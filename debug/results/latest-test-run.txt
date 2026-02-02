@@ -1,0 +1,925 @@
+PASS debug/tests/audio/format-boundary-live.test.js
+  LIVE audio format boundary (aUdiO dOcS)
+    Float32 → Int16 boundary values
+      √ should handle NaN and clamp to valid range (3 ms)
+      √ should handle very small floats near zero
+      √ should handle 1600 samples (100ms @ 16kHz STT chunk) (2 ms)
+    Int16 → Float32 boundary values
+      √ should handle full range correctly (1 ms)
+    decodeBase64PCM (TTS chunks)
+      √ should decode 8kHz TTS chunk (e.g. 80ms = 640 samples) (1 ms)
+
+PASS tests/unit/config.test.ts
+  N8N_WEBHOOK_URL
+    √ should be defined and valid URL (5 ms)
+  CARTESIA_CONFIG
+    root config
+      √ should have API_KEY
+      √ should have VOICE_ID
+      √ should have API_VERSION
+    TTS config
+      √ should have valid TTS endpoint
+      √ should have TTS model
+      √ should have sample rate 8000 (1 ms)
+      √ should have PCM encoding
+    STT config
+      √ should have valid STT endpoint
+      √ should have STT model
+      √ should have sample rate 16000
+    WebSocket config
+      √ should have reconnect settings (1 ms)
+      √ should have timeout
+
+PASS tests/unit/audio-utils.test.ts
+  audio-utils
+    floatTo16BitPCM
+      √ should convert zero to zeros (3 ms)
+      √ should convert 1.0 to 32767 (1 ms)
+      √ should convert -1.0 to -32768
+      √ should clamp values outside [-1, 1] (1 ms)
+    int16ToFloat32
+      √ should convert 0 to 0
+      √ should convert 32767 to ~1.0
+      √ should convert -32768 to ~-1.0
+      √ should round-trip correctly
+    float32ToInt16
+      √ should behave like floatTo16BitPCM (1 ms)
+    decodeBase64PCM
+      √ should decode base64 to Int16Array
+      √ should decode empty base64 to empty array (1 ms)
+
+PASS tests/jest-verification.test.ts
+  Jest verification
+    √ should run basic assertions (3 ms)
+    √ should support async/await (1 ms)
+    √ should have testUtils available from setup (1 ms)
+    √ should support object matching
+
+  console.log
+    [STT] Connected to Cartesia STT WebSocket
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:52:17)
+
+  console.log
+    [STT] Configuration sent
+
+      at CartesiaSTTClient.configure (src/stt-client.ts:100:13)
+
+  console.log
+    [TTS] Connected to Cartesia TTS WebSocket
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:54:17)
+
+  console.log
+    [STT] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:73:17)
+
+  console.log
+    [STT] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaSTTClient.attemptReconnect (src/stt-client.ts:293:13)
+
+  console.log
+    [TTS] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:74:17)
+
+  console.log
+    [TTS] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaTTSClient.attemptReconnect (src/tts-client.ts:277:13)
+
+  console.log
+    [Conversation] Initializing bidirectional conversation...
+
+      at BidirectionalConversation.initialize (src/bidirectional-conversation.ts:208:13)
+
+  console.log
+    [STT] Connected to Cartesia STT WebSocket
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:52:17)
+
+  console.log
+    [STT] Configuration sent
+
+      at CartesiaSTTClient.configure (src/stt-client.ts:100:13)
+
+  console.log
+    [TTS] Connected to Cartesia TTS WebSocket
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:54:17)
+
+  console.log
+    [Conversation] Both clients connected successfully
+
+      at BidirectionalConversation.initialize (src/bidirectional-conversation.ts:216:15)
+
+  console.log
+    [Conversation] Disconnecting...
+
+      at BidirectionalConversation.disconnect (src/bidirectional-conversation.ts:273:13)
+
+  console.log
+    [STT] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:73:17)
+
+  console.log
+    [STT] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaSTTClient.attemptReconnect (src/stt-client.ts:293:13)
+
+  console.log
+    [TTS] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:74:17)
+
+  console.log
+    [TTS] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaTTSClient.attemptReconnect (src/tts-client.ts:277:13)
+
+  console.log
+    [TTS] Connected to Cartesia TTS WebSocket
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:54:17)
+
+  console.log
+    [STT] Connected to Cartesia STT WebSocket
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:52:17)
+
+  console.log
+    [STT] Configuration sent
+
+      at CartesiaSTTClient.configure (src/stt-client.ts:100:13)
+
+  console.log
+    [TTS] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:74:17)
+
+  console.log
+    [TTS] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaTTSClient.attemptReconnect (src/tts-client.ts:277:13)
+
+  console.log
+    [STT] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:73:17)
+
+  console.log
+    [STT] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaSTTClient.attemptReconnect (src/stt-client.ts:293:13)
+
+  console.log
+    [Conversation] Initializing bidirectional conversation...
+
+      at BidirectionalConversation.initialize (src/bidirectional-conversation.ts:208:13)
+
+  console.log
+    [STT] Connected to Cartesia STT WebSocket
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:52:17)
+
+  console.log
+    [STT] Configuration sent
+
+      at CartesiaSTTClient.configure (src/stt-client.ts:100:13)
+
+  console.log
+    [TTS] Connected to Cartesia TTS WebSocket
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:54:17)
+
+  console.log
+    [Conversation] Both clients connected successfully
+
+      at BidirectionalConversation.initialize (src/bidirectional-conversation.ts:216:15)
+
+  console.error
+    [TTS] WebSocket error: Error: WebSocket error
+        at C:\Users\lazar\Downloads\Everything AI\Github\JARVIS-WEB\debug\tests\tts-client.test.ts:22:28
+        at processTicksAndRejections (node:internal/process/task_queues:85:11)
+
+      63 |
+      64 |       this.ws.on('error', (error) => {
+    > 65 |         console.error('[TTS] WebSocket error:', error);
+         |                 ^
+      66 |         this.isConnected = false;
+      67 |         if (this.onErrorCallback) {
+      68 |           this.onErrorCallback(error.message, '');
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:65:17)
+      at debug/tests/tts-client.test.ts:22:14
+
+  console.error
+    [STT] WebSocket error: Error: WebSocket error
+        at C:\Users\lazar\Downloads\Everything AI\Github\JARVIS-WEB\debug\tests\stt-client.test.ts:23:28
+        at processTicksAndRejections (node:internal/process/task_queues:85:11)
+
+      62 |
+      63 |       this.ws.on('error', (error) => {
+    > 64 |         console.error('[STT] WebSocket error:', error);
+         |                 ^
+      65 |         this.isConnected = false;
+      66 |         if (this.onErrorCallback) {
+      67 |           this.onErrorCallback(error.message, '');
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:64:17)
+      at debug/tests/stt-client.test.ts:23:14
+
+  console.log
+    [TTS] Connected to Cartesia TTS WebSocket
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:54:17)
+
+  console.log
+    [STT] Connected to Cartesia STT WebSocket
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:52:17)
+
+  console.log
+    [STT] Configuration sent
+
+      at CartesiaSTTClient.configure (src/stt-client.ts:100:13)
+
+  console.log
+    [STT] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:73:17)
+
+  console.log
+    [TTS] First byte latency for test-context-1: 60ms
+
+      at CartesiaTTSClient.handleAudioChunk (src/tts-client.ts:123:17)
+
+  console.log
+    [STT] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaSTTClient.attemptReconnect (src/stt-client.ts:293:13)
+
+  console.log
+    [Conversation] Disconnecting...
+
+      at BidirectionalConversation.disconnect (src/bidirectional-conversation.ts:273:13)
+
+  console.log
+    [STT] Connected to Cartesia STT WebSocket
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:52:17)
+
+  console.log
+    [STT] Configuration sent
+
+      at CartesiaSTTClient.configure (src/stt-client.ts:100:13)
+
+  console.log
+    [STT] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:73:17)
+
+  console.log
+    [STT] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaSTTClient.attemptReconnect (src/stt-client.ts:293:13)
+
+  console.log
+    [TTS] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:74:17)
+
+  console.log
+    [TTS] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaTTSClient.attemptReconnect (src/tts-client.ts:277:13)
+
+  console.log
+    [Conversation] Initializing bidirectional conversation...
+
+      at BidirectionalConversation.initialize (src/bidirectional-conversation.ts:208:13)
+
+  console.log
+    [STT] Connected to Cartesia STT WebSocket
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:52:17)
+
+  console.log
+    [STT] Configuration sent
+
+      at CartesiaSTTClient.configure (src/stt-client.ts:100:13)
+
+  console.log
+    [TTS] Connected to Cartesia TTS WebSocket
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:54:17)
+
+  console.log
+    [Conversation] Both clients connected successfully
+
+      at BidirectionalConversation.initialize (src/bidirectional-conversation.ts:216:15)
+
+  console.log
+    [Conversation] Disconnecting...
+
+      at BidirectionalConversation.disconnect (src/bidirectional-conversation.ts:273:13)
+
+  console.log
+    [STT] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:73:17)
+
+  console.log
+    [STT] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaSTTClient.attemptReconnect (src/stt-client.ts:293:13)
+
+  console.log
+    [TTS] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:74:17)
+
+  console.log
+    [TTS] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaTTSClient.attemptReconnect (src/tts-client.ts:277:13)
+
+  console.log
+    [Conversation] Initializing bidirectional conversation...
+
+      at BidirectionalConversation.initialize (src/bidirectional-conversation.ts:208:13)
+
+  console.log
+    [STT] Connected to Cartesia STT WebSocket
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:52:17)
+
+  console.log
+    [STT] Configuration sent
+
+      at CartesiaSTTClient.configure (src/stt-client.ts:100:13)
+
+  console.log
+    [TTS] Connected to Cartesia TTS WebSocket
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:54:17)
+
+  console.log
+    [Conversation] Both clients connected successfully
+
+      at BidirectionalConversation.initialize (src/bidirectional-conversation.ts:216:15)
+
+  console.log
+    [Conversation] Disconnecting...
+
+      at BidirectionalConversation.disconnect (src/bidirectional-conversation.ts:273:13)
+
+  console.log
+    [STT] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:73:17)
+
+  console.log
+    [STT] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaSTTClient.attemptReconnect (src/stt-client.ts:293:13)
+
+  console.log
+    [TTS] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:74:17)
+
+  console.log
+    [TTS] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaTTSClient.attemptReconnect (src/tts-client.ts:277:13)
+
+  console.log
+    [Conversation] Initializing bidirectional conversation...
+
+      at BidirectionalConversation.initialize (src/bidirectional-conversation.ts:208:13)
+
+  console.log
+    [STT] Connected to Cartesia STT WebSocket
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:52:17)
+
+  console.log
+    [STT] Configuration sent
+
+      at CartesiaSTTClient.configure (src/stt-client.ts:100:13)
+
+  console.log
+    [TTS] Connected to Cartesia TTS WebSocket
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:54:17)
+
+  console.log
+    [Conversation] Both clients connected successfully
+
+      at BidirectionalConversation.initialize (src/bidirectional-conversation.ts:216:15)
+
+  console.log
+    [Conversation] Disconnecting...
+
+      at BidirectionalConversation.disconnect (src/bidirectional-conversation.ts:273:13)
+
+  console.log
+    [STT] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:73:17)
+
+  console.log
+    [STT] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaSTTClient.attemptReconnect (src/stt-client.ts:293:13)
+
+  console.log
+    [TTS] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:74:17)
+
+  console.log
+    [TTS] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaTTSClient.attemptReconnect (src/tts-client.ts:277:13)
+
+  console.log
+    [STT] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:73:17)
+
+  console.log
+    [STT] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaSTTClient.attemptReconnect (src/stt-client.ts:293:13)
+
+PASS debug/live/n8n-webhook.test.js
+  LIVE: n8n webhook
+    √ should POST and receive response (2xx or 404 if workflow inactive) (268 ms)
+
+  console.log
+    [STT] Connected to Cartesia STT WebSocket
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:52:17)
+
+  console.log
+    [STT] Configuration sent
+
+      at CartesiaSTTClient.configure (src/stt-client.ts:100:13)
+
+  console.log
+    [Conversation] Initializing bidirectional conversation...
+
+      at BidirectionalConversation.initialize (src/bidirectional-conversation.ts:208:13)
+
+  console.log
+    [STT] Connected to Cartesia STT WebSocket
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:52:17)
+
+  console.log
+    [STT] Configuration sent
+
+      at CartesiaSTTClient.configure (src/stt-client.ts:100:13)
+
+  console.log
+    [TTS] Connected to Cartesia TTS WebSocket
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:54:17)
+
+  console.log
+    [Conversation] Both clients connected successfully
+
+      at BidirectionalConversation.initialize (src/bidirectional-conversation.ts:216:15)
+
+  console.log
+    [Conversation] Disconnecting...
+
+      at BidirectionalConversation.disconnect (src/bidirectional-conversation.ts:273:13)
+
+  console.log
+    [STT] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:73:17)
+
+  console.log
+    [STT] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaSTTClient.attemptReconnect (src/stt-client.ts:293:13)
+
+  console.log
+    [TTS] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:74:17)
+
+  console.log
+    [TTS] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaTTSClient.attemptReconnect (src/tts-client.ts:277:13)
+
+PASS debug/tests/bidirectional-conversation.test.ts
+  BidirectionalConversation
+    Initialization
+      √ should initialize both STT and TTS clients (50 ms)
+    User Speech Processing
+      √ should accept audio and finalize (124 ms)
+    Error Handling
+      √ should have error callback (15 ms)
+    Performance Metrics
+      √ should track performance metrics (16 ms)
+    Conversation History
+      √ should maintain conversation history (31 ms)
+    TTS Cancellation
+      √ should cancel TTS generation (30 ms)
+
+  console.log
+    [TTS] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:74:17)
+
+  console.log
+    [TTS] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaTTSClient.attemptReconnect (src/tts-client.ts:277:13)
+
+  console.log
+    [TTS] Connected to Cartesia TTS WebSocket
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:54:17)
+
+  console.log
+    [TTS] First byte latency for test-context-2: 60ms
+
+      at CartesiaTTSClient.handleAudioChunk (src/tts-client.ts:123:17)
+
+  console.log
+    [STT] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:73:17)
+
+  console.log
+    [STT] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaSTTClient.attemptReconnect (src/stt-client.ts:293:13)
+
+  console.log
+    [STT] Connected to Cartesia STT WebSocket
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:52:17)
+
+  console.log
+    [STT] Configuration sent
+
+      at CartesiaSTTClient.configure (src/stt-client.ts:100:13)
+
+  console.log
+    [STT] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:73:17)
+
+  console.log
+    [STT] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaSTTClient.attemptReconnect (src/stt-client.ts:293:13)
+
+  console.log
+    [STT] Connected to Cartesia STT WebSocket
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:52:17)
+
+  console.log
+    [STT] Configuration sent
+
+      at CartesiaSTTClient.configure (src/stt-client.ts:100:13)
+
+  console.log
+    [TTS] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:74:17)
+
+  console.log
+    [TTS] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaTTSClient.attemptReconnect (src/tts-client.ts:277:13)
+
+  console.log
+    [TTS] Connected to Cartesia TTS WebSocket
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:54:17)
+
+PASS debug/tests/integration/cartesia-websocket-live.test.ts
+  LIVE Cartesia WebSocket (integration)
+    √ should connect to TTS WebSocket and receive response (412 ms)
+    √ should connect to STT WebSocket and accept config (222 ms)
+
+  console.log
+    [STT] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:73:17)
+
+  console.log
+    [STT] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaSTTClient.attemptReconnect (src/stt-client.ts:293:13)
+
+  console.log
+    [STT] Connected to Cartesia STT WebSocket
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:52:17)
+
+  console.log
+    [STT] Configuration sent
+
+      at CartesiaSTTClient.configure (src/stt-client.ts:100:13)
+
+  console.log
+    [TTS] First byte latency for test-context-3: 61ms
+
+      at CartesiaTTSClient.handleAudioChunk (src/tts-client.ts:123:17)
+
+  console.log
+    [STT] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:73:17)
+
+  console.log
+    [STT] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaSTTClient.attemptReconnect (src/stt-client.ts:293:13)
+
+  console.log
+    [STT] Connected to Cartesia STT WebSocket
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:52:17)
+
+  console.log
+    [STT] Configuration sent
+
+      at CartesiaSTTClient.configure (src/stt-client.ts:100:13)
+
+  console.error
+    [STT] Error for request test-error: Test error
+
+      179 |   private handleError(response: STTResponse & { error: string }): void {
+      180 |     const { error, request_id } = response;
+    > 181 |     console.error(`[STT] Error for request ${request_id}:`, error);
+          |             ^
+      182 |     
+      183 |     if (this.onErrorCallback) {
+      184 |       this.onErrorCallback(error, request_id);
+
+      at CartesiaSTTClient.handleError (src/stt-client.ts:181:13)
+      at CartesiaSTTClient.handleMessage (src/stt-client.ts:128:18)
+      at MockWebSocket.<anonymous> (src/stt-client.ts:60:14)
+      at Object.<anonymous> (debug/tests/stt-client.test.ts:210:16)
+
+  console.log
+    [TTS] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:74:17)
+
+  console.log
+    [TTS] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaTTSClient.attemptReconnect (src/tts-client.ts:277:13)
+
+  console.log
+    [TTS] Connected to Cartesia TTS WebSocket
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:54:17)
+
+  console.log
+    [STT] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:73:17)
+
+  console.log
+    [STT] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaSTTClient.attemptReconnect (src/stt-client.ts:293:13)
+
+  console.log
+    [STT] Connected to Cartesia STT WebSocket
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:52:17)
+
+  console.log
+    [STT] Configuration sent
+
+      at CartesiaSTTClient.configure (src/stt-client.ts:100:13)
+
+  console.log
+    [TTS] First byte latency for test-context-4: 61ms
+
+      at CartesiaTTSClient.handleAudioChunk (src/tts-client.ts:123:17)
+
+  console.log
+    [STT] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:73:17)
+
+  console.log
+    [TTS] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:74:17)
+
+  console.log
+    [STT] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaSTTClient.attemptReconnect (src/stt-client.ts:293:13)
+
+  console.log
+    [TTS] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaTTSClient.attemptReconnect (src/tts-client.ts:277:13)
+
+  console.log
+    [TTS] Connected to Cartesia TTS WebSocket
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:54:17)
+
+  console.log
+    [STT] Connected to Cartesia STT WebSocket
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:52:17)
+
+  console.log
+    [STT] Configuration sent
+
+      at CartesiaSTTClient.configure (src/stt-client.ts:100:13)
+
+  console.error
+    [TTS] Error for context test-error: Test error
+
+      157 |   private handleError(response: TTSResponse & { error: string }): void {
+      158 |     const { error, context_id } = response;
+    > 159 |     console.error(`[TTS] Error for context ${context_id}:`, error);
+          |             ^
+      160 |     
+      161 |     if (this.onErrorCallback) {
+      162 |       this.onErrorCallback(error, context_id);
+
+      at CartesiaTTSClient.handleError (src/tts-client.ts:159:13)
+      at CartesiaTTSClient.handleMessage (src/tts-client.ts:103:18)
+      at MockWebSocket.<anonymous> (src/tts-client.ts:61:14)
+      at Object.<anonymous> (debug/tests/tts-client.test.ts:184:16)
+
+  console.log
+    [TTS] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:74:17)
+
+  console.log
+    [TTS] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaTTSClient.attemptReconnect (src/tts-client.ts:277:13)
+
+  console.log
+    [TTS] Connected to Cartesia TTS WebSocket
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:54:17)
+
+  console.log
+    [TTS] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:74:17)
+
+  console.log
+    [TTS] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaTTSClient.attemptReconnect (src/tts-client.ts:277:13)
+
+  console.log
+    [TTS] Connected to Cartesia TTS WebSocket
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:54:17)
+
+  console.log
+    [TTS] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:74:17)
+
+  console.log
+    [TTS] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaTTSClient.attemptReconnect (src/tts-client.ts:277:13)
+
+  console.log
+    [STT] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/stt-client.ts:73:17)
+
+  console.log
+    [STT] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaSTTClient.attemptReconnect (src/stt-client.ts:293:13)
+
+PASS debug/tests/stt-client.test.ts
+  CartesiaSTTClient
+    Connection
+      √ should connect and configure successfully (43 ms)
+      √ should send configuration on connect (14 ms)
+      √ should handle connection errors (30 ms)
+    Audio Processing
+      √ should send audio data (77 ms)
+      √ should send audio chunks (79 ms)
+      √ should receive partial transcripts (185 ms)
+      √ should track latency (185 ms)
+    Commands
+      √ should send finalize command (79 ms)
+      √ should send done command (78 ms)
+    Error Handling
+      √ should handle error responses (139 ms)
+    Performance Metrics
+      √ should track partial latencies (185 ms)
+      √ should track final latencies (186 ms)
+
+  console.log
+    [TTS] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:74:17)
+
+  console.log
+    [TTS] Attempting to reconnect in 2000ms (attempt 2)
+
+      at CartesiaTTSClient.attemptReconnect (src/tts-client.ts:277:13)
+
+  console.log
+    [TTS] Connected to Cartesia TTS WebSocket
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:54:17)
+
+  console.log
+    [TTS] First byte latency for perf-test: 61ms
+
+      at CartesiaTTSClient.handleAudioChunk (src/tts-client.ts:123:17)
+
+  console.log
+    [TTS] WebSocket closed
+
+      at MockWebSocket.<anonymous> (src/tts-client.ts:74:17)
+
+  console.log
+    [TTS] Attempting to reconnect in 1000ms (attempt 1)
+
+      at CartesiaTTSClient.attemptReconnect (src/tts-client.ts:277:13)
+
+PASS debug/tests/tts-client.test.ts
+  CartesiaTTSClient
+    Connection
+      √ should connect successfully (43 ms)
+      √ should include API key in connection URL (15 ms)
+      √ should handle connection errors (31 ms)
+    Text-to-Speech
+      √ should send text and receive audio (232 ms)
+      √ should handle streaming with continuations (325 ms)
+      √ should maintain context configuration across chunks (232 ms)
+      √ should track first byte latency (217 ms)
+    Error Handling
+      √ should handle error responses (77 ms)
+      √ should cancel contexts (16 ms)
+    Reconnection
+      √ should attempt reconnection on disconnect (123 ms)
+    Performance
+      √ should track context start times (122 ms)
+
+
+  ●  Cannot log after tests are done. Did you forget to wait for something async in your test?
+    Attempted to log "[TTS] Connected to Cartesia TTS WebSocket".
+
+      52 |
+      53 |       this.ws.on('open', () => {
+    > 54 |         console.log('[TTS] Connected to Cartesia TTS WebSocket');
+         |                 ^
+      55 |         this.isConnected = true;
+      56 |         this.reconnectAttempts = 0;
+      57 |         resolve();
+
+      at console.log (node_modules/@jest/console/build/index.js:311:10)
+      at MockWebSocket.<anonymous> (src/tts-client.ts:54:17)
+      at debug/tests/tts-client.test.ts:25:14
+
+PASS debug/live/example-run.test.js (8.499 s)
+  LIVE: example run
+    √ should run main() and produce output (Windows fix: import.meta.url check) (8017 ms)
+
+-----------------|---------|----------|---------|---------|-------------------
+File             | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s 
+-----------------|---------|----------|---------|---------|-------------------
+All files        |   72.22 |    66.66 |      50 |   78.57 |                   
+ public/js       |      96 |    66.66 |     100 |   95.23 |                   
+  audio-utils.js |     100 |    66.66 |     100 |     100 | 27-40             
+  vad-config.js  |       0 |      100 |     100 |       0 | 13                
+ src             |   18.18 |      100 |       0 |   28.57 |                   
+  config.ts      |     100 |      100 |     100 |     100 |                   
+  index.ts       |       0 |      100 |       0 |       0 | 5-9               
+-----------------|---------|----------|---------|---------|-------------------
+Test Suites: 10 passed, 10 total
+Tests:       66 passed, 66 total
+Snapshots:   0 total
+Time:        10.576 s
+Ran all test suites.

@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+*.pcm
+*.wav
+*.log
+.env
+.DS_Store
+*.tsbuildinfo
+
+# Debug logs (websocket metrics, etc.)
+debug/logs/*.json

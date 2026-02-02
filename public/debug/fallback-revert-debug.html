@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JARVIS Fallback Revert — Live Debug</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --border: #21262d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --gold: #c9a227;
+      --red: #e63946;
+      --green: #3fb950;
+    }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 1rem; }
+    h1 { font-size: 1.25rem; }
+    section { margin: 1rem 0; padding: 1rem; border: 1px solid var(--border); border-radius: 8px; max-width: 700px; }
+    label { display: block; margin: 0.5rem 0 0.2rem; font-size: 0.9rem; color: var(--muted); }
+    input, textarea, button { font: inherit; padding: 0.5rem; border-radius: 4px; }
+    input[type="text"], input[type="url"], textarea { width: 100%; background: #161b22; border: 1px solid var(--border); color: var(--text); }
+    button { background: var(--gold); color: #0d1117; border: none; cursor: pointer; margin-top: 0.5rem; }
+    button:hover { opacity: 0.9; }
+    pre { overflow-x: auto; font-size: 0.8rem; background: #161b22; padding: 0.75rem; border-radius: 4px; white-space: pre-wrap; }
+    .ok { color: var(--green); }
+    .fail { color: var(--red); }
+    .info { color: var(--muted); font-size: 0.85rem; }
+    a { color: var(--gold); }
+  </style>
+</head>
+<body>
+  <h1>JARVIS Fallback Revert — Live Debug</h1>
+  <p class="info">
+    Tests <strong>n8n webhook</strong> from the <strong>browser</strong> (same CORS context as the main app).
+    Use this to verify why text messages might be reverting to fallbacks.
+    <a href="../index.html?debug=1">Open main app with debug</a> to trace mic and transcript flow.
+  </p>
+
+  <section>
+    <h2>1. Test n8n Webhook (Browser)</h2>
+    <label>Webhook URL</label>
+    <input type="url" id="webhookUrl" placeholder="https://n8n.hempstarai.com/webhook/..." value="">
+    <label>Message to send</label>
+    <input type="text" id="testMessage" value="Hello" placeholder="e.g. Hello">
+    <button type="button" id="btnTest">Test n8n</button>
+    <div id="n8nResult" style="margin-top: 1rem;"></div>
+  </section>
+
+  <section>
+    <h2>2. Diagnosis</h2>
+    <p class="info" id="diagnosis">Run a test above to see diagnosis.</p>
+  </section>
+
+  <section>
+    <h2>3. Mic Button Revert</h2>
+    <p class="info">
+      The mic reverts when <code>onSTTStopped</code> fires. This happens:
+    </p>
+    <ul class="info">
+      <li>~2.5s after you stop speaking (silenceAfterSpeechToStopMicMs)</li>
+      <li>~10s silence (closing message, then stop)</li>
+      <li>On error (STT/WebSocket fails)</li>
+      <li>When you click mic again to stop</li>
+    </ul>
+    <p class="info">
+      Open the <a href="../index.html?debug=1">main app with ?debug=1</a> and watch the console for
+      <code>[JARVIS] [TRACE]</code> entries. Look for: <code>Mic clicked</code>, <code>startSTT</code>,
+      <code>VAD onSpeechEnd</code>, <code>onTranscript</code>, and when <code>onSTTStopped</code> would fire.
+    </p>
+  </section>
+
+  <script type="module">
+    import { buildN8nPayload } from '../js/n8n-payload.js';
+
+    const DEFAULT_WEBHOOK = 'https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4';
+    const N8N_REPLY_KEYS = ['output', 'reply', 'result', 'text', 'message', 'response', 'answer', 'content'];
+
+    function getConfig() {
+      const win = typeof window !== 'undefined' ? window : {};
+      const cfg = win.JARVIS_CONFIG || {};
+      return cfg.n8nWebhookUrl || DEFAULT_WEBHOOK;
+    }
+
+    function extractReplyFromJson(data) {
+      if (!data || typeof data !== 'object') return null;
+      for (const key of N8N_REPLY_KEYS) {
+        const v = data[key];
+        if (typeof v === 'string') return v;
+      }
+      if (Array.isArray(data) && data.length) {
+        const first = data[0];
+        if (typeof first === 'string') return first;
+        if (first && typeof first === 'object') return extractReplyFromJson(first);
+      }
+      for (const v of Object.values(data)) {
+        if (typeof v === 'string') return v;
+        if (v && typeof v === 'object' && !Array.isArray(v)) {
+          const nested = extractReplyFromJson(v);
+          if (nested) return nested;
+        }
+      }
+      return null;
+    }
+
+    function getNaturalFallback(userMessage) {
+      const m = (userMessage || '').trim().toLowerCase().replace(/[!?.,]+$/, '');
+      if (!m) return null;
+      const greetings = ['hello', 'hi', 'hey', 'hi there', 'hello there', 'good morning', 'good afternoon', 'good evening', 'greetings', 'howdy'];
+      if (greetings.some((g) => m === g || m.startsWith(g + ' '))) return "Hello! How can I assist you today?";
+      if (m === 'goodbye' || m === 'bye' || m === 'see you') return "Goodbye. I'll be here when you need me.";
+      if (m === 'thanks' || m === 'thank you' || m === 'thanks!') return "You're welcome.";
+      if (m === 'yes' || m === 'no') return "Understood.";
+      return null;
+    }
+
+    const urlInput = document.getElementById('webhookUrl');
+    const msgInput = document.getElementById('testMessage');
+    const btnTest = document.getElementById('btnTest');
+    const resultEl = document.getElementById('n8nResult');
+    const diagEl = document.getElementById('diagnosis');
+
+    if (!urlInput.value) urlInput.value = getConfig();
+
+    btnTest.addEventListener('click', async () => {
+      const url = urlInput.value.trim() || getConfig();
+      const message = msgInput.value.trim() || 'Hello';
+      resultEl.innerHTML = '<p class="info">Sending...</p>';
+      diagEl.textContent = '';
+
+      const payload = buildN8nPayload(message, { source: 'text' });
+
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        const rawText = await res.text();
+        let data = {};
+        try {
+          data = rawText ? JSON.parse(rawText) : {};
+        } catch {
+          data = { _raw: rawText };
+        }
+
+        const reply = extractReplyFromJson(data);
+        const natural = getNaturalFallback(message);
+        const wouldUseFallback = typeof reply !== 'string';
+        const fallbackUsed = wouldUseFallback ? (natural || "I heard you. I'm still getting set up — please try again in a moment.") : null;
+
+        let html = '';
+        html += `<p><strong>Status:</strong> ${res.status} ${res.statusText}</p>`;
+        html += `<p><strong>extractReplyFromJson:</strong> ${reply !== null ? `<span class="ok">"${String(reply).slice(0, 60)}${reply.length > 60 ? '…' : ''}"</span>` : '<span class="fail">null (no reply key found)</span>'}</p>`;
+        html += `<p><strong>Would use fallback?</strong> ${wouldUseFallback ? `<span class="fail">Yes</span> → ${escapeHtml(String(fallbackUsed || 'generic'))}` : '<span class="ok">No — real reply</span>'}</p>`;
+        html += '<p><strong>Raw response:</strong></p>';
+        html += `<pre>${escapeHtml(JSON.stringify(data, null, 2))}</pre>`;
+
+        resultEl.innerHTML = html;
+
+        let diag = '';
+        if (res.status === 404) diag = '404 = n8n workflow likely inactive. Activate the workflow in n8n.';
+        else if (res.status >= 500) diag = '5xx = n8n server error. Check n8n logs.';
+        else if (wouldUseFallback) {
+          const keys = Object.keys(data).filter(k => typeof data[k] === 'string');
+          diag = `n8n responded but no standard reply key (output/reply/result/text/message/response/answer/content). Found string keys: ${keys.length ? keys.join(', ') : 'none'}. Ensure n8n returns e.g. { "reply": "..." }.`;
+        } else diag = 'n8n response OK. If main app still shows fallbacks, check CORS or that both use the same URL.';
+        diagEl.textContent = diag;
+      } catch (err) {
+        resultEl.innerHTML = `<p class="fail"><strong>Error:</strong> ${escapeHtml(err.message)}</p><p class="info">Common causes: CORS blocked, network error, wrong URL.</p>`;
+        diagEl.textContent = `Fetch failed: ${err.message}. This may indicate CORS blocking the request from the browser.`;
+      }
+    });
+
+    function escapeHtml(s) {
+      const div = document.createElement('div');
+      div.textContent = s;
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>

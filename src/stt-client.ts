@@ -1,0 +1,330 @@
+import WebSocket from 'ws';
+import { CARTESIA_CONFIG } from './config.js';
+import type {
+  STTConfig,
+  STTDoneResponse,
+  STTErrorResponse,
+  STTResponse,
+  STTTranscriptCallback,
+  STTTranscriptResponse,
+  STTDoneCallback,
+  STTErrorCallback,
+} from './types.js';
+
+/**
+ * Cartesia STT WebSocket Client
+ * cArTeSiA dOcS.md: 100ms chunks, ink-whisper, pcm_s16le 16kHz, process is_final:false immediately.
+ * cArTeSiA wEbSoCkEt.md: research https://docs.cartesia.ai/api-reference/tts/websocket for issues/fixes.
+ */
+export class CartesiaSTTClient {
+  private ws: WebSocket | null = null;
+  private isConnected = false;
+  private isConfigured = false;
+  private reconnectAttempts = 0;
+  private reconnectTimerId: ReturnType<typeof setTimeout> | null = null;
+  private _disconnecting = false;
+  private currentRequestId: string | null = null;
+  
+  // Callbacks
+  private onTranscriptCallback?: STTTranscriptCallback;
+  private onDoneCallback?: STTDoneCallback;
+  private onErrorCallback?: STTErrorCallback;
+  
+  // Performance tracking
+  private requestStartTimes = new Map<string, number>();
+  private partialLatencies: number[] = [];
+  private finalLatencies: number[] = [];
+
+  constructor(
+    private apiKey: string = CARTESIA_CONFIG.API_KEY
+  ) {}
+
+  /**
+   * Connect to Cartesia STT WebSocket
+   */
+  async connect(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const url = new URL(CARTESIA_CONFIG.STT.ENDPOINT);
+      url.searchParams.set('api_key', this.apiKey);
+      url.searchParams.set('cartesia_version', CARTESIA_CONFIG.API_VERSION);
+
+      this.ws = new WebSocket(url.toString());
+
+      this.ws.on('open', () => {
+        console.log('[STT] Connected to Cartesia STT WebSocket');
+        this.isConnected = true;
+        this.reconnectAttempts = 0;
+        this.configure();
+        resolve();
+      });
+
+      this.ws.on('message', (data: WebSocket.Data) => {
+        this.handleMessage(data);
+      });
+
+      this.ws.on('error', (error) => {
+        console.error('[STT] WebSocket error:', error);
+        this.isConnected = false;
+        if (this.onErrorCallback) {
+          this.onErrorCallback(error.message, '');
+        }
+        reject(error);
+      });
+
+      this.ws.on('close', () => {
+        console.log('[STT] WebSocket closed');
+        this.isConnected = false;
+        this.isConfigured = false;
+        if (!this._disconnecting) this.attemptReconnect();
+      });
+    });
+  }
+
+  /**
+   * Configure STT session
+   */
+  private configure(): void {
+    if (!this.ws || !this.isConnected) {
+      return;
+    }
+
+    const config: STTConfig = {
+      model: CARTESIA_CONFIG.STT.MODEL,
+      language: CARTESIA_CONFIG.STT.LANGUAGE,
+      encoding: CARTESIA_CONFIG.STT.ENCODING,
+      sample_rate: String(CARTESIA_CONFIG.STT.SAMPLE_RATE),
+      min_volume: CARTESIA_CONFIG.STT.MIN_VOLUME,
+      max_silence_duration_secs: CARTESIA_CONFIG.STT.MAX_SILENCE_DURATION_SECS,
+    };
+
+    this.ws.send(JSON.stringify(config));
+    this.isConfigured = true;
+    console.log('[STT] Configuration sent');
+  }
+
+  /**
+   * Handle incoming WebSocket messages
+   */
+  private handleMessage(data: WebSocket.Data): void {
+    try {
+      // Check if it's a text message (JSON) or binary (audio)
+      if (data instanceof Buffer) {
+        // Binary data - this shouldn't happen for responses
+        return;
+      }
+
+      const message = JSON.parse(data.toString()) as STTResponse;
+      
+      switch (message.type) {
+        case 'transcript':
+          this.handleTranscript(message as STTTranscriptResponse);
+          break;
+        case 'flush_done':
+          console.log('[STT] Flush done for request:', message.request_id);
+          break;
+        case 'done':
+          this.handleDone(message as STTDoneResponse);
+          break;
+        default:
+          if ('error' in message) {
+            this.handleError(message as STTErrorResponse);
+          }
+      }
+    } catch (error) {
+      console.error('[STT] Error parsing message:', error);
+    }
+  }
+
+  /**
+   * Handle transcript response
+   */
+  private handleTranscript(response: STTTranscriptResponse): void {
+    const { text, is_final, request_id } = response;
+    
+    // Track latency
+    const startTime = this.requestStartTimes.get(request_id);
+    if (startTime) {
+      const latency = Date.now() - startTime;
+      
+      if (is_final) {
+        this.finalLatencies.push(latency);
+        console.log(`[STT] Final transcript latency: ${latency}ms`);
+      } else {
+        this.partialLatencies.push(latency);
+        console.log(`[STT] Partial transcript latency: ${latency}ms`);
+      }
+    }
+    
+    if (this.onTranscriptCallback) {
+      this.onTranscriptCallback(text, is_final, request_id);
+    }
+  }
+
+  /**
+   * Handle done response
+   */
+  private handleDone(response: STTDoneResponse): void {
+    const { request_id } = response;
+    
+    if (this.requestStartTimes.has(request_id)) {
+      this.requestStartTimes.delete(request_id);
+    }
+    
+    if (this.onDoneCallback) {
+      this.onDoneCallback(request_id);
+    }
+  }
+
+  /**
+   * Handle error response
+   */
+  private handleError(response: STTResponse & { error: string }): void {
+    const { error, request_id } = response;
+    console.error(`[STT] Error for request ${request_id}:`, error);
+    
+    if (this.onErrorCallback) {
+      this.onErrorCallback(error, request_id);
+    }
+  }
+
+  /**
+   * Send audio data
+   * Audio should be PCM s16le format at 16000 Hz sample rate
+   */
+  sendAudio(audioBuffer: ArrayBuffer): void {
+    if (!this.isConnected || !this.ws || !this.isConfigured) {
+      throw new Error('STT WebSocket not connected or configured');
+    }
+
+    // Generate request ID if starting new request
+    if (!this.currentRequestId) {
+      this.currentRequestId = this.generateRequestId();
+      this.requestStartTimes.set(this.currentRequestId, Date.now());
+    }
+
+    // Send binary audio (cArTeSiA dOcS: binary WebSocket messages, raw audio)
+    this.ws.send(Buffer.from(audioBuffer), { binary: true });
+  }
+
+  /**
+   * Send audio chunk (optimized for 100ms chunks)
+   */
+  sendAudioChunk(audioBuffer: ArrayBuffer): void {
+    this.sendAudio(audioBuffer);
+  }
+
+  /**
+   * Finalize current transcription request.
+   * cArTeSiA dOcS: send text "finalize" → receive flush_done.
+   */
+  finalize(): void {
+    if (!this.isConnected || !this.ws) {
+      return;
+    }
+
+    this.ws.send('finalize');
+  }
+
+  /**
+   * Close session and finalize.
+   * cArTeSiA dOcS: send text "done" → receive done, then close.
+   */
+  done(): void {
+    if (!this.isConnected || !this.ws) {
+      return;
+    }
+
+    this.ws.send('done');
+    this.currentRequestId = null;
+  }
+
+  /**
+   * Set transcript callback
+   */
+  onTranscript(callback: STTTranscriptCallback): void {
+    this.onTranscriptCallback = callback;
+  }
+
+  /**
+   * Set done callback
+   */
+  onDone(callback: STTDoneCallback): void {
+    this.onDoneCallback = callback;
+  }
+
+  /**
+   * Set error callback
+   */
+  onError(callback: STTErrorCallback): void {
+    this.onErrorCallback = callback;
+  }
+
+  /**
+   * Get average partial latency
+   */
+  getAveragePartialLatency(): number {
+    if (this.partialLatencies.length === 0) return 0;
+    return this.partialLatencies.reduce((a, b) => a + b, 0) / this.partialLatencies.length;
+  }
+
+  /**
+   * Get average final latency
+   */
+  getAverageFinalLatency(): number {
+    if (this.finalLatencies.length === 0) return 0;
+    return this.finalLatencies.reduce((a, b) => a + b, 0) / this.finalLatencies.length;
+  }
+
+  /**
+   * Generate unique request ID
+   */
+  private generateRequestId(): string {
+    return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /**
+   * Attempt to reconnect
+   */
+  private attemptReconnect(): void {
+    if (this.reconnectAttempts >= CARTESIA_CONFIG.WS.MAX_RECONNECT_ATTEMPTS) {
+      console.error('[STT] Max reconnection attempts reached');
+      return;
+    }
+
+    this.reconnectAttempts++;
+    const delay = CARTESIA_CONFIG.WS.RECONNECT_DELAY * this.reconnectAttempts;
+    
+    console.log(`[STT] Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempts})`);
+    this.reconnectTimerId = setTimeout(() => {
+      this.reconnectTimerId = null;
+      this.connect().catch(console.error);
+    }, delay);
+  }
+
+  /**
+   * Disconnect from WebSocket
+   */
+  disconnect(): void {
+    this._disconnecting = true;
+    if (this.reconnectTimerId !== null) {
+      clearTimeout(this.reconnectTimerId);
+      this.reconnectTimerId = null;
+    }
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+    this._disconnecting = false;
+    this.isConnected = false;
+    this.isConfigured = false;
+    this.currentRequestId = null;
+    this.requestStartTimes.clear();
+  }
+
+  /**
+   * Check if connected
+   */
+  get connected(): boolean {
+    return this.isConnected && this.isConfigured;
+  }
+}

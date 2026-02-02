@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JARVIS — Voice Pipeline Debug</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; padding: 1.5rem; max-width: 720px; margin: 0 auto; }
+    h1 { font-size: 1.25rem; }
+    .result { margin: 0.5rem 0; padding: 0.5rem 0.75rem; border-radius: 6px; border: 1px solid transparent; font-size: 0.9rem; }
+    .pass { background-color: #d4edda; color: #155724; border-color: #c3e6cb; }
+    .fail { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb; }
+    .pending { background-color: #fff3cd; color: #856404; border-color: #ffeeba; }
+    .info { background-color: #d1ecf1; color: #0c5460; border-color: #bee5eb; }
+    button { margin: 0.5rem 0.5rem 0 0; padding: 0.5rem 1rem; cursor: pointer; }
+    #log { max-height: 400px; overflow-y: auto; }
+    .step { font-weight: 600; margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>JARVIS Voice Pipeline Debug</h1>
+  <p>Runs checks for mic, AudioWorklet, VAD, and STT connectivity. Open DevTools console for verbose output.</p>
+  <button type="button" id="runAll">Run all checks</button>
+  <button type="button" id="runVoice">Test voice flow (speak after click)</button>
+  <div id="log"></div>
+
+  <script type="module">
+    const logEl = document.getElementById('log');
+    function log(msg, status = 'pending') {
+      const div = document.createElement('div');
+      div.className = 'result ' + status;
+      div.textContent = msg;
+      logEl.appendChild(div);
+      return div;
+    }
+    function pass(msg) { return log('✓ ' + msg, 'pass'); }
+    function fail(msg) { return log('✗ ' + msg, 'fail'); }
+    function info(msg) { return log(msg, 'info'); }
+
+    document.getElementById('runAll').onclick = async () => {
+      logEl.innerHTML = '';
+      log('Starting voice pipeline checks…', 'pending');
+
+      try {
+        // 1. Secure context
+        if (typeof window !== 'undefined' && !window.isSecureContext) {
+          fail('Requires HTTPS or localhost');
+          return;
+        }
+        pass('Secure context OK');
+
+        // 2. getUserMedia
+        if (!navigator.mediaDevices?.getUserMedia) {
+          fail('getUserMedia not available');
+          return;
+        }
+        pass('getUserMedia available');
+
+        // 3. AudioContext
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) { fail('AudioContext not available'); return; }
+        const ctx = new Ctx();
+        if (ctx.state === 'suspended') await ctx.resume();
+        pass('AudioContext OK (state: ' + ctx.state + ', sampleRate: ' + ctx.sampleRate + ')');
+
+        // 4. AudioWorklet processors
+        const base = new URL('../audio/', document.baseURI).href;
+        await ctx.audioWorklet.addModule(base + 'stt-capture-processor.js');
+        pass('STT capture processor loaded');
+        await ctx.audioWorklet.addModule(base + 'tts-playback-processor.js');
+        pass('TTS playback processor loaded');
+
+        // 5. Mic stream
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const tracks = stream.getTracks();
+        pass('Microphone stream OK (' + tracks.length + ' track(s))');
+
+        // 6. STT capture node
+        const source = ctx.createMediaStreamSource(stream);
+        const sttNode = new AudioWorkletNode(ctx, 'stt-capture-processor');
+        source.connect(sttNode);
+        let chunkCount = 0;
+        sttNode.port.onmessage = (e) => {
+          if (e.data?.type === 'audio' && e.data?.data) chunkCount++;
+        };
+        await new Promise(r => setTimeout(r, 500));
+        sttNode.disconnect();
+        source.disconnect();
+        stream.getTracks().forEach(t => t.stop());
+        if (chunkCount > 0) {
+          pass('STT capture receiving audio (' + chunkCount + ' chunks in 500ms)');
+        } else {
+          fail('STT capture received no audio chunks');
+        }
+
+        await ctx.close();
+        log('All checks completed.', 'pass');
+      } catch (e) {
+        fail(e.message || String(e));
+        console.error(e);
+      }
+    };
+
+    document.getElementById('runVoice').onclick = async () => {
+      logEl.innerHTML = '';
+      info('Voice flow test: Speak clearly after "Listening" appears. You have 15 seconds.');
+      const cfg = window.JARVIS_CONFIG || {};
+      const apiKey = cfg.apiKey || '';
+      if (!apiKey) {
+        fail('CARTESIA_API_KEY required. Set window.JARVIS_CONFIG.apiKey or use .env');
+        return;
+      }
+      info('Redirecting to main app with ?debug=1 — use mic button there.');
+      window.location.href = '../index.html?debug=1';
+    };
+  </script>
+</body>
+</html>

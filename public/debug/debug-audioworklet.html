@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JARVIS — AudioWorklet LIVE Debug</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; padding: 1.5rem; max-width: 640px; margin: 0 auto; }
+    h1 { font-size: 1.25rem; }
+    .result { margin: 0.5rem 0; padding: 0.5rem; border-radius: 6px; border: 1px solid transparent; }
+    .pass { background-color: #d4edda; color: #155724; border-color: #c3e6cb; }
+    .fail { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb; }
+    .pending { background-color: #fff3cd; color: #856404; border-color: #ffeeba; }
+    button { margin-top: 1rem; padding: 0.5rem 1rem; cursor: pointer; }
+    button:focus-visible { outline: 2px solid #0d6efd; outline-offset: 2px; }
+  </style>
+</head>
+<body>
+  <h1>AudioWorklet LIVE Debug</h1>
+  <p>Per <strong>aUdiO dOcS.md</strong> — validates AudioContext and worklet processors (STT capture, TTS playback).</p>
+  <div id="log"></div>
+  <button type="button" id="run">Run checks</button>
+
+  <script type="module">
+    const logEl = document.getElementById('log');
+    function log(msg, status = 'pending') {
+      const div = document.createElement('div');
+      div.className = 'result ' + status;
+      div.textContent = msg;
+      logEl.appendChild(div);
+    }
+
+    function pass(msg) { log('PASS: ' + msg, 'pass'); }
+    function fail(msg) { log('FAIL: ' + msg, 'fail'); }
+
+    document.getElementById('run').onclick = async () => {
+      logEl.innerHTML = '';
+      log('Starting AudioWorklet LIVE checks…', 'pending');
+
+      try {
+        if (typeof AudioContext === 'undefined' && typeof webkitAudioContext === 'undefined') {
+          fail('AudioContext not available');
+          return;
+        }
+        pass('AudioContext available');
+
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        const ctx = new Ctx();
+        if (ctx.state === 'suspended') await ctx.resume();
+        pass('AudioContext created and resumed: ' + ctx.state);
+
+        const base = new URL('../audio/', document.baseURI).href;
+        await ctx.audioWorklet.addModule(base + 'stt-capture-processor.js');
+        pass('STT capture processor loaded');
+
+        await ctx.audioWorklet.addModule(base + 'tts-playback-processor.js');
+        pass('TTS playback processor loaded');
+
+        const sttNode = new AudioWorkletNode(ctx, 'stt-capture-processor');
+        const ttsNode = new AudioWorkletNode(ctx, 'tts-playback-processor');
+        ttsNode.connect(ctx.destination);
+        pass('STT and TTS nodes created and TTS connected to destination');
+
+        sttNode.disconnect();
+        ttsNode.disconnect();
+        await ctx.close();
+        pass('Nodes disconnected, context closed');
+
+        log('All AudioWorklet LIVE checks passed.', 'pass');
+      } catch (e) {
+        fail(e.message || String(e));
+        console.error(e);
+      }
+    };
+  </script>
+</body>
+</html>
