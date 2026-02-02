@@ -23,6 +23,9 @@ npm run debug:config
 # Test n8n webhook connectivity
 npm run debug:n8n
 
+# Open app with ?debug=1 and send test message from console
+npm run debug:app
+
 # Check .env setup (no build required)
 npm run debug:env
 
@@ -39,6 +42,7 @@ npm run test:integration
 |------|---------|
 | `run-debug-suite.mjs` | CI-style pipeline: lint, test, build, vite build |
 | `check-n8n-webhook.js` | Quick n8n webhook connectivity check |
+| `open-app-debug-send.mjs` | Opens app at `?debug=1`, runs Node fetch test, then you run `JARVIS_DEBUG_SEND_TEST()` in the browser console to send a message and check for reply/errors |
 | `validate-config.js` | Validates Cartesia + n8n config (post-build) |
 | `check-env.js` | Validates .env file exists and has required keys |
 | `n8n-webhook.test.js` | Jest LIVE test for n8n webhook |

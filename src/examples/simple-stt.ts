@@ -42,25 +42,6 @@ async function main() {
     console.log('4. Call stt.finalize() when done');
     console.log('5. Call stt.done() to close session\n');
 
-    // Example: If you have a PCM file
-    // try {
-    //   const audioData = readFileSync('input_audio.pcm');
-    //   console.log(`Sending ${audioData.length} bytes of audio...\n`);
-    //   
-    //   // Send in 100ms chunks (1600 samples at 16kHz = 100ms)
-    //   const chunkSize = 1600 * 2; // 16-bit = 2 bytes per sample
-    //   for (let i = 0; i < audioData.length; i += chunkSize) {
-    //     const chunk = audioData.slice(i, i + chunkSize);
-    //     stt.sendAudioChunk(chunk.buffer);
-    //     await new Promise(resolve => setTimeout(resolve, 100));
-    //   }
-    //   
-    //   stt.finalize();
-    //   await new Promise(resolve => setTimeout(resolve, 2000));
-    // } catch (error) {
-    //   console.log('No input_audio.pcm file found (this is expected)');
-    // }
-
     // Keep connection alive
     console.log('STT ready. Press Ctrl+C to exit.\n');
     await new Promise(resolve => setTimeout(resolve, 5000));

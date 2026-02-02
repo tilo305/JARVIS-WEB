@@ -7,7 +7,7 @@ export const N8N_WEBHOOK_URL =
   'https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4';
 
 export const CARTESIA_CONFIG = {
-  API_KEY: process.env.CARTESIA_API_KEY ?? 'sk_car_GYAnGSmHkAFGYbr52wL9HG',
+  API_KEY: process.env.CARTESIA_API_KEY ?? '',
   VOICE_ID: '95131c95-525c-463b-893d-803bafdf93c4',
   API_VERSION: '2025-04-16',
 

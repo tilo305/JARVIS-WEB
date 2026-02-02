@@ -88,11 +88,12 @@ export class CartesiaSTTClient {
       return;
     }
 
+    // cArTeSiA dOcS.md: sample_rate must be a whole number (integer). String causes "Invalid sample rate" error.
     const config: STTConfig = {
       model: CARTESIA_CONFIG.STT.MODEL,
       language: CARTESIA_CONFIG.STT.LANGUAGE,
       encoding: CARTESIA_CONFIG.STT.ENCODING,
-      sample_rate: String(CARTESIA_CONFIG.STT.SAMPLE_RATE),
+      sample_rate: CARTESIA_CONFIG.STT.SAMPLE_RATE,
       min_volume: CARTESIA_CONFIG.STT.MIN_VOLUME,
       max_silence_duration_secs: CARTESIA_CONFIG.STT.MAX_SILENCE_DURATION_SECS,
     };

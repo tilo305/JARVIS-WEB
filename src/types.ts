@@ -78,12 +78,12 @@ export type TTSResponse =
   | TTSTimestampsResponse 
   | TTSErrorResponse;
 
-// STT Types
+// STT Types (cArTeSiA dOcS: sample_rate must be whole number, not string)
 export interface STTConfig {
   model: string;
   language: string;
   encoding: string;
-  sample_rate: string;
+  sample_rate: number;
   min_volume: string;
   max_silence_duration_secs: string;
 }

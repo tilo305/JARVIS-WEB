@@ -8,16 +8,21 @@
 import { N8N_WEBHOOK_URL } from '../../dist/config.js';
 import { buildN8nPayload } from '../../public/js/n8n-payload.js';
 
+const FETCH_TIMEOUT_MS = 15000;
+
 async function main() {
   console.log('[DEBUG] Testing n8n webhook:', N8N_WEBHOOK_URL);
   const payload = buildN8nPayload('Hello from JARVIS debug', { source: 'text' });
   console.log('[DEBUG] Payload keys:', Object.keys(payload).join(', '));
   try {
+    const controller = new AbortController();
+    const to = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     const res = await fetch(N8N_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-    });
+      signal: controller.signal,
+    }).finally(() => clearTimeout(to));
     const ok = res.ok;
     const data = await res.json().catch(() => ({}));
     console.log('[DEBUG] Status:', res.status, res.statusText);

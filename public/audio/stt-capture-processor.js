@@ -51,10 +51,8 @@ class STTCaptureProcessor extends AudioWorkletProcessor {
     }
 
     while (this.buffer.length >= SAMPLES_PER_CHUNK) {
-      const chunk = new Int16Array(SAMPLES_PER_CHUNK);
-      for (let i = 0; i < SAMPLES_PER_CHUNK; i++) {
-        chunk[i] = this.buffer.shift();
-      }
+      const taken = this.buffer.splice(0, SAMPLES_PER_CHUNK);
+      const chunk = new Int16Array(taken);
       this.port.postMessage({ type: 'audio', data: chunk.buffer }, [chunk.buffer]);
     }
     return true;

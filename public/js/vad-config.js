@@ -37,9 +37,9 @@ export const VAD_CONFIG = {
   // Useful when user clicks stop mic mid-utterance.
   submitUserSpeechOnPause: true,
 
-  // silenceAfterSpeechToStopMicMs: After VAD fires onSpeechEnd, wait this many ms
-  // of continued silence then auto-stop the mic (turn off STT, update button).
-  // Gives time for agent to respond while mic stops recording.
+  // silenceAfterSpeechToStopMicMs: After user stops speaking (onSpeechEnd), wait this
+  // many ms of silence. Then stop mic and send buffered transcript to agent.
+  // Natural bidirectional flow: user speaks → 2.5s silence → stop mic → agent responds.
   silenceAfterSpeechToStopMicMs: 2500,
 
   // silenceClosingMessageMs: After the agent finishes speaking (TTS done), wait this

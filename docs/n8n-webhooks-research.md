@@ -14,6 +14,8 @@ This document summarizes all n8n webhook usage across the project (single webhoo
 | **Content-Type** | `application/json` |
 | **Expected response** | JSON with one of: `output`, `reply`, `result`, `text`, `message`, `response`, `answer`, `content` |
 
+**No text or voice in chat?** If the Respond to Webhook node shows the correct output but the frontend gets nothing, the Webhook trigger node must use **Respond: "Using Respond to Webhook Node"**. See **`debug/N8N-RESPOND-TO-WEBHOOK-FIX.md`**.
+
 ---
 
 ## 1.5 Single Source of Truth: n8n Payload

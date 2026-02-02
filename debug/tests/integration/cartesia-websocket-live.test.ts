@@ -101,12 +101,13 @@ describe('LIVE Cartesia WebSocket (integration)', () => {
         sttWs = new WebSocket(url.toString());
 
         sttWs.on('open', () => {
+          // sample_rate must be integer (Cartesia rejects string)
           sttWs!.send(
             JSON.stringify({
               model: CARTESIA_CONFIG.STT.MODEL,
               language: 'en',
               encoding: 'pcm_s16le',
-              sample_rate: '16000',
+              sample_rate: 16000,
               min_volume: '0.0',
               max_silence_duration_secs: '2.0',
             })

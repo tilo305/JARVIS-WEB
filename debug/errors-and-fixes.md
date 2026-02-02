@@ -4,6 +4,35 @@ Per **zEn DeBuGgEr.md** — all fixes documented here. Ensure fixes are 100% wor
 
 ---
 
+## 2025-02-02 (STT Invalid Sample Rate — No Text / No Voice)
+
+### Symptom
+
+- Console error: `[JARVIS] [ERROR] STT server error Invalid sample rate: The sample rate is not valid, make sure it is a whole number.`
+- STT WebSocket closes immediately after connect
+- No transcript → no n8n call → no TTS response (even though n8n reports OK)
+
+### Root Cause
+
+Cartesia STT API rejects `sample_rate` when sent as string `"16000"`; it expects a whole number (integer).
+
+### Fix
+
+In `public/js/cartesia-audio-bridge.js`, changed STT config:
+- **Before:** `sample_rate: '16000'` (string)
+- **After:** `sample_rate: 16000` (integer)
+
+### Files
+
+- `public/js/cartesia-audio-bridge.js`
+- `tests/unit/cartesia-audio-bridge.test.js` (regression test)
+
+### Verify
+
+Reload `http://localhost:3000/?debug=1`, click mic, speak — STT should connect, transcripts should reach n8n, voice response should play.
+
+---
+
 ## 2025-02-02 (Fallback Revert Research — Mic & Text Messages)
 
 ### Symptom
@@ -36,6 +65,12 @@ Both the mic button and text messages revert to their fallbacks:
 
 Research complete. Use debug tools to diagnose; apply fixes based on findings (e.g. n8n workflow structure, VAD timing).
 
+### Mic Flow — Natural Bidirectional Conversation (2025-02-02)
+
+- **Intended flow:** User speaks → stops → 2.5s timer starts → after 2.5s of user silence, stop mic → then send transcript to agent.
+- **Implementation:** onSpeechEnd starts 2.5s timer. Final transcript from STT is buffered in _pendingFinalTranscript. When 2.5s fires: stop mic (close WebSocket), then call onTranscript with buffered transcript so agent responds. WebSocket stays open for 2.5s so we receive the transcript before closing.
+- **File:** `public/js/cartesia-audio-bridge.js`, `public/js/vad-config.js`
+
 ### n8n Full Payload Fix (2025-02-02)
 
 - **Issue:** Webhook body only had `message`; session_id, timezone, location, etc. were missing. Debug tools sent minimal payload.
@@ -51,6 +86,21 @@ Research complete. Use debug tools to diagnose; apply fixes based on findings (e
   - **10s** (`startAgentSilenceTimer`): Called when agent finishes TTS; after 10s no user speech, agent says "Standing by...", then mic stops.
 - **Files:** `cartesia-audio-bridge.js`, `app.js`, `vad-config.js`
 - **Tests:** `tests/unit/cartesia-audio-bridge.test.js` added for bridge API surface.
+
+### Mic Not Sending Payload to n8n (2025-02-02)
+
+- **Issue:** Mic flow sometimes never sends transcript payload to n8n (recurring). User speaks but no POST to webhook.
+- **Root causes (see `debug/MIC-N8N-PAYLOAD-RESEARCH.md`):**
+  1. **Race:** Final transcript from Cartesia STT can arrive after the 2.5s timer fires; when timer ran, `_pendingFinalTranscript` was still null → no `onTranscript` → no n8n.
+  2. **No final:** STT might only send partials (`is_final: false`) for short utterances → `_pendingFinalTranscript` never set → no send.
+  3. **Empty text:** `msg.text` undefined/empty → we never called `onTranscript`.
+- **Fix:** In `cartesia-audio-bridge.js`:
+  - Added **last-partial fallback:** `_lastTranscriptText` updated on every transcript (partial or final) with non-empty text; when 2.5s timer fires, use `_pendingFinalTranscript.text` if present, else `_lastTranscriptText`, so we always send something when the user spoke.
+  - **Normalize text:** Store transcript as `String(msg.text || '').trim()` so we never rely on undefined/whitespace.
+  - Clear `_lastTranscriptText` on `onSpeechStart` (per utterance) and in `stopSTT()`.
+- **App.js:** `onTranscript` now uses trimmed text and logs "sending voice payload to n8n" / "empty text, skipping n8n" for easier diagnosis.
+- **Files:** `public/js/cartesia-audio-bridge.js`, `public/js/app.js`, `debug/MIC-N8N-PAYLOAD-RESEARCH.md`
+- **Status:** Fixed. Verify with `?debug=1`: speak into mic, confirm console shows "sending transcript to agent" and "n8n: sending payload" and Network tab shows POST to n8n.
 
 ---
 

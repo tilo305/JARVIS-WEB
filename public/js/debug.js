@@ -47,4 +47,4 @@ const DEBUG = {
 };
 
 DEBUG.init();
-export { DEBUG, isDebugEnabled };
+export { DEBUG };

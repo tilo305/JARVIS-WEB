@@ -10,7 +10,8 @@ class TTSPlaybackProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
     this.buffer = [];
-    this.upsampleRatio = sampleRate / TTS_SAMPLE_RATE;
+    const ctxRate = typeof sampleRate !== 'undefined' ? sampleRate : (globalThis.sampleRate ?? 48000);
+    this.upsampleRatio = ctxRate / TTS_SAMPLE_RATE;
     this.port.onmessage = (e) => {
       if (e.data.type === 'audio') {
         const samples = e.data.samples;
@@ -18,6 +19,9 @@ class TTSPlaybackProcessor extends AudioWorkletProcessor {
           this.buffer.push(...samples);
         } else if (samples instanceof Int16Array) {
           this.buffer.push(...Array.from(samples));
+        } else if (samples instanceof ArrayBuffer) {
+          const arr = new Int16Array(samples);
+          this.buffer.push(...Array.from(arr));
         }
       } else if (e.data.type === 'clear') {
         this.buffer = [];
@@ -26,7 +30,9 @@ class TTSPlaybackProcessor extends AudioWorkletProcessor {
   }
 
   int16ToFloat(s) {
-    return s >= 0x8000 ? -(0x10000 - s) / 0x8000 : s / 0x7FFF;
+    // Standard Int16 PCM (-32768..32767) → Float32 (-1..1); handles both signed and unsigned
+    const n = typeof s === 'number' && !Number.isNaN(s) ? s : 0;
+    return n >= 0x8000 ? -(0x10000 - n) / 0x8000 : n / 0x7FFF;
   }
 
   process(inputs, outputs) {

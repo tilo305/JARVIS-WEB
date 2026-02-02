@@ -8,7 +8,7 @@ import { dirname, join } from 'path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..');
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 async function main() {
   const isBuild = process.argv.includes('build');

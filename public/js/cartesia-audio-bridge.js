@@ -57,6 +57,10 @@ export class CartesiaAudioBridge {
     this._silenceStopTimer = null;
     /** Timer: ~10s silence → single closing message then INACTIVE (fires once per timeout) */
     this._silenceClosingTimer = null;
+    /** Pending final transcript: buffer until 2.5s fires, then send to agent */
+    this._pendingFinalTranscript = null;
+    /** Last transcript text (partial or final) — fallback when final arrives late or never */
+    this._lastTranscriptText = '';
   }
 
   /** Whether the mic/STT pipeline is currently running (for UI sync) */
@@ -162,12 +166,12 @@ export class CartesiaAudioBridge {
     return new Promise((resolve, reject) => {
       this.sttWs.onopen = () => {
         DEBUG.trace('STT WebSocket open');
-        // cArTeSiA dOcS.md: Initial Configuration Message uses string values; sample_rate must be a whole number (string "16000").
+        // cArTeSiA dOcS.md: sample_rate must be a whole number. Use integer to avoid float/string validation issues.
         const sttConfig = {
           model: 'ink-whisper',
           language: this.language,
           encoding: 'pcm_s16le',
-          sample_rate: '16000',
+          sample_rate: 16000,
           min_volume: '0.0',
           max_silence_duration_secs: '2.0',
         };
@@ -179,11 +183,19 @@ export class CartesiaAudioBridge {
         try {
           const msg = JSON.parse(e.data);
           if (msg.type === 'transcript') {
-            DEBUG.trace('STT transcript', { text: msg.text?.slice(0, 50), is_final: msg.is_final });
+            const text = (msg.text != null ? String(msg.text) : '').trim();
+            if (text) this._lastTranscriptText = text;
+            DEBUG.trace('STT transcript', { text: text.slice(0, 50), is_final: msg.is_final });
             this.onPartialTranscript(msg.text, msg.is_final);
-            this.onTranscript(msg.text, msg.is_final, msg.request_id || '');
+            if (msg.is_final && text) {
+              this._pendingFinalTranscript = { text, request_id: msg.request_id || '' };
+            }
           } else if (msg.type === 'error' || msg.error) {
-            DEBUG.error('STT server error', msg.error || msg);
+            const sttErr = msg.error ?? msg.message ?? (typeof msg === 'string' ? msg : JSON.stringify(msg));
+            DEBUG.error('STT server error', sttErr, msg);
+            try {
+              this.onError(typeof sttErr === 'string' ? sttErr : 'STT error. Check API key and Cartesia status.');
+            } catch { /* ignore */ }
           } else if (DEBUG.enabled) {
             DEBUG.trace('STT message', { type: msg.type });
           }
@@ -272,6 +284,8 @@ export class CartesiaAudioBridge {
           DEBUG.trace('VAD onSpeechStart - enabling STT streaming');
           this._clearSilenceStopTimer();
           this._clearSilenceClosingTimer();
+          this._pendingFinalTranscript = null;
+          this._lastTranscriptText = '';
           this.onSpeechStart();
           this._bargeIn();
           this._sttStreaming = true;
@@ -281,13 +295,25 @@ export class CartesiaAudioBridge {
           DEBUG.trace('VAD onSpeechEnd - sending finalize, starting 2.5s mic stop timer');
           this.onSpeechEnd();
           this._sttStreaming = false;
+          this._pendingFinalTranscript = null;
           if (this.sttWs?.readyState === WebSocket.OPEN) this.sttWs.send('finalize');
           const stopMs = VAD_CONFIG.silenceAfterSpeechToStopMicMs ?? 2500;
           this._clearSilenceStopTimer();
           if (stopMs > 0) {
             this._silenceStopTimer = setTimeout(() => {
               this._silenceStopTimer = null;
+              const pending = this._pendingFinalTranscript;
+              this._pendingFinalTranscript = null;
+              const fallback = (this._lastTranscriptText || '').trim();
+              this._lastTranscriptText = '';
               this.stopSTT();
+              const textToSend = (pending && String(pending.text || '').trim()) || fallback || '';
+              if (textToSend) {
+                DEBUG.trace('2.5s elapsed - sending transcript to agent', { fromFinal: !!pending, preview: textToSend.slice(0, 50) });
+                this.onTranscript(textToSend, true, pending?.request_id || '');
+              } else {
+                DEBUG.trace('2.5s elapsed - no transcript to send (empty or missing)');
+              }
             }, stopMs);
           }
         },
@@ -333,6 +359,8 @@ export class CartesiaAudioBridge {
   stopSTT() {
     this._clearSilenceStopTimer();
     this._clearSilenceClosingTimer();
+    this._pendingFinalTranscript = null;
+    this._lastTranscriptText = '';
     const wasActive = this._sttActive;
     this._sttActive = false;
     if (this.vad) {

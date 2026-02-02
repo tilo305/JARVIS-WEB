@@ -28,6 +28,7 @@
     "verify": "npm run lint:check && npm run build && npm test",
     "debug": "node debug/run-debug-suite.mjs",
     "debug:n8n": "npm run build && node debug/tools/check-n8n-webhook.js",
+    "debug:app": "node debug/tools/open-app-debug-send.mjs",
     "debug:config": "npm run build && node debug/tools/validate-config.js",
     "debug:live": "jest debug/live",
     "debug:env": "node debug/live/check-env.js",

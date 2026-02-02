@@ -105,8 +105,10 @@ function escapeHtml(s) {
 const N8N_REPLY_KEYS = ['output', 'reply', 'result', 'text', 'message', 'response', 'answer', 'content'];
 
 /**
- * Get client location/timezone and locale for n8n (no geolocation permission required).
- * @returns {{ timezone: string, locale: string, language: string }}
+ * Extract reply string from n8n webhook JSON response.
+ * Checks keys: output, reply, result, text, message, response, answer, content; then arrays and nested objects.
+ * @param {Object} data - Parsed JSON response from n8n
+ * @returns {string|null} - Reply text or null if none found
  */
 function extractReplyFromJson(data) {
   if (!data || typeof data !== 'object') return null;
@@ -167,10 +169,30 @@ async function getLLMReply(userText, options = {}) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    const data = await res.json().catch(() => ({}));
+    const contentType = res.headers.get('content-type') || '';
+    let data = {};
+    if (contentType.includes('application/json')) {
+      data = await res.json().catch(() => ({}));
+    } else {
+      const text = await res.text().catch(() => '');
+      if (text.trim()) {
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = { output: text.trim() };
+        }
+      }
+    }
     const reply = extractReplyFromJson(data);
     DEBUG.trace('n8n: response', { status: res.status, hasReply: !!reply, replyPreview: typeof reply === 'string' ? reply.slice(0, 50) : '' });
+    if (DEBUG.enabled && typeof reply !== 'string') {
+      DEBUG.trace('n8n: response body (no reply extracted)', data);
+    }
     if (typeof reply === 'string') return reply;
+    // No reply in body — often because Webhook node didn't wait for Respond to Webhook node
+    if (res.ok && (Object.keys(data).length === 0 || !extractReplyFromJson(data))) {
+      DEBUG.error('n8n: empty or no reply in response body. In n8n, set Webhook node Respond to "Using Respond to Webhook Node". See debug/N8N-RESPOND-TO-WEBHOOK-FIX.md');
+    }
     const natural = getNaturalFallback(payload.message);
     const fallback = natural || "I heard you. I'm still getting set up — please try again in a moment.";
     DEBUG.trace('n8n: using fallback (no reply in response)', { natural: !!natural, fallbackPreview: fallback.slice(0, 50) });
@@ -192,14 +214,15 @@ const bridge = new CartesiaAudioBridge({
   },
   onTranscript: async (text, isFinal) => {
     if (!isFinal) return;
-    if (!text.trim()) {
-      DEBUG.trace('onTranscript: empty text, skipping n8n');
+    const trimmed = (text || '').trim();
+    if (!trimmed) {
+      DEBUG.trace('onTranscript: empty text, skipping n8n (no payload sent)');
       return;
     }
-    DEBUG.trace('onTranscript: final text received, sending to n8n', { text: text.slice(0, 80) });
-    appendMessage('user', text);
+    DEBUG.trace('onTranscript: sending voice payload to n8n', { length: trimmed.length, preview: trimmed.slice(0, 80) });
+    appendMessage('user', trimmed);
     setStatus('Processing…', 'listening');
-    const replyText = await getLLMReply(text, { source: 'voice' });
+    const replyText = await getLLMReply(trimmed, { source: 'voice' });
     appendMessage('assistant', replyText);
     setStatus('Speaking…', 'speaking');
     bridge.speakText(replyText).then(() => {
@@ -247,27 +270,78 @@ const bridge = new CartesiaAudioBridge({
   },
 });
 
+/** Debug tool: when ?debug=1, expose JARVIS_DEBUG_SEND_TEST() in console to send a test message and check n8n response. */
+if (typeof window !== 'undefined' && (DEBUG.enabled || (window.location && window.location.search && /[?&]debug=1/.test(window.location.search)))) {
+  window.JARVIS_DEBUG_SEND_TEST = async function () {
+    const msg = 'Hello from JARVIS debug';
+    const payload = buildPayload(msg, { source: 'text' });
+    /* eslint-disable no-console -- debug tool */
+    console.log('[JARVIS DEBUG] Sending test message to n8n...', payload.message);
+    try {
+      const res = await fetch(n8nWebhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const contentType = res.headers.get('content-type') || '';
+      let data = {};
+      if (contentType.includes('application/json')) {
+        data = await res.json().catch(() => ({}));
+      } else {
+        const text = await res.text().catch(() => '');
+        if (text.trim()) {
+          try {
+            data = JSON.parse(text);
+          } catch {
+            data = { output: text.trim() };
+          }
+        }
+      }
+      const reply = extractReplyFromJson(data);
+      if (typeof reply === 'string') {
+        console.log('[JARVIS DEBUG] Reply OK:', reply.slice(0, 120) + (reply.length > 120 ? '…' : ''));
+        return { ok: true, reply };
+      }
+      console.error('[JARVIS DEBUG] No reply in response.');
+      console.log('[JARVIS DEBUG] Response body:', data);
+      console.log('[JARVIS DEBUG] Fix: 1. Use production URL (webhook/ not webhook-test/). 2. Ensure n8n workflow is active. 3. Check CORS if cross-origin. See debug/N8N-RESPOND-TO-WEBHOOK-FIX.md');
+      return { ok: false, data };
+    } catch (err) {
+      console.error('[JARVIS DEBUG] Error:', err.message);
+      console.log('[JARVIS DEBUG] Fix: Check network, CORS, and webhook URL. See debug/N8N-RESPOND-TO-WEBHOOK-FIX.md');
+      return { ok: false, error: err.message };
+    }
+  };
+  console.log('[JARVIS DEBUG] Run JARVIS_DEBUG_SEND_TEST() in the console to send a test message and check the n8n response.');
+}
+/* eslint-enable no-console */
+
 let pendingAttachments = [];
 
 btnSend.addEventListener('click', async () => {
   const text = textInput.value.trim();
   if (!text) return;
-  if (!apiKey) {
-    setStatus('Add CARTESIA_API_KEY (or set window.JARVIS_CONFIG.apiKey)', 'error');
-    return;
-  }
   textInput.value = '';
   textInput.placeholder = 'Type or speak...';
   const attachmentsForPayload = [...pendingAttachments];
   appendMessage('user', text, attachmentsForPayload.length ? attachmentsForPayload : []);
   pendingAttachments = [];
   setStatus('Processing…', 'listening');
-  const replyText = await getLLMReply(text, { source: 'text', attachments: attachmentsForPayload });
-  appendMessage('assistant', replyText);
-  setStatus('Speaking…', 'speaking');
   try {
-    await bridge.speakText(replyText);
-    setStatus('Ready');
+    const replyText = await getLLMReply(text, { source: 'text', attachments: attachmentsForPayload });
+    appendMessage('assistant', replyText);
+    if (apiKey) {
+      setStatus('Speaking…', 'speaking');
+      try {
+        await bridge.speakText(replyText);
+        setStatus('Ready');
+      } catch (err) {
+        setStatus('Error', 'error');
+        appendMessage('assistant', 'Sorry, something went wrong. ' + (err?.message || err));
+      }
+    } else {
+      setStatus('Ready (no voice: add CARTESIA_API_KEY for TTS)', '');
+    }
   } catch (err) {
     setStatus('Error', 'error');
     appendMessage('assistant', 'Sorry, something went wrong. ' + (err?.message || err));
