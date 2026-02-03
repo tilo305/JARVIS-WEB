@@ -40,8 +40,8 @@ describe('CARTESIA_CONFIG', () => {
       expect(typeof CARTESIA_CONFIG.TTS.MODEL).toBe('string');
     });
 
-    it('should have sample rate 8000', () => {
-      expect(CARTESIA_CONFIG.TTS.SAMPLE_RATE).toBe(8000);
+    it('should have sample rate 44100', () => {
+      expect(CARTESIA_CONFIG.TTS.SAMPLE_RATE).toBe(44100);
     });
 
     it('should have PCM encoding', () => {

@@ -45,14 +45,46 @@ export class CartesiaTTSClient {
    * Connect to Cartesia TTS WebSocket
    */
   async connect(): Promise<void> {
+    // Prevent multiple simultaneous connection attempts
+    if (this.ws && (this.ws.readyState === 0 || this.ws.readyState === 1)) {
+      // CONNECTING (0) or OPEN (1)
+      if (this.ws.readyState === 1 && this.isConnected) {
+        return Promise.resolve(); // Already connected
+      }
+      // If connecting, wait for it or reject
+      return Promise.reject(new Error('TTS WebSocket connection already in progress'));
+    }
+
     return new Promise((resolve, reject) => {
       const url = new URL(CARTESIA_CONFIG.TTS.ENDPOINT);
       url.searchParams.set('api_key', this.apiKey);
       url.searchParams.set('cartesia_version', CARTESIA_CONFIG.API_VERSION);
 
+      // Clean up existing connection if any
+      if (this.ws) {
+        try {
+          this.ws.removeAllListeners();
+          if (this.ws.readyState !== 3) { // Not CLOSED
+            this.ws.close();
+          }
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
+
       this.ws = new WebSocket(url.toString());
 
+      const timeout = setTimeout(() => {
+        if (this.ws && this.ws.readyState !== 1) {
+          this.ws.close();
+          const err = new Error('TTS WebSocket connection timeout');
+          this.isConnected = false;
+          reject(err);
+        }
+      }, CARTESIA_CONFIG.WS.TIMEOUT_MS);
+
       this.ws.on('open', () => {
+        clearTimeout(timeout);
         console.log('[TTS] Connected to Cartesia TTS WebSocket');
         this.isConnected = true;
         this.reconnectAttempts = 0;
@@ -64,16 +96,18 @@ export class CartesiaTTSClient {
       });
 
       this.ws.on('error', (error) => {
+        clearTimeout(timeout);
         console.error('[TTS] WebSocket error:', error);
         this.isConnected = false;
         if (this.onErrorCallback) {
-          this.onErrorCallback(error.message, '');
+          this.onErrorCallback(error.message || 'TTS WebSocket error', '');
         }
         reject(error);
       });
 
-      this.ws.on('close', () => {
-        console.log('[TTS] WebSocket closed');
+      this.ws.on('close', (code, reason) => {
+        clearTimeout(timeout);
+        console.log('[TTS] WebSocket closed', { code, reason: reason?.toString() });
         this.isConnected = false;
         if (!this._disconnecting) this.attemptReconnect();
       });
@@ -141,7 +175,7 @@ export class CartesiaTTSClient {
     const { context_id } = response;
     this.activeContexts.delete(context_id);
     
-    // Clean up after 1 second (context expiration)
+    // cArTeSiA dOcS: Contexts automatically expire 1 second after the last audio output
     setTimeout(() => {
       this.contextConfigs.delete(context_id);
       this.contextStartTimes.delete(context_id);
@@ -177,11 +211,17 @@ export class CartesiaTTSClient {
       throw new Error('TTS WebSocket not connected');
     }
 
+    // Check WebSocket readyState before sending
+    if (this.ws.readyState !== 1) { // WebSocket.OPEN = 1
+      throw new Error(`TTS WebSocket not open (readyState: ${this.ws.readyState})`);
+    }
+
     // Get or create context configuration
     let config = this.contextConfigs.get(contextId);
     
     if (!config) {
-      // First message for this context — cArTeSiA dOcS: raw, pcm_s16le 8kHz, max_buffer_delay_ms 0 for streaming
+      // First message for this context — cArTeSiA dOcS: raw, pcm_s16le, max_buffer_delay_ms 0 for streaming
+      // Note: Using 44100 Hz for quality (docs recommend 8000 Hz for optimal latency)
       config = {
         model_id: this.model,
         voice: {
@@ -191,12 +231,12 @@ export class CartesiaTTSClient {
         language: CARTESIA_CONFIG.TTS.LANGUAGE,
         context_id: contextId,
         output_format: {
-          container: 'raw',
-          encoding: CARTESIA_CONFIG.TTS.ENCODING,
-          sample_rate: CARTESIA_CONFIG.TTS.SAMPLE_RATE,
+          container: 'raw', // cArTeSiA dOcS: No container overhead
+          encoding: CARTESIA_CONFIG.TTS.ENCODING, // pcm_s16le - recommended for best performance
+          sample_rate: CARTESIA_CONFIG.TTS.SAMPLE_RATE, // 44100 Hz for quality (8000 Hz for optimal latency)
         },
         add_timestamps: true,
-        max_buffer_delay_ms: CARTESIA_CONFIG.TTS.MAX_BUFFER_DELAY_MS,
+        max_buffer_delay_ms: CARTESIA_CONFIG.TTS.MAX_BUFFER_DELAY_MS, // 0 = no server buffering when streaming client-side
       };
       this.contextConfigs.set(contextId, config);
       this.contextStartTimes.set(contextId, Date.now());
@@ -204,10 +244,13 @@ export class CartesiaTTSClient {
     }
 
     // Create request with transcript and continue flag
+    // cArTeSiA dOcS: All fields except transcript, continue, and duration must remain identical
+    // across requests on the same context_id. We spread config to ensure this.
     const request: TTSRequest = {
       ...config,
       transcript,
       continue: isContinue,
+      // Note: duration is not included - it's optional and not part of our config
     };
 
     this.ws.send(JSON.stringify(request));
@@ -228,9 +271,18 @@ export class CartesiaTTSClient {
 
   /**
    * Cancel a context
+   * cArTeSiA dOcS: Send {"context_id": "...", "cancel": true}
+   * Only halts requests that haven't begun generating
    */
   cancelContext(contextId: string): void {
     if (!this.isConnected || !this.ws) {
+      return;
+    }
+
+    // Check WebSocket readyState before sending
+    if (this.ws.readyState !== 1) { // WebSocket.OPEN = 1
+      console.warn('[TTS] Cannot cancel context: WebSocket not open (readyState:', this.ws.readyState, ')');
+      this.activeContexts.delete(contextId);
       return;
     }
 
@@ -295,26 +347,58 @@ export class CartesiaTTSClient {
    */
   disconnect(): void {
     this._disconnecting = true;
+    
+    // Clear reconnect timer
     if (this.reconnectTimerId !== null) {
       clearTimeout(this.reconnectTimerId);
       this.reconnectTimerId = null;
     }
+    
+    // Close WebSocket properly
     if (this.ws) {
-      this.ws.close();
-      this.ws = null;
+      try {
+        // Remove all listeners to prevent reconnection attempts
+        this.ws.removeAllListeners();
+        
+        // Close the connection
+        if (this.ws.readyState !== 3) { // Not CLOSED
+          this.ws.close();
+        }
+      } catch (err) {
+        console.error('[TTS] Error during disconnect:', err);
+      } finally {
+        this.ws = null;
+      }
     }
+    
+    // Reset state
     this._disconnecting = false;
     this.isConnected = false;
     this.contextConfigs.clear();
     this.activeContexts.clear();
     this.contextStartTimes.clear();
     this.firstByteTimes.clear();
+    this.reconnectAttempts = 0;
   }
 
   /**
    * Check if connected
    */
   get connected(): boolean {
-    return this.isConnected;
+    return this.isConnected && this.ws?.readyState === 1; // WebSocket.OPEN = 1
+  }
+
+  /**
+   * Get WebSocket readyState for debugging
+   */
+  get readyState(): number {
+    return this.ws?.readyState ?? 3; // CLOSED = 3
+  }
+
+  /**
+   * Check if WebSocket is in a valid state for operations
+   */
+  isReady(): boolean {
+    return this.connected && this.ws?.readyState === 1;
   }
 }

@@ -41,7 +41,7 @@ describe('Embedded CSS', () => {
     it('defines :root variables', () => {
       expect(css).toMatch(/:root\s*\{/);
       expect(css).toMatch(/--bg-deep:/);
-      expect(css).toMatch(/--arc-blue:/);
+      expect(css).toMatch(/--iron-red:/);
       expect(css).toMatch(/--gold:/);
     });
 
@@ -56,7 +56,7 @@ describe('Embedded CSS', () => {
 
     it('has focus-visible for accessibility', () => {
       expect(css).toMatch(/focus-visible/);
-      expect(css).toMatch(/outline.*var\(--arc-blue\)|outline.*#00d4ff/);
+      expect(css).toMatch(/outline.*var\(--gold\)|outline.*var\(--iron-red\)|outline.*#FFB800|outline.*#C41E3A/);
     });
 
     it('respects prefers-reduced-motion', () => {

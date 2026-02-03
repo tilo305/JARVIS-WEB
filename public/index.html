@@ -4,85 +4,379 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>JARVIS — Voice &amp; Chat</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%2300d4ff' opacity='0.2'/><circle cx='16' cy='16' r='10' fill='none' stroke='%23c9a227' stroke-width='2'/><circle cx='16' cy='16' r='4' fill='%2300d4ff'/></svg>" type="image/svg+xml">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%23C41E3A' opacity='0.3'/><circle cx='16' cy='16' r='10' fill='none' stroke='%23FFB800' stroke-width='2'/><circle cx='16' cy='16' r='4' fill='%23DC143C'/></svg>" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet">
+  <!-- Modern UI v2.0 - Enhanced Iron Man Theme with Glassmorphism -->
   <style>
     :root {
-      --bg-deep: #060a0f;
-      --bg-panel: #0d1117;
-      --bg-input: #161b22;
-      --border: #21262d;
-      --gold: #c9a227;
-      --gold-dim: #8b7355;
-      --red: #e63946;
-      --arc-blue: #00d4ff;
-      --text: #e6edf3;
-      --text-muted: #8b949e;
-      --user-msg-bg: rgba(0, 212, 255, 0.08);
-      --assistant-msg-bg: rgba(201, 162, 39, 0.06);
-      --radius: 12px;
-      --radius-sm: 8px;
+      --bg-deep: #0a0a0f;
+      --bg-panel: #0f0f15;
+      --bg-input: #1a1a22;
+      --border: #2a2a35;
+      /* Iron Man Gold - Hot Rod Gold */
+      --gold: #FFB800;
+      --gold-bright: #FFD700;
+      --gold-glow: #FFED4E;
+      --gold-dim: #FF8C00;
+      /* Iron Man Red - Hot Rod Red */
+      --iron-red: #C41E3A;
+      --iron-red-bright: #DC143C;
+      --iron-red-glow: #FF1744;
+      --iron-red-dim: #8B0000;
+      /* Accent Colors */
+      --red: #FF1744;
+      --text: #F5F5F5;
+      --text-muted: #B0B0B0;
+      --user-msg-bg: rgba(196, 30, 58, 0.15);
+      --assistant-msg-bg: rgba(255, 184, 0, 0.12);
+      --radius: 20px;
+      --radius-sm: 12px;
+      /* Modern easing functions */
+      --ease-out: cubic-bezier(0, 0, 0.58, 1);
+      --ease-in-out: cubic-bezier(0.42, 0, 0.58, 1);
+      --ease-material: cubic-bezier(0.4, 0, 0.2, 1);
     }
-    * { box-sizing: border-box; }
+    * { 
+      box-sizing: border-box;
+    }
     body {
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       background: var(--bg-deep);
+      background-image: 
+        radial-gradient(circle at 20% 30%, rgba(196, 30, 58, 0.2) 0%, transparent 60%),
+        radial-gradient(circle at 80% 70%, rgba(255, 184, 0, 0.25) 0%, transparent 60%),
+        radial-gradient(circle at 50% 50%, rgba(255, 184, 0, 0.15) 0%, transparent 70%),
+        linear-gradient(135deg, rgba(196, 30, 58, 0.12) 0%, rgba(255, 184, 0, 0.1) 50%, rgba(196, 30, 58, 0.08) 100%);
       color: var(--text);
       margin: 0;
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: 
+        repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(196, 30, 58, 0.05) 2px, rgba(196, 30, 58, 0.05) 4px),
+        repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(255, 184, 0, 0.05) 2px, rgba(255, 184, 0, 0.05) 4px),
+        repeating-linear-gradient(45deg, transparent, transparent 1px, rgba(255, 184, 0, 0.03) 1px, rgba(255, 184, 0, 0.03) 2px);
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.5;
+    }
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: 
+        radial-gradient(ellipse at 30% 40%, rgba(196, 30, 58, 0.06) 0%, transparent 50%),
+        radial-gradient(ellipse at 70% 60%, rgba(255, 184, 0, 0.05) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(255, 184, 0, 0.04) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+      animation: backgroundPulse 8s ease-in-out infinite;
+    }
+    @keyframes backgroundPulse {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 0.7; }
     }
     .chat-interface {
       width: 600px;
       height: 500px;
       display: flex;
       flex-direction: column;
-      background: var(--bg-panel);
-      border: 1px solid var(--border);
+      background: rgba(15, 15, 21, 0.7);
+      background-image: 
+        linear-gradient(135deg, rgba(196, 30, 58, 0.15) 0%, rgba(255, 184, 0, 0.12) 50%, rgba(196, 30, 58, 0.1) 100%),
+        radial-gradient(circle at top left, rgba(196, 30, 58, 0.2) 0%, transparent 50%),
+        radial-gradient(circle at bottom right, rgba(255, 184, 0, 0.18) 0%, transparent 50%);
+      border: none;
       border-radius: var(--radius);
       overflow: hidden;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      box-shadow: 
+        0 25px 70px rgba(0, 0, 0, 0.8),
+        0 0 0 2px rgba(196, 30, 58, 0.3),
+        0 0 80px rgba(196, 30, 58, 0.3),
+        0 0 120px rgba(255, 184, 0, 0.2),
+        0 0 100px rgba(196, 30, 58, 0.15),
+        inset 0 2px 4px rgba(255, 255, 255, 0.12),
+        inset 0 -2px 4px rgba(255, 184, 0, 0.15);
+      backdrop-filter: blur(25px) saturate(200%);
+      -webkit-backdrop-filter: blur(25px) saturate(200%);
+      position: relative;
+      z-index: 1;
+    }
+    .chat-interface::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: var(--radius);
+      padding: 3px;
+      background: rgba(255, 184, 0, 0.3);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+      z-index: -1;
+    }
+    .chat-interface::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: rgba(255, 184, 0, 0.3);
+      pointer-events: none;
+      box-shadow: 
+        0 0 10px rgba(255, 184, 0, 0.2);
     }
     .header {
       flex-shrink: 0;
       padding: 1rem 1.5rem;
-      border-bottom: 1px solid var(--border);
+      border-bottom: 2px solid;
+      border-image: linear-gradient(90deg, transparent, var(--iron-red), var(--gold), var(--iron-red-bright), var(--gold), var(--iron-red), transparent) 1;
       display: flex;
       align-items: center;
       gap: 0.75rem;
-      background: var(--bg-panel);
+      background: rgba(15, 15, 21, 0.6);
+      backdrop-filter: blur(30px) saturate(200%);
+      -webkit-backdrop-filter: blur(30px) saturate(200%);
+      position: relative;
+      box-shadow: 
+        0 4px 16px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.12),
+        0 0 30px rgba(196, 30, 58, 0.2),
+        0 0 20px rgba(255, 184, 0, 0.15);
+    }
+    .header::after {
+      content: '';
+      position: absolute;
+      bottom: -2px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, 
+        transparent, 
+        var(--iron-red) 20%, 
+        var(--gold) 40%, 
+        var(--iron-red-bright) 50%, 
+        var(--gold) 60%, 
+        var(--iron-red) 80%, 
+        transparent
+      );
+      box-shadow: 
+        0 0 20px var(--iron-red), 
+        0 0 35px var(--gold);
+      animation: borderGlow 3s ease-in-out infinite;
+    }
+    @keyframes borderGlow {
+      0%, 100% { 
+        opacity: 0.8;
+        box-shadow: 
+          0 0 20px var(--iron-red), 
+          0 0 35px var(--gold);
+      }
+      50% { 
+        opacity: 1;
+        box-shadow: 
+          0 0 30px var(--iron-red), 
+          0 0 50px var(--gold),
+          0 0 40px var(--iron-red-bright);
+      }
     }
     .header .logo {
       width: 36px;
       height: 36px;
       border-radius: 50%;
-      background: radial-gradient(circle at 30% 30%, var(--arc-blue), var(--gold));
-      box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+      background: radial-gradient(circle at 30% 30%, var(--iron-red-bright), var(--gold-bright), var(--iron-red), var(--gold));
+      box-shadow: 
+        0 0 40px rgba(196, 30, 58, 0.9),
+        0 0 80px rgba(196, 30, 58, 0.6),
+        0 0 120px rgba(255, 184, 0, 0.5),
+        0 0 100px rgba(255, 184, 0, 0.4),
+        inset 0 0 30px rgba(255, 184, 0, 0.6),
+        inset 0 0 50px rgba(196, 30, 58, 0.4);
+      position: relative;
+      transition: transform var(--ease-material) 300ms, box-shadow var(--ease-material) 300ms;
+      border: 2px solid rgba(255, 184, 0, 0.5);
+    }
+    .header .logo::before {
+      content: '';
+      position: absolute;
+      inset: -4px;
+      border-radius: 50%;
+      background: conic-gradient(from 0deg, var(--iron-red), var(--gold), var(--iron-red-bright), var(--gold), var(--iron-red));
+      opacity: 0.5;
+      animation: logoRotate 3s linear infinite;
+      z-index: -1;
+    }
+    @keyframes logoRotate {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      .header .logo {
+        animation: logoGlow 2s ease-in-out infinite;
+      }
+    }
+    @keyframes logoGlow {
+      0%, 100% { 
+        box-shadow: 
+          0 0 40px rgba(196, 30, 58, 0.9),
+          0 0 80px rgba(196, 30, 58, 0.6),
+          0 0 120px rgba(255, 184, 0, 0.5),
+          0 0 100px rgba(255, 184, 0, 0.4),
+          inset 0 0 30px rgba(255, 184, 0, 0.6);
+        transform: scale(1);
+      }
+      50% { 
+        box-shadow: 
+          0 0 70px rgba(196, 30, 58, 1),
+          0 0 140px rgba(196, 30, 58, 0.8),
+          0 0 200px rgba(255, 184, 0, 0.7),
+          0 0 160px rgba(255, 184, 0, 0.6),
+          inset 0 0 40px rgba(255, 184, 0, 0.8),
+          inset 0 0 25px rgba(196, 30, 58, 0.5);
+        transform: scale(1.08);
+      }
     }
     .header h1 {
       font-family: 'Orbitron', sans-serif;
       font-size: 1.25rem;
       font-weight: 700;
       margin: 0;
-      letter-spacing: 0.05em;
-      background: linear-gradient(135deg, var(--gold), var(--arc-blue));
+      letter-spacing: 0.08em;
+      background: linear-gradient(135deg, var(--gold-bright) 0%, var(--gold) 30%, var(--iron-red) 50%, var(--gold) 70%, var(--gold-bright) 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
+      filter: 
+        drop-shadow(0 0 20px rgba(255, 184, 0, 0.9)) 
+        drop-shadow(0 0 30px rgba(196, 30, 58, 0.8));
+      animation: textShimmer 2.5s ease-in-out infinite;
+      text-transform: uppercase;
+      position: relative;
+    }
+    .header h1::before {
+      content: 'JARVIS';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, var(--iron-red-bright) 0%, var(--iron-red) 30%, var(--gold) 50%, var(--iron-red) 70%, var(--gold-bright) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      opacity: 0;
+      animation: textShimmerAlt 2.5s ease-in-out infinite;
+    }
+    @keyframes textShimmer {
+      0%, 100% { 
+        filter: 
+          drop-shadow(0 0 20px rgba(255, 184, 0, 0.9)) 
+          drop-shadow(0 0 30px rgba(196, 30, 58, 0.8));
+        background-position: 0% 50%;
+      }
+      50% { 
+        filter: 
+          drop-shadow(0 0 28px rgba(255, 184, 0, 1)) 
+          drop-shadow(0 0 45px rgba(196, 30, 58, 1))
+          drop-shadow(0 0 60px rgba(255, 184, 0, 0.6));
+        background-position: 100% 50%;
+      }
+    }
+    @keyframes textShimmerAlt {
+      0%, 100% { opacity: 0; }
+      50% { opacity: 0.3; }
     }
     .header .status {
       font-size: 0.75rem;
       color: var(--text-muted);
       margin-left: auto;
+      padding: 0.25rem 0.75rem;
+      border-radius: 6px;
+      background: rgba(42, 52, 65, 0.6);
+      border: 1px solid rgba(196, 30, 58, 0.3);
+      transition: all var(--ease-material) 300ms;
+      position: relative;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     }
-    .header .status.listening { color: var(--arc-blue); }
-    .header .status.speaking { color: var(--gold); }
-    .header .status.status-misfire { color: var(--gold-dim); }
-    .header .status.error { color: var(--red); }
+    .header .status::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      opacity: 0.6;
+      margin-left: -14px;
+      transition: opacity var(--ease-material) 300ms;
+      box-shadow: 0 0 8px currentColor;
+    }
+    .header .status.listening { 
+      color: var(--iron-red-bright);
+      background: rgba(196, 30, 58, 0.2);
+      border-color: var(--iron-red);
+      box-shadow: 
+        0 0 30px rgba(196, 30, 58, 0.6),
+        0 0 60px rgba(196, 30, 58, 0.4),
+        inset 0 0 15px rgba(196, 30, 58, 0.2);
+    }
+    .header .status.listening::before {
+      opacity: 1;
+      background: var(--iron-red-bright);
+      box-shadow: 
+        0 0 18px var(--iron-red),
+        0 0 36px var(--iron-red),
+        0 0 54px var(--iron-red);
+      animation: statusPulse 1.2s var(--ease-in-out) infinite;
+    }
+    .header .status.speaking { 
+      color: var(--gold-bright);
+      background: rgba(255, 184, 0, 0.18);
+      border-color: var(--gold);
+      box-shadow: 
+        0 0 25px rgba(255, 184, 0, 0.5),
+        0 0 50px rgba(255, 184, 0, 0.3),
+        0 0 30px rgba(196, 30, 58, 0.2),
+        inset 0 0 12px rgba(255, 184, 0, 0.15);
+    }
+    .header .status.speaking::before {
+      opacity: 1;
+      background: var(--gold-bright);
+      box-shadow: 
+        0 0 15px var(--gold),
+        0 0 30px var(--gold),
+        0 0 45px var(--gold),
+        0 0 20px var(--iron-red);
+      animation: statusPulse 1.2s var(--ease-in-out) infinite;
+    }
+    .header .status.status-misfire { 
+      color: var(--gold-dim);
+      background: rgba(139, 115, 85, 0.1);
+    }
+    .header .status.error { 
+      color: var(--red);
+      background: rgba(230, 57, 70, 0.1);
+      box-shadow: 0 0 12px rgba(230, 57, 70, 0.2);
+    }
+    .header .status.error::before {
+      opacity: 1;
+    }
+    @keyframes statusPulse {
+      0%, 100% { opacity: 0.6; transform: translateY(-50%) scale(1); }
+      50% { opacity: 1; transform: translateY(-50%) scale(1.2); }
+    }
     .header-actions {
       display: flex;
       align-items: center;
@@ -90,8 +384,8 @@
       margin-left: 0.5rem;
     }
     .header-actions .btn-icon {
-      width: 32px;
-      height: 32px;
+      width: 40px;
+      height: 40px;
     }
 
     .chat-container {
@@ -102,6 +396,21 @@
       display: flex;
       flex-direction: column;
       gap: 0.75rem;
+      scroll-behavior: smooth;
+    }
+    .chat-container::-webkit-scrollbar {
+      width: 6px;
+    }
+    .chat-container::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .chat-container::-webkit-scrollbar-thumb {
+      background: rgba(139, 115, 85, 0.3);
+      border-radius: 3px;
+      transition: background var(--ease-material) 200ms;
+    }
+    .chat-container::-webkit-scrollbar-thumb:hover {
+      background: rgba(201, 162, 39, 0.5);
     }
     .message {
       max-width: 85%;
@@ -109,23 +418,43 @@
       border-radius: var(--radius);
       font-size: 0.9375rem;
       line-height: 1.45;
+      position: relative;
+      backdrop-filter: blur(16px) saturate(150%);
+      -webkit-backdrop-filter: blur(16px) saturate(150%);
     }
     @media (prefers-reduced-motion: no-preference) {
-      .message { animation: fadeIn 0.2s ease; }
+      .message { 
+        animation: fadeIn 300ms var(--ease-out);
+      }
     }
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(4px); }
-      to { opacity: 1; transform: translateY(0); }
+      from { 
+        opacity: 0; 
+        transform: translateY(8px) scale(0.98);
+      }
+      to { 
+        opacity: 1; 
+        transform: translateY(0) scale(1);
+      }
     }
     .message.user {
       align-self: flex-end;
-      background: var(--user-msg-bg);
-      border: 1px solid rgba(0, 212, 255, 0.2);
+      background: linear-gradient(135deg, rgba(196, 30, 58, 0.25), rgba(196, 30, 58, 0.15));
+      border: 1.5px solid var(--iron-red);
+      box-shadow: 
+        0 4px 14px rgba(196, 30, 58, 0.3),
+        0 0 30px rgba(196, 30, 58, 0.25),
+        inset 0 1px 0 rgba(220, 20, 60, 0.3);
     }
     .message.assistant {
       align-self: flex-start;
-      background: var(--assistant-msg-bg);
-      border: 1px solid rgba(201, 162, 39, 0.2);
+      background: linear-gradient(135deg, rgba(255, 184, 0, 0.2), rgba(255, 184, 0, 0.1), rgba(196, 30, 58, 0.08));
+      border: 1.5px solid var(--gold);
+      box-shadow: 
+        0 4px 14px rgba(255, 184, 0, 0.25),
+        0 0 25px rgba(255, 184, 0, 0.2),
+        0 0 15px rgba(196, 30, 58, 0.15),
+        inset 0 1px 0 rgba(255, 215, 0, 0.25);
     }
     .message .label {
       font-size: 0.7rem;
@@ -133,10 +462,19 @@
       letter-spacing: 0.05em;
       color: var(--text-muted);
       margin-bottom: 0.25rem;
+      font-weight: 600;
     }
-    .message.assistant .label { color: var(--gold-dim); }
-    .message.user .label { color: var(--arc-blue); }
-    .message .content { word-break: break-word; }
+    .message.assistant .label { 
+      color: var(--gold-dim);
+      text-shadow: 0 0 8px rgba(201, 162, 39, 0.3);
+    }
+    .message.user .label { 
+      color: var(--iron-red-bright);
+      text-shadow: 0 0 8px rgba(196, 30, 58, 0.5);
+    }
+    .message .content { 
+      word-break: break-word;
+    }
     .message .attachments {
       margin-top: 0.5rem;
       display: flex;
@@ -148,6 +486,11 @@
       max-height: 120px;
       border-radius: var(--radius-sm);
       object-fit: cover;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      transition: transform var(--ease-material) 200ms;
+    }
+    .message .attachments img:hover {
+      transform: scale(1.05);
     }
     .message .attachments .file-name {
       font-size: 0.8rem;
@@ -160,27 +503,64 @@
       gap: 0.5rem;
     }
     .message .attachments .btn-attachment {
-      font-size: 0.75rem;
-      padding: 0.25rem 0.5rem;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      background: var(--bg-input);
-      color: var(--text);
+      font-size: 0.8125rem;
+      padding: 0.625rem 1rem;
+      border: 2px solid var(--gold);
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--gold-bright) 0%, var(--gold) 40%, var(--iron-red) 60%, var(--gold) 100%);
+      background-size: 200% 200%;
+      color: #0a0a0f;
       cursor: pointer;
+      transition: all var(--ease-material) 300ms;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 
+        0 2px 6px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    }
+    .message .attachments .btn-attachment::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0.1), transparent);
+      opacity: 0;
+      transition: opacity var(--ease-material) 300ms;
+      z-index: 0;
+    }
+    .message .attachments .btn-attachment > * {
+      position: relative;
+      z-index: 1;
     }
     .message .attachments .btn-attachment:hover {
-      border-color: var(--gold-dim);
-      color: var(--gold);
+      background-position: 100% 50%;
+      border-color: var(--gold-bright);
+      transform: translateY(-2px) scale(1.02);
+      box-shadow: 
+        0 0 30px rgba(255, 184, 0, 0.6),
+        0 0 50px rgba(255, 184, 0, 0.4),
+        0 4px 12px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    }
+    .message .attachments .btn-attachment:hover::before {
+      opacity: 1;
+    }
+    .message .attachments .btn-attachment:active {
+      transform: translateY(0) scale(0.98);
     }
 
     .input-row {
       flex-shrink: 0;
       padding: 1rem 1.5rem 1.5rem;
-      background: var(--bg-panel);
-      border-top: 1px solid var(--border);
+      background: rgba(13, 17, 23, 0.5);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      border: 2px solid rgba(255, 184, 0, 0.3);
+      border-radius: var(--radius);
       display: flex;
       align-items: flex-end;
       gap: 0.5rem;
+      position: relative;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
     }
     .input-wrap {
       flex: 1;
@@ -191,10 +571,31 @@
       border-radius: var(--radius);
       padding: 0.5rem 0.75rem;
       min-height: 44px;
+      transition: all var(--ease-material) 200ms;
+      position: relative;
+    }
+    .input-wrap::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: var(--radius);
+      padding: 1px;
+          background: linear-gradient(135deg, rgba(196, 30, 58, 0.3), rgba(255, 184, 0, 0.3));
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      opacity: 0;
+      transition: opacity var(--ease-material) 200ms;
+      pointer-events: none;
     }
     .input-wrap:focus-within {
       border-color: var(--gold-dim);
-      box-shadow: 0 0 0 2px rgba(201, 162, 39, 0.15);
+      box-shadow: 
+        0 0 0 2px rgba(201, 162, 39, 0.15),
+        0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+    .input-wrap:focus-within::before {
+      opacity: 1;
     }
     .input-wrap textarea {
       flex: 1;
@@ -206,61 +607,267 @@
       resize: none;
       min-height: 24px;
       max-height: 120px;
+      transition: color var(--ease-material) 200ms;
     }
-    .input-wrap textarea::placeholder { color: var(--text-muted); }
-    .input-wrap textarea:focus { outline: none; }
-    .input-wrap textarea:focus-visible { outline: 2px solid var(--arc-blue); outline-offset: 2px; }
+    .input-wrap textarea::placeholder { 
+      color: var(--text-muted);
+      transition: opacity var(--ease-material) 200ms;
+    }
+    .input-wrap textarea:focus::placeholder {
+      opacity: 0.5;
+    }
+    .input-wrap textarea:focus { 
+      outline: none;
+    }
+    .input-wrap textarea:focus-visible { 
+      outline: 2px solid var(--gold); 
+      outline-offset: 2px;
+    }
 
     .btn-icon {
-      width: 40px;
-      height: 40px;
-      border: none;
-      border-radius: var(--radius-sm);
-      background: transparent;
-      color: var(--text-muted);
+      width: 48px;
+      height: 48px;
+      border: 2px solid var(--gold);
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--gold-bright) 0%, var(--gold) 40%, var(--iron-red) 60%, var(--gold) 100%);
+      background-size: 200% 200%;
+      color: #0a0a0f;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: color 0.15s, background-color 0.15s;
+      transition: all var(--ease-material) 300ms;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 
+        0 4px 16px rgba(255, 184, 0, 0.5),
+        0 0 30px rgba(255, 184, 0, 0.4),
+        0 0 20px rgba(196, 30, 58, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+      z-index: 1;
     }
-    .btn-icon:hover {
-      color: var(--text);
-      background-color: rgba(255,255,255,0.06);
+    .btn-icon::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0.1), transparent);
+      opacity: 0;
+      transition: opacity var(--ease-material) 300ms;
+      z-index: 1;
     }
-    .btn-icon:focus-visible { outline: 2px solid var(--arc-blue); outline-offset: 2px; }
-    .btn-icon:disabled { opacity: 0.4; cursor: not-allowed; }
-    .btn-icon.active { color: var(--arc-blue); }
-    .btn-icon.active.recording { color: var(--red); }
+    .btn-icon > * {
+      position: relative;
+      z-index: 2;
+    }
+    .btn-icon svg {
+      width: 100%;
+      height: 100%;
+      filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.2));
+      transition: transform var(--ease-material) 300ms, filter var(--ease-material) 300ms;
+    }
+    .btn-icon:hover svg {
+      transform: scale(1.1);
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+    }
+    .btn-icon:active svg {
+      transform: scale(0.95);
+    }
+    .btn-icon:hover:not(:disabled) {
+      background-position: 100% 50%;
+      transform: translateY(-3px) scale(1.06);
+      border-color: var(--gold-bright);
+      box-shadow: 
+        0 0 50px rgba(255, 184, 0, 0.9),
+        0 0 80px rgba(255, 184, 0, 0.6),
+        0 0 40px rgba(196, 30, 58, 0.5),
+        0 6px 20px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.5),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+    }
+    .btn-icon:hover:not(:disabled)::before {
+      opacity: 1;
+    }
+    .btn-icon:active:not(:disabled) {
+      transform: translateY(-1px) scale(1.02);
+      box-shadow: 
+        0 2px 12px rgba(255, 184, 0, 0.4),
+        0 0 20px rgba(255, 184, 0, 0.3),
+        0 0 15px rgba(196, 30, 58, 0.25),
+        inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    }
+    .btn-icon:focus-visible { 
+      outline: 2px solid var(--gold); 
+      outline-offset: 3px;
+      border-color: var(--gold);
+      box-shadow: 
+        0 0 0 4px rgba(255, 184, 0, 0.2),
+        0 4px 16px rgba(0, 0, 0, 0.4),
+        0 0 20px rgba(255, 184, 0, 0.3);
+    }
+    .btn-icon:disabled { 
+      opacity: 0.4; 
+      cursor: not-allowed;
+      transform: none;
+      filter: grayscale(0.5);
+    }
+    .btn-icon.active { 
+      background-position: 100% 50%;
+      border-color: var(--gold-bright);
+      box-shadow: 
+        0 0 30px rgba(255, 184, 0, 0.7),
+        0 0 60px rgba(255, 184, 0, 0.5),
+        0 0 40px rgba(196, 30, 58, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    }
+    .btn-icon.active.recording { 
+      background: linear-gradient(135deg, var(--red) 0%, var(--iron-red-bright) 40%, var(--red) 60%, var(--iron-red-bright) 100%);
+      background-size: 200% 200%;
+      border-color: var(--red);
+      box-shadow: 
+        0 0 30px rgba(230, 57, 70, 0.7),
+        0 0 60px rgba(230, 57, 70, 0.5),
+        0 0 40px rgba(196, 30, 58, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    }
     @media (prefers-reduced-motion: no-preference) {
-      .btn-icon.active.recording { animation: pulse 1s ease infinite; }
+      .btn-icon.active.recording { 
+        animation: recordingPulse 1.2s var(--ease-in-out) infinite;
+      }
     }
     @keyframes pulse {
       50% { opacity: 0.7; }
     }
+    @keyframes recordingPulse {
+      0%, 100% { 
+        box-shadow: 
+          0 0 20px rgba(230, 57, 70, 0.5),
+          0 0 40px rgba(230, 57, 70, 0.3),
+          inset 0 1px 0 rgba(255, 255, 255, 0.15);
+      }
+      50% { 
+        box-shadow: 
+          0 0 30px rgba(230, 57, 70, 0.7),
+          0 0 60px rgba(230, 57, 70, 0.5),
+          0 0 80px rgba(230, 57, 70, 0.3),
+          inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      }
+    }
     .btn-send {
-      width: 44px;
-      height: 44px;
-      border: none;
-      border-radius: var(--radius-sm);
-      background: linear-gradient(135deg, var(--gold), #a67c00);
-      color: #0d1117;
+      width: 52px;
+      height: 52px;
+      border: 2px solid var(--gold);
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--gold-bright) 0%, var(--gold) 40%, var(--iron-red) 60%, var(--gold) 100%);
+      background-size: 200% 200%;
+      color: #0a0a0f;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: transform 0.1s, box-shadow 0.15s;
+      transition: all var(--ease-material) 300ms;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 
+        0 4px 16px rgba(255, 184, 0, 0.5),
+        0 0 30px rgba(255, 184, 0, 0.4),
+        0 0 20px rgba(196, 30, 58, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+      z-index: 1;
     }
-    .btn-send:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+    .btn-send::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0.1), transparent);
+      opacity: 0;
+      transition: opacity var(--ease-material) 300ms;
+      z-index: 1;
+    }
+    .btn-send::after {
+      content: '';
+      position: absolute;
+      inset: -2px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--gold-bright), var(--gold), var(--iron-red-bright), var(--gold), var(--gold-bright));
+      background-size: 300% 300%;
+      opacity: 0;
+      transition: opacity var(--ease-material) 300ms;
+      z-index: -1;
+      filter: blur(8px);
+      animation: gradientShift 3s ease infinite;
+    }
+    .btn-send > * {
+      position: relative;
+      z-index: 2;
+      filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+    }
+    .btn-send svg {
+      width: 100%;
+      height: 100%;
+      transition: transform var(--ease-material) 300ms, filter var(--ease-material) 300ms;
+    }
+    .btn-send:hover:not(:disabled) svg {
+      transform: scale(1.1) rotate(-5deg);
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
+    }
+    .btn-send:active:not(:disabled) svg {
+      transform: scale(0.95) rotate(0deg);
+    }
+    @keyframes gradientShift {
+      0%, 100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+    }
+    .btn-send:focus-visible { 
+      outline: 2px solid var(--gold-bright); 
+      outline-offset: 3px;
+      box-shadow: 
+        0 0 0 4px rgba(255, 184, 0, 0.3),
+        0 4px 16px rgba(255, 184, 0, 0.5),
+        0 0 30px rgba(255, 184, 0, 0.4),
+        0 0 20px rgba(196, 30, 58, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    }
     .btn-send:hover:not(:disabled) {
-      box-shadow: 0 0 16px rgba(201, 162, 39, 0.4);
+      box-shadow: 
+        0 0 50px rgba(255, 184, 0, 0.9),
+        0 0 80px rgba(255, 184, 0, 0.6),
+        0 0 40px rgba(196, 30, 58, 0.5),
+        0 6px 20px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.5),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+      transform: translateY(-3px) scale(1.06);
+      border-color: var(--gold-bright);
+      background-position: 100% 50%;
     }
-    @media (prefers-reduced-motion: no-preference) {
-      .btn-send:hover:not(:disabled) { transform: scale(1.02); }
+    .btn-send:hover:not(:disabled)::before {
+      opacity: 1;
     }
-    .btn-send:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-send:hover:not(:disabled)::after {
+      opacity: 0.6;
+    }
+    .btn-send:active:not(:disabled) {
+      transform: translateY(-1px) scale(1.02);
+      box-shadow: 
+        0 2px 12px rgba(255, 184, 0, 0.4),
+        0 0 20px rgba(255, 184, 0, 0.3),
+        0 0 15px rgba(196, 30, 58, 0.25),
+        inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    }
+    .btn-send:disabled { 
+      opacity: 0.5; 
+      cursor: not-allowed;
+      transform: none;
+      filter: grayscale(0.4);
+      box-shadow: 
+        0 2px 8px rgba(255, 184, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    }
 
-    #fileInput { display: none; }
+    #fileInput { 
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -271,7 +878,11 @@
     <span class="status" id="status">Ready</span>
     <div class="header-actions">
       <button type="button" class="btn-icon btn-export" id="btnExportPdf" title="Export chat to PDF" aria-label="Export chat to PDF">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <path d="M10 13h4M10 17h4M8 9h.01"/>
+        </svg>
       </button>
     </div>
   </header>
@@ -285,17 +896,27 @@
 
   <div class="input-row">
     <button type="button" class="btn-icon" id="btnPaperclip" title="Attach file" aria-label="Attach file">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+      </svg>
     </button>
     <input type="file" id="fileInput" multiple tabindex="-1">
     <div class="input-wrap">
       <textarea id="textInput" placeholder="Type or speak..." rows="1" aria-label="Message"></textarea>
     </div>
     <button type="button" class="btn-send" id="btnSend" title="Send" aria-label="Send message">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m22 2-7 20-4-9-9-4Z"/>
+        <path d="M22 2 11 13"/>
+      </svg>
     </button>
     <button type="button" class="btn-icon" id="btnMic" title="Click to start or stop voice" aria-label="Microphone — click to talk" aria-pressed="false">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="2" width="6" height="11" rx="3" ry="3"/>
+        <path d="M5 10v2a7 7 0 0 0 14 0v-2"/>
+        <line x1="12" y1="19" x2="12" y2="23"/>
+        <line x1="8" y1="23" x2="16" y2="23"/>
+      </svg>
     </button>
   </div>
   </div>

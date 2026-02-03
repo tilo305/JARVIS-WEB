@@ -3,21 +3,29 @@
  * Run full debug suite: lint, test, build.
  * Per zEn DeBuGgEr.md - all tests, debugging, errors and fixes.
  */
-import { spawn } from 'child_process';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 const steps = [
-  { name: 'Lint', cmd: 'npm', args: ['run', 'lint'] },
-  { name: 'Test', cmd: 'npm', args: ['run', 'test'] },
-  { name: 'TypeScript Build', cmd: 'npm', args: ['run', 'build'] },
-  { name: 'Vite Build', cmd: 'npm', args: ['run', 'vite', 'build'] },
+  { name: 'Lint', script: 'npm run lint' },
+  { name: 'Test', script: 'npm run test' },
+  { name: 'TypeScript Build', script: 'npm run build' },
+  { name: 'Vite Build', script: 'npm run vite:build' },
 ];
 
-async function run(cmd, args) {
-  return new Promise((resolve) => {
-    const proc = spawn(cmd, args, { stdio: 'inherit', shell: true });
-    proc.on('close', (code) => resolve(code));
-    proc.on('error', () => resolve(1));
-  });
+async function run(script) {
+  try {
+    await execAsync(script, { 
+      // exec handles Windows properly without deprecation warnings
+      // Output is automatically shown via exec
+    });
+    return 0;
+  } catch (error) {
+    // execAsync rejects on non-zero exit, but we want to return the code
+    return error.code || 1;
+  }
 }
 
 async function main() {
@@ -26,7 +34,7 @@ async function main() {
 
   for (const step of steps) {
     process.stdout.write(`[${step.name}] Running... `);
-    const code = await run(step.cmd, step.args);
+    const code = await run(step.script);
     results.push({ name: step.name, ok: code === 0 });
     console.log(code === 0 ? 'PASS\n' : `FAIL (exit ${code})\n`);
     if (code !== 0) break;

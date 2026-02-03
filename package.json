@@ -12,6 +12,7 @@
     "serve": "node server.js",
     "dev:browser": "vite",
     "vite": "node scripts/kill-port-then-vite.mjs",
+    "vite:build": "node scripts/kill-port-then-vite.mjs build",
     "preview": "vite preview",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -69,7 +70,7 @@
     "ts-jest": "^29.4.6",
     "typescript": "^5.3.3",
     "typescript-eslint": "^8.54.0",
-    "vite": "^5.4.0",
-    "vite-plugin-static-copy": "^2.3.2"
+    "vite": "^7.3.1",
+    "vite-plugin-static-copy": "^3.2.0"
   }
 }

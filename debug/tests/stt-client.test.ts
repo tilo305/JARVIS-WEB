@@ -113,15 +113,17 @@ describe('CartesiaSTTClient', () => {
       expect(client.connected).toBe(true);
     });
 
-    it('should send configuration on connect', async () => {
+    it('should configure via URL params on connect', async () => {
       await client.connect();
 
       const mockWs = client['ws'] as unknown as MockWebSocket;
-      expect(mockWs.sentMessages.length).toBeGreaterThan(0);
-
-      const config = JSON.parse(mockWs.sentMessages[0] as string);
-      expect(config.model).toBe(CARTESIA_CONFIG.STT.MODEL);
-      expect(config.language).toBe(CARTESIA_CONFIG.STT.LANGUAGE);
+      const url = new URL(mockWs.url);
+      
+      // Configuration is done via URL params, not sent messages
+      expect(url.searchParams.get('model')).toBe(CARTESIA_CONFIG.STT.MODEL);
+      expect(url.searchParams.get('language')).toBe(CARTESIA_CONFIG.STT.LANGUAGE);
+      expect(url.searchParams.get('sample_rate')).toBe(String(CARTESIA_CONFIG.STT.SAMPLE_RATE));
+      expect(url.searchParams.get('encoding')).toBe(CARTESIA_CONFIG.STT.ENCODING);
     });
 
     it('should handle connection errors', async () => {

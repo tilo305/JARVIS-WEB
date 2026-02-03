@@ -173,8 +173,8 @@ export class BidirectionalConversation {
    * Send audio to STT
    */
   sendAudio(audioBuffer: ArrayBuffer): void {
-    if (!this.sttClient.connected) {
-      throw new Error('STT client not connected');
+    if (!this.sttClient.isReady()) {
+      throw new Error('STT client not ready (not connected or WebSocket not open)');
     }
     this.sttClient.sendAudioChunk(audioBuffer);
   }
@@ -268,7 +268,15 @@ export class BidirectionalConversation {
   async disconnect(): Promise<void> {
     console.log('[Conversation] Disconnecting...');
     
-    this.sttClient.done();
+    try {
+      // Finalize STT if connected
+      if (this.sttClient.isReady()) {
+        this.sttClient.done();
+      }
+    } catch (err) {
+      console.error('[Conversation] Error finalizing STT:', err);
+    }
+    
     this.sttClient.disconnect();
     this.ttsClient.disconnect();
     

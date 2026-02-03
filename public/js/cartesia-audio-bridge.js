@@ -207,18 +207,85 @@ export class CartesiaAudioBridge {
   }
 
   async init() {
-    if (this.audioContext) return;
-    this.audioContext = new AudioContext();
-    if (this.audioContext.state === 'suspended') await this.audioContext.resume();
-    const basePath = this.options.audioWorkletBasePath || './audio/';
-    await this.audioContext.audioWorklet.addModule(`${basePath}stt-capture-processor.js`);
-    await this.audioContext.audioWorklet.addModule(`${basePath}tts-playback-processor.js`);
-    this.ttsNode = new AudioWorkletNode(this.audioContext, 'tts-playback-processor');
-    this.ttsNode.connect(this.audioContext.destination);
-    return this.audioContext;
+    if (this.audioContext) return this.audioContext;
+    
+    // Check AudioWorklet support
+    if (!window.AudioWorkletNode) {
+      throw new Error('AudioWorklet is not supported in this browser. Use Chrome, Firefox, Edge, or Safari 14.1+.');
+    }
+    
+    try {
+      this.audioContext = new AudioContext();
+      if (this.audioContext.state === 'suspended') {
+        await this.audioContext.resume();
+      }
+      DEBUG.trace('AudioContext created', { state: this.audioContext.state, sampleRate: this.audioContext.sampleRate });
+      
+      // Resolve AudioWorklet module paths
+      const basePath = this.options.audioWorkletBasePath || './audio/';
+      const sttPath = `${basePath}stt-capture-processor.js`;
+      const ttsPath = `${basePath}tts-playback-processor.js`;
+      
+      DEBUG.trace('Loading AudioWorklet modules', { sttPath, ttsPath });
+      
+      // Load STT processor
+      try {
+        await this.audioContext.audioWorklet.addModule(sttPath);
+        DEBUG.trace('STT capture processor loaded successfully');
+      } catch (err) {
+        DEBUG.error('Failed to load STT processor', { path: sttPath, error: err });
+        throw new Error(`Failed to load STT AudioWorklet processor from ${sttPath}. Check that the file exists and is accessible. ${err.message || err}`);
+      }
+      
+      // Load TTS processor
+      try {
+        await this.audioContext.audioWorklet.addModule(ttsPath);
+        DEBUG.trace('TTS playback processor loaded successfully');
+      } catch (err) {
+        DEBUG.error('Failed to load TTS processor', { path: ttsPath, error: err });
+        throw new Error(`Failed to load TTS AudioWorklet processor from ${ttsPath}. Check that the file exists and is accessible. ${err.message || err}`);
+      }
+      
+      // Create and connect TTS node
+      try {
+        this.ttsNode = new AudioWorkletNode(this.audioContext, 'tts-playback-processor');
+        this.ttsNode.connect(this.audioContext.destination);
+        DEBUG.trace('TTS AudioWorkletNode created and connected to destination');
+        
+        // Handle TTS processor errors
+        this.ttsNode.port.onerror = (err) => {
+          DEBUG.error('TTS AudioWorklet processor error', { error: err });
+          this.onError('TTS AudioWorklet processor error. Check console for details.');
+        };
+      } catch (err) {
+        DEBUG.error('Failed to create TTS AudioWorkletNode', { error: err });
+        throw new Error(`Failed to create TTS AudioWorkletNode. Ensure processors are loaded. ${err.message || err}`);
+      }
+      
+      return this.audioContext;
+    } catch (err) {
+      // Cleanup on failure
+      if (this.audioContext) {
+        try {
+          await this.audioContext.close();
+        } catch {
+          // Ignore cleanup errors
+        }
+        this.audioContext = null;
+      }
+      throw err;
+    }
   }
 
   async connectSTTWebSocket() {
+    // Prevent multiple simultaneous connection attempts
+    if (this.sttWs && (this.sttWs.readyState === WebSocket.CONNECTING || this.sttWs.readyState === WebSocket.OPEN)) {
+      if (this.sttWs.readyState === WebSocket.OPEN) {
+        return Promise.resolve(); // Already connected
+      }
+      return Promise.reject(new Error('STT WebSocket connection already in progress'));
+    }
+
     // Cartesia STT: config via URL query params (not first message). @cartesia/cartesia-js SDK style.
     const url = new URL(STT_ENDPOINT);
     url.searchParams.set('api_key', this.apiKey);
@@ -230,11 +297,50 @@ export class CartesiaAudioBridge {
     url.searchParams.set('min_volume', '0.0');
     url.searchParams.set('max_silence_duration_secs', '4.0');
     DEBUG.trace('STT WebSocket connecting', { url: STT_ENDPOINT });
+    
+    // Clean up existing connection if any
+    if (this.sttWs) {
+      try {
+        this.sttWs.onopen = null;
+        this.sttWs.onerror = null;
+        this.sttWs.onclose = null;
+        this.sttWs.onmessage = null;
+        if (this.sttWs.readyState !== WebSocket.CLOSED) {
+          this.sttWs.close();
+        }
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
+    
     this.sttWs = new WebSocket(url.toString());
     return new Promise((resolve, reject) => {
+      let settled = false;
+      const timeout = setTimeout(() => {
+        if (!settled && this.sttWs && this.sttWs.readyState !== WebSocket.OPEN) {
+          settled = true;
+          try {
+            this.sttWs.close();
+          } catch {
+            // Ignore close errors
+          }
+          reject(new Error('STT WebSocket connection timeout'));
+        }
+      }, 180000); // 3 minutes
+
+      const settle = (fn) => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timeout);
+          fn();
+        }
+      };
+
       this.sttWs.onopen = () => {
-        DEBUG.trace('STT WebSocket open');
-        resolve();
+        settle(() => {
+          DEBUG.trace('STT WebSocket open');
+          resolve();
+        });
       };
       this.sttWs.onmessage = (e) => {
         if (typeof e.data !== 'string') return;
@@ -262,19 +368,37 @@ export class CartesiaAudioBridge {
           }
         } catch { /* ignore */ }
       };
-      this.sttWs.onerror = () => {
-        DEBUG.error('STT WebSocket error');
-        reject(new Error('STT WebSocket error'));
+      this.sttWs.onerror = (err) => {
+        settle(() => {
+          DEBUG.error('STT WebSocket error', err);
+          reject(new Error('STT WebSocket error'));
+        });
       };
       this.sttWs.onclose = (ev) => {
-        DEBUG.trace('STT WebSocket closed', { code: ev.code, reason: ev.reason });
+        if (!settled) {
+          clearTimeout(timeout);
+          // If connection closed before opening (unexpected close), reject the promise
+          // This is a safety check - onerror should fire first, but browsers can be inconsistent
+          if (ev && ev.code !== 1000 && ev.code !== 1001) {
+            // Not a normal close (1000) or going away (1001) - likely an error
+            settled = true;
+            reject(new Error(`STT WebSocket closed unexpectedly (code: ${ev.code}, reason: ${ev.reason || 'none'})`));
+          }
+        }
+        DEBUG.trace('STT WebSocket closed', { code: ev?.code, reason: ev?.reason });
       };
     });
   }
 
   _sendChunkToSTT(arrayBuffer) {
     if (!this.sttWs || this.sttWs.readyState !== WebSocket.OPEN || !this._sttStreaming) return;
-    this.sttWs.send(arrayBuffer);
+    try {
+      this.sttWs.send(arrayBuffer);
+    } catch (err) {
+      DEBUG.error('Error sending STT chunk', { error: err, readyState: this.sttWs?.readyState });
+      // If send fails, the WebSocket is likely closed - stop streaming
+      this._sttStreaming = false;
+    }
   }
 
   _flushPreSpeechBuffer() {
@@ -320,30 +444,61 @@ export class CartesiaAudioBridge {
       this.sttAnalyserNode = this.audioContext.createAnalyser();
       this.sttAnalyserNode.fftSize = 256;
       this.sttAnalyserNode.smoothingTimeConstant = 0.5;
-      this.sttNode = new AudioWorkletNode(this.audioContext, 'stt-capture-processor');
-      source.connect(this.sttGainNode);
-      this.sttGainNode.connect(this.sttNode);
-      this.sttGainNode.connect(this.sttAnalyserNode);
+      
+      // Create STT AudioWorkletNode with error handling
+      try {
+        this.sttNode = new AudioWorkletNode(this.audioContext, 'stt-capture-processor');
+        DEBUG.trace('STT AudioWorkletNode created successfully');
+      } catch (err) {
+        DEBUG.error('Failed to create STT AudioWorkletNode', { error: err });
+        throw new Error(`Failed to create STT AudioWorkletNode. Ensure AudioWorklet processors are loaded. ${err.message || err}`);
+      }
+      
+      // Connect audio graph: source -> gain -> STT node (capture only, no output needed)
+      // Also connect gain to analyser for level metering
+      try {
+        source.connect(this.sttGainNode);
+        this.sttGainNode.connect(this.sttNode);
+        this.sttGainNode.connect(this.sttAnalyserNode);
+        DEBUG.trace('STT audio graph connected: source -> gain -> sttNode, gain -> analyser');
+      } catch (err) {
+        DEBUG.error('Failed to connect STT audio graph', { error: err });
+        throw new Error(`Failed to connect STT audio graph. ${err.message || err}`);
+      }
 
       this._preSpeechBuffer = [];
       this._sttStreaming = false;
 
       let _audioChunkCount = 0;
       this.sttNode.port.onmessage = (e) => {
-        if (e.data.type !== 'audio' || !e.data.data) return;
-        _audioChunkCount++;
-        if (DEBUG.enabled && _audioChunkCount <= 3) {
-          DEBUG.trace('stt-capture: audio chunk received', { chunk: _audioChunkCount, streaming: this._sttStreaming });
-        }
-        const buf = e.data.data;
-        if (this._sttStreaming) {
-          this._sendChunkToSTT(buf);
-        } else {
-          this._preSpeechBuffer.push(buf);
-          if (this._preSpeechBuffer.length > this._preSpeechMaxChunks) {
-            this._preSpeechBuffer.shift();
+        try {
+          if (!e || !e.data || e.data.type !== 'audio' || !e.data.data) return;
+          _audioChunkCount++;
+          if (DEBUG.enabled && _audioChunkCount <= 3) {
+            DEBUG.trace('stt-capture: audio chunk received', { chunk: _audioChunkCount, streaming: this._sttStreaming });
           }
+          const buf = e.data.data;
+          if (!(buf instanceof ArrayBuffer)) {
+            DEBUG.error('STT processor sent invalid data type', { type: typeof buf, isArrayBuffer: buf instanceof ArrayBuffer });
+            return;
+          }
+          if (this._sttStreaming) {
+            this._sendChunkToSTT(buf);
+          } else {
+            this._preSpeechBuffer.push(buf);
+            if (this._preSpeechBuffer.length > this._preSpeechMaxChunks) {
+              this._preSpeechBuffer.shift();
+            }
+          }
+        } catch (err) {
+          DEBUG.error('Error handling STT AudioWorklet message', { error: err, data: e?.data });
         }
+      };
+      
+      // Handle processor errors
+      this.sttNode.port.onerror = (err) => {
+        DEBUG.error('STT AudioWorklet processor error', { error: err });
+        this.onError('STT AudioWorklet processor error. Check console for details.');
       };
 
       // Only pass MicVAD-supported options; app-only (silenceClosing*, silenceAfterSpeechToStopMicMs) stay in VAD_CONFIG for bridge use
@@ -376,7 +531,13 @@ export class CartesiaAudioBridge {
           this.onSpeechEnd();
           this._sttStreaming = false;
           this._pendingFinalTranscript = null;
-          if (this.sttWs?.readyState === WebSocket.OPEN) this.sttWs.send('finalize');
+          if (this.sttWs?.readyState === WebSocket.OPEN) {
+            try {
+              this.sttWs.send('finalize');
+            } catch (err) {
+              DEBUG.error('Error sending finalize to STT', { error: err });
+            }
+          }
           const stopMs = VAD_CONFIG.silenceAfterSpeechToStopMicMs ?? 3500;
           this._clearSilenceStopTimer();
           if (stopMs > 0) {
@@ -389,8 +550,38 @@ export class CartesiaAudioBridge {
         onVADMisfire: () => this.onVADMisfire(),
       };
 
-      this.vad = await MicVAD.new(vadOptions);
-      this.vad.start();
+      try {
+        this.vad = await MicVAD.new(vadOptions);
+        if (!this.vad) {
+          throw new Error('VAD initialization returned null');
+        }
+        this.vad.start();
+        DEBUG.trace('startSTT: VAD started successfully');
+      } catch (vadErr) {
+        DEBUG.error('VAD initialization failed', vadErr);
+        // Clean up partial state before throwing
+        if (this.mediaStream) {
+          this.mediaStream.getTracks().forEach((t) => t.stop());
+          this.mediaStream = null;
+        }
+        if (this.sttNode) {
+          this.sttNode.disconnect();
+          this.sttNode = null;
+        }
+        if (this.sttGainNode) {
+          this.sttGainNode.disconnect();
+          this.sttGainNode = null;
+        }
+        if (this.sttAnalyserNode) {
+          this.sttAnalyserNode.disconnect();
+          this.sttAnalyserNode = null;
+        }
+        if (this.sttWs) {
+          try { this.sttWs.close(); } catch { /* ignore */ }
+          this.sttWs = null;
+        }
+        throw new Error(`VAD initialization failed: ${vadErr?.message || vadErr}`);
+      }
       this._sttActive = true;
       this._hadTranscriptFromPreviousSegment = false;
       const maxMs = VAD_CONFIG.maxListeningMs ?? 0;
@@ -472,8 +663,18 @@ export class CartesiaAudioBridge {
     const wasActive = this._sttActive;
     this._sttActive = false;
     if (this.vad) {
-      this.vad.pause();
-      this.vad = null;
+      try {
+        // Pause VAD to stop processing
+        this.vad.pause();
+        // Some VAD implementations may need explicit cleanup
+        if (typeof this.vad.destroy === 'function') {
+          this.vad.destroy();
+        }
+      } catch (vadErr) {
+        DEBUG.error('Error stopping VAD', vadErr);
+      } finally {
+        this.vad = null;
+      }
     }
     this._sttStreaming = false;
     this._preSpeechBuffer = [];
@@ -482,24 +683,57 @@ export class CartesiaAudioBridge {
       this.mediaStream = null;
     }
     this.stopLevelMeter();
+    // Disconnect audio nodes in reverse order of connection
     if (this.sttNode) {
-      this.sttNode.disconnect();
+      try {
+        this.sttNode.disconnect();
+        this.sttNode.port.onmessage = null;
+        this.sttNode.port.onerror = null;
+      } catch (err) {
+        DEBUG.error('Error disconnecting STT node', { error: err });
+      }
       this.sttNode = null;
     }
-    if (this.sttGainNode) {
-      this.sttGainNode.disconnect();
-      this.sttGainNode = null;
-    }
     if (this.sttAnalyserNode) {
-      this.sttAnalyserNode.disconnect();
+      try {
+        this.sttAnalyserNode.disconnect();
+      } catch (err) {
+        DEBUG.error('Error disconnecting analyser node', { error: err });
+      }
       this.sttAnalyserNode = null;
     }
-    if (this.sttWs) {
-      if (this.sttWs.readyState === WebSocket.OPEN) {
-        try { this.sttWs.send('done'); } catch { /* ignore */ }
+    if (this.sttGainNode) {
+      try {
+        this.sttGainNode.disconnect();
+      } catch (err) {
+        DEBUG.error('Error disconnecting gain node', { error: err });
       }
-      this.sttWs.close();
-      this.sttWs = null;
+      this.sttGainNode = null;
+    }
+    if (this.sttWs) {
+      try {
+        // Remove all listeners
+        this.sttWs.onopen = null;
+        this.sttWs.onerror = null;
+        this.sttWs.onclose = null;
+        this.sttWs.onmessage = null;
+        // Send done message if open
+        if (this.sttWs.readyState === WebSocket.OPEN) {
+          try { 
+            this.sttWs.send('done'); 
+          } catch { 
+            // Ignore send errors
+          }
+        }
+        // Close the connection
+        if (this.sttWs.readyState !== WebSocket.CLOSED) {
+          this.sttWs.close();
+        }
+      } catch (err) {
+        DEBUG.error('Error disconnecting STT WebSocket', err);
+      } finally {
+        this.sttWs = null;
+      }
     }
     if (wasActive) this.onSTTStopped();
   }
@@ -510,21 +744,82 @@ export class CartesiaAudioBridge {
     if (this.ttsWs?.readyState === WebSocket.OPEN) return;
     if (this._ttsConnectPromise) return this._ttsConnectPromise;
 
+    // Prevent multiple simultaneous connection attempts
+    if (this.ttsWs && (this.ttsWs.readyState === WebSocket.CONNECTING || this.ttsWs.readyState === WebSocket.OPEN)) {
+      if (this.ttsWs.readyState === WebSocket.OPEN) {
+        return Promise.resolve(); // Already connected
+      }
+      return Promise.reject(new Error('TTS WebSocket connection already in progress'));
+    }
+
     const url = new URL(TTS_ENDPOINT);
     url.searchParams.set('api_key', this.apiKey);
     url.searchParams.set('cartesia_version', CARTESIA_VERSION);
+    
+    // Clean up existing connection if any
+    if (this.ttsWs) {
+      try {
+        this.ttsWs.onopen = null;
+        this.ttsWs.onerror = null;
+        this.ttsWs.onclose = null;
+        this.ttsWs.onmessage = null;
+        if (this.ttsWs.readyState !== WebSocket.CLOSED) {
+          this.ttsWs.close();
+        }
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
+    
     this.ttsWs = new WebSocket(url.toString());
 
     this._ttsConnectPromise = new Promise((resolve, reject) => {
+      let settled = false;
+      const timeout = setTimeout(() => {
+        if (!settled && this.ttsWs && this.ttsWs.readyState !== WebSocket.OPEN) {
+          settled = true;
+          this._ttsConnectPromise = null;
+          try {
+            this.ttsWs.close();
+          } catch {
+            // Ignore close errors
+          }
+          reject(new Error('TTS WebSocket connection timeout'));
+        }
+      }, 180000); // 3 minutes
+
+      const settle = (fn) => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timeout);
+          this._ttsConnectPromise = null;
+          fn();
+        }
+      };
+
       this.ttsWs.onopen = () => {
-        this._ttsConnectPromise = null;
-        resolve();
+        settle(() => {
+          resolve();
+        });
       };
       this.ttsWs.onerror = () => {
-        this._ttsConnectPromise = null;
-        reject(new Error('TTS WebSocket error'));
+        settle(() => {
+          reject(new Error('TTS WebSocket error'));
+        });
       };
-      this.ttsWs.onclose = () => { this._ttsConnectPromise = null; };
+      this.ttsWs.onclose = (ev) => { 
+        if (!settled) {
+          clearTimeout(timeout);
+          this._ttsConnectPromise = null;
+          // If connection closed before opening (unexpected close), reject the promise
+          // This is a safety check - onerror should fire first, but browsers can be inconsistent
+          if (ev && ev.code !== 1000 && ev.code !== 1001) {
+            // Not a normal close (1000) or going away (1001) - likely an error
+            settled = true;
+            reject(new Error(`TTS WebSocket closed unexpectedly (code: ${ev.code}, reason: ${ev.reason || 'none'})`));
+          }
+        }
+      };
       this.ttsWs.onmessage = (e) => {
         if (typeof e.data !== 'string') return;
         try {
@@ -554,36 +849,105 @@ export class CartesiaAudioBridge {
   }
 
   playTTSChunk(pcmInt16) {
-    if (this.ttsNode) {
-      this.ttsNode.port.postMessage({ type: 'audio', samples: Array.from(pcmInt16) });
+    if (!this.ttsNode) {
+      DEBUG.error('playTTSChunk: TTS node not initialized');
+      return;
+    }
+    try {
+      if (!(pcmInt16 instanceof Int16Array) && !Array.isArray(pcmInt16)) {
+        DEBUG.error('playTTSChunk: invalid data type', { type: typeof pcmInt16, isInt16Array: pcmInt16 instanceof Int16Array });
+        return;
+      }
+      const samples = pcmInt16 instanceof Int16Array ? Array.from(pcmInt16) : pcmInt16;
+      this.ttsNode.port.postMessage({ type: 'audio', samples });
+    } catch (err) {
+      DEBUG.error('Error sending TTS chunk to AudioWorklet', { error: err });
+      this.onError('TTS playback error. Check console for details.');
     }
   }
 
   clearTTSBuffer() {
-    if (this.ttsNode) this.ttsNode.port.postMessage({ type: 'clear' });
+    if (!this.ttsNode) return;
+    try {
+      this.ttsNode.port.postMessage({ type: 'clear' });
+    } catch (err) {
+      DEBUG.error('Error clearing TTS buffer', { error: err });
+    }
+  }
+  
+  /**
+   * Verify AudioWorklet initialization status
+   * @returns {{ initialized: boolean, audioContext: boolean, sttProcessor: boolean, ttsProcessor: boolean, ttsNode: boolean, message?: string }}
+   */
+  verifyAudioWorkletInit() {
+    const result = {
+      initialized: false,
+      audioContext: !!this.audioContext,
+      sttProcessor: false,
+      ttsProcessor: false,
+      ttsNode: !!this.ttsNode,
+    };
+    
+    if (!this.audioContext) {
+      result.message = 'AudioContext not initialized';
+      return result;
+    }
+    
+    // Check if processors are registered (by attempting to create nodes)
+    try {
+      // Note: We can't directly check if processors are registered without creating nodes
+      // But if nodes can be created, processors are loaded
+      if (this.ttsNode) {
+        result.ttsProcessor = true;
+      }
+      // For STT, we check if we can create a node (but don't keep it)
+      try {
+        const testNode = new AudioWorkletNode(this.audioContext, 'stt-capture-processor');
+        testNode.disconnect();
+        result.sttProcessor = true;
+      } catch {
+        result.sttProcessor = false;
+        result.message = 'STT processor not loaded';
+      }
+    } catch (err) {
+      result.message = `Verification error: ${err.message || err}`;
+    }
+    
+    result.initialized = result.audioContext && result.sttProcessor && result.ttsProcessor && result.ttsNode;
+    return result;
   }
 
   async speakText(transcript, contextId = null, isContinue = false) {
     await this.connectTTS();
     const ctxId = contextId || `ctx_${++this.contextIdCounter}_${Date.now()}`;
 
-    this.ttsWs.send(
-      JSON.stringify({
-        model_id: this.ttsModel,
-        transcript,
-        voice: { mode: 'id', id: this.voiceId },
-        language: this.language,
-        context_id: ctxId,
-        output_format: {
-          container: 'raw',
-          encoding: 'pcm_s16le',
-          sample_rate: 44100,
-        },
-        add_timestamps: true,
-        continue: isContinue,
-        max_buffer_delay_ms: 0,
-      })
-    );
+    // Check WebSocket readyState before sending
+    if (!this.ttsWs || this.ttsWs.readyState !== WebSocket.OPEN) {
+      throw new Error(`TTS WebSocket not open (readyState: ${this.ttsWs?.readyState ?? 'null'})`);
+    }
+
+    try {
+      this.ttsWs.send(
+        JSON.stringify({
+          model_id: this.ttsModel,
+          transcript,
+          voice: { mode: 'id', id: this.voiceId },
+          language: this.language,
+          context_id: ctxId,
+          output_format: {
+            container: 'raw',
+            encoding: 'pcm_s16le',
+            sample_rate: 44100,
+          },
+          add_timestamps: true,
+          continue: isContinue,
+          max_buffer_delay_ms: 0,
+        })
+      );
+    } catch (err) {
+      DEBUG.error('Error sending TTS request', { error: err, readyState: this.ttsWs?.readyState });
+      throw new Error(`Failed to send TTS request: ${err.message || err}`);
+    }
 
     if (isContinue) return Promise.resolve();
     return new Promise((resolve, reject) => {
@@ -601,7 +965,11 @@ export class CartesiaAudioBridge {
 
   cancelTTS(contextId) {
     if (this.ttsWs?.readyState === WebSocket.OPEN) {
-      this.ttsWs.send(JSON.stringify({ context_id: contextId, cancel: true }));
+      try {
+        this.ttsWs.send(JSON.stringify({ context_id: contextId, cancel: true }));
+      } catch (err) {
+        DEBUG.error('Error sending TTS cancel', { error: err, contextId });
+      }
     }
     this.clearTTSBuffer();
   }
@@ -611,8 +979,21 @@ export class CartesiaAudioBridge {
     this._ttsDoneResolvers.clear();
     this._ttsConnectPromise = null;
     if (this.ttsWs) {
-      this.ttsWs.close();
-      this.ttsWs = null;
+      try {
+        // Remove all listeners
+        this.ttsWs.onopen = null;
+        this.ttsWs.onerror = null;
+        this.ttsWs.onclose = null;
+        this.ttsWs.onmessage = null;
+        // Close the connection
+        if (this.ttsWs.readyState !== WebSocket.CLOSED) {
+          this.ttsWs.close();
+        }
+      } catch (err) {
+        DEBUG.error('Error disconnecting TTS WebSocket', err);
+      } finally {
+        this.ttsWs = null;
+      }
     }
   }
 
@@ -620,11 +1001,20 @@ export class CartesiaAudioBridge {
     this.stopSTT();
     this.disconnectTTS();
     if (this.ttsNode) {
-      this.ttsNode.disconnect();
+      try {
+        this.ttsNode.disconnect();
+        this.ttsNode.port.onerror = null;
+      } catch (err) {
+        DEBUG.error('Error disconnecting TTS node in destroy', { error: err });
+      }
       this.ttsNode = null;
     }
     if (this.audioContext) {
-      this.audioContext.close();
+      try {
+        this.audioContext.close();
+      } catch (err) {
+        DEBUG.error('Error closing AudioContext', { error: err });
+      }
       this.audioContext = null;
     }
   }

@@ -23,7 +23,7 @@ export default tseslint.config(
   // Base JavaScript recommended rules
   js.configs.recommended,
 
-  // TypeScript files (src/, tests/)
+  // TypeScript files (src/, tests/) - with project-based type checking
   {
     files: ["src/**/*.ts", "tests/**/*.ts"],
     extends: [...tseslint.configs.recommended],
@@ -37,12 +37,14 @@ export default tseslint.config(
       sourceType: "module",
       globals: {
         ...globals.node,
+        ...globals.jest,
       },
     },
     rules: {
       "no-unused-vars": "off", // Handled by @typescript-eslint/no-unused-vars
       "no-undef": "off", // TypeScript handles this
       "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
+      "no-console": "off",
     },
   },
 
@@ -142,6 +144,30 @@ export default tseslint.config(
       },
     },
     rules: {
+      "no-console": "off",
+    },
+  },
+
+  // Debug TypeScript test files (without project requirement)
+  {
+    files: ["debug/**/*.ts"],
+    extends: [...tseslint.configs.recommended],
+    languageOptions: {
+      parser: tseslint.parser,
+      parserOptions: {
+        // No project required for debug files
+      },
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: {
+        ...globals.node,
+        ...globals.jest,
+      },
+    },
+    rules: {
+      "no-unused-vars": "off", // Handled by @typescript-eslint/no-unused-vars
+      "no-undef": "off", // TypeScript handles this
+      "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
       "no-console": "off",
     },
   }

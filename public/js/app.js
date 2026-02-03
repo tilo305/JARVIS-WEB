@@ -41,6 +41,22 @@ if (!chatContainer || !statusEl) {
   throw new Error('JARVIS: missing required DOM elements');
 }
 
+/** Guard: check button elements exist before attaching event listeners */
+if (!btnSend || !btnMic || !btnPaperclip || !textInput || !fileInput) {
+  const msg = '[JARVIS] Missing required button elements. Check HTML structure.';
+  const missing = {
+    btnSend: !btnSend,
+    btnMic: !btnMic,
+    btnPaperclip: !btnPaperclip,
+    textInput: !textInput,
+    fileInput: !fileInput,
+  };
+  /* eslint-disable no-console -- intentional when DOM is missing */
+  if (typeof console !== 'undefined' && console.error) console.error(msg, missing);
+  /* eslint-enable no-console */
+  throw new Error('JARVIS: missing required button elements');
+}
+
 /** Config: Vite env when built, or window.JARVIS_CONFIG for static HTML (e.g. public/index.html) */
 function getConfig() {
   const env = typeof import.meta !== 'undefined' ? import.meta.env : {};
@@ -179,13 +195,22 @@ async function filesToAttachmentPayload(files) {
 async function getLLMReply(userText, options = {}) {
   const payload = buildPayload(userText, options);
   if (!payload.message) return { reply: "I didn't catch that. Try again?", data: {} };
-  DEBUG.trace('n8n: sending payload', { message: payload.message.slice(0, 50), source: payload.source });
+  DEBUG.trace('n8n: sending payload', { message: payload.message.slice(0, 50), source: payload.source, url: n8nWebhookUrl });
+  if (!n8nWebhookUrl || typeof n8nWebhookUrl !== 'string' || !n8nWebhookUrl.trim()) {
+    DEBUG.error('n8n webhook URL is missing or invalid', { n8nWebhookUrl });
+    return { reply: "Configuration error: N8N webhook URL is not set. Please check your configuration.", data: {} };
+  }
+  let timeoutId;
   try {
+    const controller = new AbortController();
+    timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
     const res = await fetch(n8nWebhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
     const contentType = res.headers.get('content-type') || '';
     let data = {};
     if (contentType.includes('application/json')) {
@@ -220,8 +245,17 @@ async function getLLMReply(userText, options = {}) {
     DEBUG.trace('n8n: using fallback (no reply in response)', { natural: !!natural, fallbackPreview: fallback.slice(0, 50) });
     return { reply: natural ? natural : fallback, data };
   } catch (err) {
-    DEBUG.error('n8n webhook error', err);
-    return { reply: "Sorry, I couldn't reach the assistant. Please try again.", data: {} };
+    if (timeoutId) clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      DEBUG.error('n8n webhook timeout after 30s', { url: n8nWebhookUrl, message: payload.message.slice(0, 50) });
+      return { reply: "Request timed out. The assistant is taking too long to respond. Please try again.", data: {} };
+    } else if (err.message && (err.message.includes('CORS') || err.message.includes('Failed to fetch'))) {
+      DEBUG.error('n8n webhook CORS or network error', { url: n8nWebhookUrl, err: err.message });
+      return { reply: "Network error: Could not reach the assistant. Check your connection and CORS settings.", data: {} };
+    } else {
+      DEBUG.error('n8n webhook error', { url: n8nWebhookUrl, err });
+      return { reply: "Sorry, I couldn't reach the assistant. Please try again.", data: {} };
+    }
   }
 }
 
@@ -298,6 +332,7 @@ const bridge = new CartesiaAudioBridge({
             bridge.startAgentSilenceTimer();
           } catch (sttErr) {
             DEBUG.error('Failed to restart STT after TTS', sttErr);
+            syncMicButton(false, false);
             setStatus('Ready (mic restart failed)', '');
           }
           if (files.length) await processFileSpecs(files);
@@ -321,7 +356,13 @@ const bridge = new CartesiaAudioBridge({
     // eslint-disable-next-line no-console -- intentional error reporting
     console.error('[JARVIS]', err);
     setStatus('Error', 'error');
-    if (bridge.isSTTActive()) bridge.stopSTT();
+    // Ensure mic button is synced if STT was active
+    if (bridge.isSTTActive()) {
+      bridge.stopSTT(); // This will trigger onSTTStopped which syncs the mic button
+    } else {
+      // If STT wasn't active, ensure mic button is in correct state
+      syncMicButton(false, false);
+    }
   },
   onSTTStopped: () => {
     DEBUG.trace('onSTTStopped: mic reverting to idle (syncMicButton false)');
@@ -398,86 +439,106 @@ if (typeof window !== 'undefined' && (DEBUG.enabled || (window.location && windo
 
 let pendingAttachments = [];
 
-btnSend.addEventListener('click', async () => {
-  const text = textInput.value.trim();
-  if (!text) return;
-  textInput.value = '';
-  textInput.placeholder = 'Type or speak...';
-  const attachmentsForPayload = [...pendingAttachments];
-  appendMessage('user', text, attachmentsForPayload.length ? attachmentsForPayload : []);
-  pendingAttachments = [];
-  setStatus('Processing…', 'listening');
-  try {
-    const attachmentPayload = await filesToAttachmentPayload(attachmentsForPayload);
-    await addOcrToAttachments(attachmentPayload);
-    const { reply: replyText, data: replyData } = await getLLMReply(text, { source: 'text', attachments: attachmentPayload });
-    appendMessage('assistant', replyText);
-    const files = extractFilesFromJson(replyData);
-    if (apiKey) {
-      setStatus('Speaking…', 'speaking');
-      try {
-        await bridge.speakText(replyText);
-        setStatus('Ready');
-        if (files.length) await processFileSpecs(files);
-      } catch (err) {
-        setStatus('Error', 'error');
-        appendMessage('assistant', 'Sorry, something went wrong. ' + (err?.message || err));
-      }
-    } else {
-      setStatus('Ready (no voice: add CARTESIA_API_KEY for TTS)', '');
-      if (files.length) await processFileSpecs(files);
+if (btnSend) {
+  btnSend.addEventListener('click', async () => {
+    DEBUG.trace('btnSend clicked', { hasText: !!textInput.value.trim(), textLength: textInput.value.trim().length });
+    const text = textInput.value.trim();
+    if (!text) {
+      DEBUG.trace('btnSend: empty text, returning early');
+      return;
     }
-  } catch (err) {
-    setStatus('Error', 'error');
-    appendMessage('assistant', 'Sorry, something went wrong. ' + (err?.message || err));
-  }
-});
-
-textInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    btnSend.click();
-  }
-});
-
-btnMic.addEventListener('click', async () => {
-  DEBUG.trace('Mic clicked', { sttActive: bridge.isSTTActive() });
-  if (bridge.isSTTActive()) {
-    bridge.stopSTT();
-    return;
-  }
-  if (!apiKey) {
-    setStatus('Add CARTESIA_API_KEY (or set window.JARVIS_CONFIG.apiKey)', 'error');
-    return;
-  }
-  const support = CartesiaAudioBridge.checkRecordingSupport();
-  if (!support.supported) {
-    setStatus(support.message || 'Microphone not available', 'error');
-    return;
-  }
-  syncMicButton(false, true);
-  try {
-    setStatus('Connecting…');
-    await bridge.connectTTS().catch(() => {});
-    DEBUG.trace('TTS connected, starting STT…');
+    textInput.value = '';
+    textInput.placeholder = 'Type or speak...';
+    const attachmentsForPayload = [...pendingAttachments];
+    appendMessage('user', text, attachmentsForPayload.length ? attachmentsForPayload : []);
+    pendingAttachments = [];
+    setStatus('Processing…', 'listening');
     try {
-      const saved = typeof localStorage !== 'undefined' && localStorage.getItem(MIC_BOOST_STORAGE_KEY);
-      if (saved != null) {
-        const v = parseFloat(saved);
-        if (!Number.isNaN(v)) bridge.setInputGain(Math.max(0.5, Math.min(2, v)));
+      const attachmentPayload = await filesToAttachmentPayload(attachmentsForPayload);
+      await addOcrToAttachments(attachmentPayload);
+      const { reply: replyText, data: replyData } = await getLLMReply(text, { source: 'text', attachments: attachmentPayload });
+      appendMessage('assistant', replyText);
+      const files = extractFilesFromJson(replyData);
+      if (apiKey) {
+        setStatus('Speaking…', 'speaking');
+        try {
+          await bridge.speakText(replyText);
+          setStatus('Ready');
+          if (files.length) await processFileSpecs(files);
+        } catch (err) {
+          setStatus('Error', 'error');
+          appendMessage('assistant', 'Sorry, something went wrong. ' + (err?.message || err));
+        }
+      } else {
+        setStatus('Ready (no voice: add CARTESIA_API_KEY for TTS)', '');
+        if (files.length) await processFileSpecs(files);
       }
-    } catch { /* ignore */ }
-    await bridge.startSTT();
-    syncMicButton(true, false);
-    setStatus('Listening…', 'listening');
-  } catch (err) {
-    const msg = err?.message || String(err);
-    setStatus(msg.startsWith('Mic ') ? msg : 'Mic: ' + msg, 'error');
-    syncMicButton(false, false);
-  }
-});
+    } catch (err) {
+      setStatus('Error', 'error');
+      appendMessage('assistant', 'Sorry, something went wrong. ' + (err?.message || err));
+    }
+  });
+} else {
+  DEBUG.error('btnSend not found - cannot attach click handler');
+}
 
-btnPaperclip.addEventListener('click', () => fileInput.click());
+if (textInput) {
+  textInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (btnSend) btnSend.click();
+    }
+  });
+} else {
+  DEBUG.error('textInput not found - cannot attach keydown handler');
+}
+
+if (btnMic) {
+  btnMic.addEventListener('click', async () => {
+    DEBUG.trace('Mic clicked', { sttActive: bridge.isSTTActive() });
+    if (bridge.isSTTActive()) {
+      bridge.stopSTT();
+      return;
+    }
+    if (!apiKey) {
+      setStatus('Add CARTESIA_API_KEY (or set window.JARVIS_CONFIG.apiKey)', 'error');
+      return;
+    }
+    const support = CartesiaAudioBridge.checkRecordingSupport();
+    if (!support.supported) {
+      setStatus(support.message || 'Microphone not available', 'error');
+      return;
+    }
+    syncMicButton(false, true);
+    try {
+      setStatus('Connecting…');
+      await bridge.connectTTS().catch(() => {});
+      DEBUG.trace('TTS connected, starting STT…');
+      try {
+        const saved = typeof localStorage !== 'undefined' && localStorage.getItem(MIC_BOOST_STORAGE_KEY);
+        if (saved != null) {
+          const v = parseFloat(saved);
+          if (!Number.isNaN(v)) bridge.setInputGain(Math.max(0.5, Math.min(2, v)));
+        }
+      } catch { /* ignore */ }
+      await bridge.startSTT();
+      syncMicButton(true, false);
+      setStatus('Listening…', 'listening');
+    } catch (err) {
+      const msg = err?.message || String(err);
+      setStatus(msg.startsWith('Mic ') ? msg : 'Mic: ' + msg, 'error');
+      syncMicButton(false, false);
+    }
+  });
+} else {
+  DEBUG.error('btnMic not found - cannot attach click handler');
+}
+
+if (btnPaperclip && fileInput) {
+  btnPaperclip.addEventListener('click', () => fileInput.click());
+} else {
+  DEBUG.error('btnPaperclip or fileInput not found - cannot attach click handler', { btnPaperclip: !!btnPaperclip, fileInput: !!fileInput });
+}
 
 if (btnExportPdf) {
   btnExportPdf.addEventListener('click', async () => {

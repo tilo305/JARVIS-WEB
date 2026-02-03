@@ -12,11 +12,12 @@ export const CARTESIA_CONFIG = {
   API_VERSION: '2025-04-16',
 
   // TTS: cArTeSiA dOcS — sonic-turbo 40ms first byte (real-time), sonic-3 90ms (emotive)
+  // Note: Using 44100 Hz (not 8000) for better quality; processor expects 44100
   TTS: {
     ENDPOINT: 'wss://api.cartesia.ai/tts/websocket',
     MODEL: 'sonic-turbo' as const, // 40ms first byte for live real-time; use 'sonic-3' for 90ms
     LANGUAGE: 'en',
-    SAMPLE_RATE: 8000,
+    SAMPLE_RATE: 44100, // Matches bridge and processor; 8000 is lower latency but 44100 is better quality
     ENCODING: 'pcm_s16le',
     // 0 = no server buffering when streaming client-side (cArTeSiA dOcS: optimal latency)
     MAX_BUFFER_DELAY_MS: 0,
