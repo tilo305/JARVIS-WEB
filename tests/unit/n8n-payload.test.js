@@ -2,7 +2,7 @@
  * Unit tests for n8n payload builder — ensures full payload is always sent.
  */
 import { describe, it, expect } from '@jest/globals';
-import { buildN8nPayload, getClientLocation, extractReplyFromJson } from '../../public/js/n8n-payload.js';
+import { buildN8nPayload, getClientLocation, getNaturalFallback, extractReplyFromJson, extractFilesFromJson } from '../../public/js/n8n-payload.js';
 
 const REQUIRED_KEYS = [
   'message',
@@ -56,6 +56,22 @@ describe('n8n-payload', () => {
       const payload = buildN8nPayload('test');
       expect(payload.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
     });
+
+    it('should pass through attachment ocrText from multimodal OCR tool', () => {
+      const payload = buildN8nPayload('Describe this', {
+        attachments: [{ name: 'note.png', type: 'image/png', size: 100, data: 'base64...', ocrText: 'Hello from image' }],
+      });
+      expect(payload.attachments).toHaveLength(1);
+      expect(payload.attachments[0].ocrText).toBe('Hello from image');
+    });
+
+    it('should include ocrText when empty string (OCR ran but found no text)', () => {
+      const payload = buildN8nPayload('What is this?', {
+        attachments: [{ name: 'pic.jpg', type: 'image/jpeg', size: 200, data: 'base64...', ocrText: '' }],
+      });
+      expect(payload.attachments).toHaveLength(1);
+      expect(payload.attachments[0]).toHaveProperty('ocrText', '');
+    });
   });
 
   describe('getClientLocation', () => {
@@ -65,6 +81,24 @@ describe('n8n-payload', () => {
       expect(loc).toHaveProperty('locale');
       expect(loc).toHaveProperty('language');
       expect(typeof loc.timezone).toBe('string');
+    });
+  });
+
+  describe('getNaturalFallback', () => {
+    it('should return greeting reply for hello/hi etc.', () => {
+      expect(getNaturalFallback('hello')).toBe("Hello! How can I assist you today?");
+      expect(getNaturalFallback('Hi there')).toBe("Hello! How can I assist you today?");
+      expect(getNaturalFallback('good morning')).toBe("Hello! How can I assist you today?");
+    });
+    it('should return goodbye/thanks/yes-no replies', () => {
+      expect(getNaturalFallback('goodbye')).toBe("Goodbye. I'll be here when you need me.");
+      expect(getNaturalFallback('thank you')).toBe("You're welcome.");
+      expect(getNaturalFallback('yes')).toBe("Understood.");
+    });
+    it('should return null for unknown or empty', () => {
+      expect(getNaturalFallback('')).toBeNull();
+      expect(getNaturalFallback('  ')).toBeNull();
+      expect(getNaturalFallback('what is the weather')).toBeNull();
     });
   });
 
@@ -93,6 +127,25 @@ describe('n8n-payload', () => {
     it('should prefer first matching key per N8N_REPLY_KEYS order', () => {
       const data = { message: 'first', output: 'second' };
       expect(extractReplyFromJson(data)).toBe('second');
+    });
+  });
+
+  describe('extractFilesFromJson', () => {
+    it('should return files array when present', () => {
+      const data = { output: 'Hi', files: [{ type: 'pdf', title: 'Doc', content: 'x' }] };
+      expect(extractFilesFromJson(data)).toHaveLength(1);
+      expect(extractFilesFromJson(data)[0].type).toBe('pdf');
+    });
+
+    it('should return empty array when no files', () => {
+      expect(extractFilesFromJson({})).toEqual([]);
+      expect(extractFilesFromJson({ output: 'Hi' })).toEqual([]);
+    });
+
+    it('should filter out items without type', () => {
+      const data = { files: [{ type: 'audio', text: 'x' }, { content: 'y' }] };
+      expect(extractFilesFromJson(data)).toHaveLength(1);
+      expect(extractFilesFromJson(data)[0].type).toBe('audio');
     });
   });
 });

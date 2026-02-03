@@ -97,7 +97,20 @@ describe('VAD_CONFIG', () => {
     it('should have silenceAfterSpeechToStopMicMs for fallback path', () => {
       expect(VAD_CONFIG.silenceAfterSpeechToStopMicMs).toBeDefined();
       expect(typeof VAD_CONFIG.silenceAfterSpeechToStopMicMs).toBe('number');
-      expect(VAD_CONFIG.silenceAfterSpeechToStopMicMs).toBe(2500);
+      expect(VAD_CONFIG.silenceAfterSpeechToStopMicMs).toBe(3500);
+    });
+
+    it('should have silenceClosingDelayAfterTtsMs (delay before 10s countdown)', () => {
+      expect(VAD_CONFIG.silenceClosingDelayAfterTtsMs).toBeDefined();
+      expect(typeof VAD_CONFIG.silenceClosingDelayAfterTtsMs).toBe('number');
+      expect(VAD_CONFIG.silenceClosingDelayAfterTtsMs).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should have maxListeningMs for force-stop safety', () => {
+      expect(VAD_CONFIG.maxListeningMs).toBeDefined();
+      expect(typeof VAD_CONFIG.maxListeningMs).toBe('number');
+      expect(VAD_CONFIG.maxListeningMs).toBeGreaterThan(0);
+      expect(VAD_CONFIG.maxListeningMs).toBe(60000);
     });
   });
 
@@ -106,6 +119,7 @@ describe('VAD_CONFIG', () => {
       'model', 'redemptionMs', 'preSpeechPadMs', 'minSpeechMs',
       'positiveSpeechThreshold', 'negativeSpeechThreshold', 'submitUserSpeechOnPause',
       'silenceAfterSpeechToStopMicMs', 'silenceClosingMessageMs', 'silenceClosingPhrases',
+      'silenceClosingDelayAfterTtsMs', 'maxListeningMs',
       'baseAssetPath', 'onnxWASMBasePath',
     ]);
     Object.keys(VAD_CONFIG).forEach((key) => {

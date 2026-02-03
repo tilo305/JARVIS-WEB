@@ -4,6 +4,25 @@ Per **zEn DeBuGgEr.md** — all fixes documented here. Ensure fixes are 100% wor
 
 ---
 
+## 10s Silence Timer & Conversation Stopping (Fixes Verified)
+
+### 1. 10 seconds of silence — timer starts too early
+- **Fix:** `silenceClosingDelayAfterTtsMs: 3500` in `vad-config.js`. The 10s countdown starts only **after** a 3.5s delay following TTS "done", so playback can drain and the 10s doesn’t feel like it started too soon.
+- **Code:** `cartesia-audio-bridge.js` → `startAgentSilenceTimer()` uses the delay before starting the 10s timer; `onSpeechStart` clears both timers.
+- **See:** `debug/SILENCE-AND-CONVERSATION-TIMER-FIXES.md`
+
+### 2. Conversation stopping too early
+- **Fix:** `silenceAfterSpeechToStopMicMs: 3500` in `vad-config.js` (increased from 2500). The mic stays open for **3.5s** of user silence after speech end before stopping and sending the transcript, so brief pauses don’t cut off the turn.
+- **Code:** `cartesia-audio-bridge.js` uses `VAD_CONFIG.silenceAfterSpeechToStopMicMs` for the post-speech stop timer.
+- **See:** `debug/SILENCE-AND-CONVERSATION-TIMER-FIXES.md`
+
+### Verification
+- `npm run test:unit` — vad-config and cartesia-audio-bridge tests pass.
+- `npm run lint` — no errors.
+- Manual: `?debug=1` — after agent speaks, 3.5s + 10s silence → closing message; after user speaks, 3.5s pause still keeps mic on.
+
+---
+
 ## 2025-02-02 (STT Invalid Sample Rate — No Text / No Voice)
 
 ### Symptom

@@ -105,7 +105,7 @@ Built by `buildN8nPayload(message, options)` — **all of these are sent on ever
 | `message_id` | string | Unique per message, e.g. `msg_<timestamp>_<random>`. |
 | `messageId` | string | Same as `message_id` (camelCase for n8n). |
 | `source` | string | `'voice'` or `'text'`. |
-| `attachments` | array | `[{ name, type, size }, ...]` for attached files (empty for voice). |
+| `attachments` | array | `[{ name, type, size, data?, ocrText? }, ...]` — `data` is base64 file content when present (empty for voice). Image attachments include `ocrText` (extracted via client-side OCR) when available. |
 | `locale` | string | Browser locale (e.g. `en-US`), if available. |
 | `language` | string | Browser language (e.g. `en-US`), if available. |
 

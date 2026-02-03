@@ -48,6 +48,22 @@ describe('CartesiaAudioBridge', () => {
     // Cartesia STT: config in URL query params (not first message)
     expect(source).toMatch(/searchParams\.set\(['"]sample_rate['"],\s*['"]16000['"]\)/);
     expect(source).toMatch(/searchParams\.set\(['"]model['"]/);
-    expect(source).toMatch(/CARTESIA_VERSION\s*=\s*['"]2024-06-10['"]/);
+    expect(source).toMatch(/CARTESIA_VERSION\s*=\s*['"]2025-04-16['"]/);
+  });
+
+  it('must use VAD_CONFIG.silenceAfterSpeechToStopMicMs for post-speech stop timer (3.5s fix)', () => {
+    const { readFileSync } = require('fs');
+    const { join } = require('path');
+    const source = readFileSync(join(__dirname, '../../public/js/cartesia-audio-bridge.js'), 'utf8');
+    expect(source).toMatch(/VAD_CONFIG\.silenceAfterSpeechToStopMicMs/);
+    expect(source).toMatch(/\?\?\s*3500/);
+  });
+
+  it('must use VAD_CONFIG.silenceClosingDelayAfterTtsMs in startAgentSilenceTimer (10s delay fix)', () => {
+    const { readFileSync } = require('fs');
+    const { join } = require('path');
+    const source = readFileSync(join(__dirname, '../../public/js/cartesia-audio-bridge.js'), 'utf8');
+    expect(source).toMatch(/silenceClosingDelayAfterTtsMs/);
+    expect(source).toMatch(/delayMs\s*=\s*VAD_CONFIG\.silenceClosingDelayAfterTtsMs/);
   });
 });

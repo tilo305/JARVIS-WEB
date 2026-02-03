@@ -10,7 +10,16 @@
  * Debug: Add ?debug=1 to URL or set window.JARVIS_DEBUG = true
  */
 import { CartesiaAudioBridge } from './cartesia-audio-bridge.js';
-import { buildN8nPayload, extractReplyFromJson } from './n8n-payload.js';
+import { buildN8nPayload, extractReplyFromJson, extractFilesFromJson, getNaturalFallback } from './n8n-payload.js';
+import { addOcrToAttachments } from './ocr-tool.js';
+import {
+  createPdfBlob,
+  createImageBlobFromBase64,
+  createTextBlob,
+  downloadBlob,
+  isAudioFile,
+  safeFilename,
+} from './file-creator.js';
 import { DEBUG } from './debug.js';
 
 const chatContainer = document.getElementById('chatContainer');
@@ -18,8 +27,10 @@ const textInput = document.getElementById('textInput');
 const btnSend = document.getElementById('btnSend');
 const btnMic = document.getElementById('btnMic');
 const btnPaperclip = document.getElementById('btnPaperclip');
+const btnExportPdf = document.getElementById('btnExportPdf');
 const fileInput = document.getElementById('fileInput');
 const statusEl = document.getElementById('status');
+const MIC_BOOST_STORAGE_KEY = 'jarvis_mic_boost';
 
 /** Guard: fail fast if required DOM is missing (wrong page or load order) */
 if (!chatContainer || !statusEl) {
@@ -78,19 +89,43 @@ function appendMessage(role, content, attachments = []) {
   const wrap = document.createElement('div');
   wrap.className = 'message ' + role;
   const label = role === 'user' ? 'You' : 'JARVIS';
-  let attHtml = '';
+  wrap.innerHTML = `<div class="label">${escapeHtml(label)}</div><div class="content">${escapeHtml(content)}</div>`;
   if (attachments.length) {
-    attHtml = '<div class="attachments">' + attachments.map(a => {
+    const attDiv = document.createElement('div');
+    attDiv.className = 'attachments';
+    for (const a of attachments) {
       const isImage = (a && typeof a === 'object' && a.type && a.type.startsWith('image/'));
+      const isAudio = (a && typeof a === 'object' && a.type) ? isAudioFile(a) : false;
       if (isImage) {
-        const url = a.url || URL.createObjectURL(a);
-        return `<img src="${url}" alt="Attachment" />`;
+        const img = document.createElement('img');
+        img.src = a.url || URL.createObjectURL(a);
+        img.alt = 'Attachment';
+        attDiv.appendChild(img);
+      } else if (isAudio && (a instanceof File || a instanceof Blob)) {
+        const name = a.name || 'audio';
+        const block = document.createElement('div');
+        block.className = 'attachment-audio';
+        block.innerHTML = `<span class="file-name">${escapeHtml(name)}</span>`;
+        const downloadBtn = document.createElement('button');
+        downloadBtn.type = 'button';
+        downloadBtn.className = 'btn-attachment';
+        downloadBtn.textContent = 'Download';
+        downloadBtn.title = 'Download';
+        downloadBtn.addEventListener('click', () => {
+          downloadBlob(a, safeFilename(name, ''));
+        });
+        block.appendChild(downloadBtn);
+        attDiv.appendChild(block);
+      } else {
+        const name = typeof a === 'string' ? a : (a && a.name) || 'File';
+        const span = document.createElement('span');
+        span.className = 'file-name';
+        span.textContent = name;
+        attDiv.appendChild(span);
       }
-      const name = typeof a === 'string' ? a : (a && a.name) || 'File';
-      return `<span class="file-name">${escapeHtml(name)}</span>`;
-    }).join('') + '</div>';
+    }
+    wrap.appendChild(attDiv);
   }
-  wrap.innerHTML = `<div class="label">${escapeHtml(label)}</div><div class="content">${escapeHtml(content)}</div>${attHtml}`;
   chatContainer.appendChild(wrap);
   chatContainer.scrollTop = chatContainer.scrollHeight;
   return wrap;
@@ -102,37 +137,48 @@ function escapeHtml(s) {
   return div.innerHTML;
 }
 
+/** Max attachment size (bytes) — larger files are skipped to avoid huge payloads */
+const MAX_ATTACHMENT_SIZE = 15 * 1024 * 1024; // 15 MB
+
 /**
- * Natural fallback replies when n8n doesn't return a proper reply.
- * Keeps the conversation friendly instead of showing technical instructions.
+ * Read File objects to base64 for sending in JSON payload.
+ * Skips files over MAX_ATTACHMENT_SIZE. Returns array of { name, type, size, data }.
  */
-function getNaturalFallback(userMessage) {
-  const m = (userMessage || '').trim().toLowerCase().replace(/[!?.,]+$/, '');
-  if (!m) return null;
-  const greetings = ['hello', 'hi', 'hey', 'hi there', 'hello there', 'good morning', 'good afternoon', 'good evening', 'greetings', 'howdy'];
-  if (greetings.some((g) => m === g || m.startsWith(g + ' '))) {
-    return "Hello! How can I assist you today?";
+async function filesToAttachmentPayload(files) {
+  const results = [];
+  for (const f of files) {
+    if (!(f instanceof File)) continue;
+    if (f.size > MAX_ATTACHMENT_SIZE) {
+      DEBUG.trace('attachment skipped (too large)', { name: f.name, size: f.size });
+      continue;
+    }
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => {
+          const m = r.result;
+          resolve(typeof m === 'string' && m.includes(',') ? m.split(',')[1] : '');
+        };
+        r.onerror = () => reject(r.error);
+        r.readAsDataURL(f);
+      });
+      results.push({ name: f.name, type: f.type, size: f.size, data: base64 });
+    } catch (err) {
+      DEBUG.error('attachment read failed', { name: f.name, err });
+    }
   }
-  if (m === 'goodbye' || m === 'bye' || m === 'see you') {
-    return "Goodbye. I'll be here when you need me.";
-  }
-  if (m === 'thanks' || m === 'thank you' || m === 'thanks!') {
-    return "You're welcome.";
-  }
-  if (m === 'yes' || m === 'no') {
-    return "Understood.";
-  }
-  return null;
+  return results;
 }
 
 /**
  * Get LLM reply from n8n webhook.
  * Sends full payload: message, session_id, sessionId, timestamp, timezone, location,
  * message_id, messageId, source, attachments, locale, language.
+ * @returns {{ reply: string, data: Object }} - reply text and raw response for files
  */
 async function getLLMReply(userText, options = {}) {
   const payload = buildPayload(userText, options);
-  if (!payload.message) return "I didn't catch that. Try again?";
+  if (!payload.message) return { reply: "I didn't catch that. Try again?", data: {} };
   DEBUG.trace('n8n: sending payload', { message: payload.message.slice(0, 50), source: payload.source });
   try {
     const res = await fetch(n8nWebhookUrl, {
@@ -156,7 +202,7 @@ async function getLLMReply(userText, options = {}) {
     }
     const reply = extractReplyFromJson(data);
     DEBUG.trace('n8n: response', { status: res.status, hasReply: !!reply, replyPreview: typeof reply === 'string' ? reply.slice(0, 50) : '' });
-    if (typeof reply === 'string') return reply;
+    if (typeof reply === 'string') return { reply, data };
     // No reply extracted — log so we can diagnose fallback
     const hasNatural = !!getNaturalFallback(payload.message);
     if (!hasNatural) {
@@ -172,11 +218,42 @@ async function getLLMReply(userText, options = {}) {
     const natural = getNaturalFallback(payload.message);
     const fallback = natural || "I heard you. I'm still getting set up — please try again in a moment.";
     DEBUG.trace('n8n: using fallback (no reply in response)', { natural: !!natural, fallbackPreview: fallback.slice(0, 50) });
-    if (natural) return natural;
-    return fallback;
+    return { reply: natural ? natural : fallback, data };
   } catch (err) {
     DEBUG.error('n8n webhook error', err);
-    return "Sorry, I couldn't reach the assistant. Please try again.";
+    return { reply: "Sorry, I couldn't reach the assistant. Please try again.", data: {} };
+  }
+}
+
+/**
+ * Process file specs from n8n response: create blobs and trigger downloads.
+ * Types: pdf (title + content), image (base64), text (content). Audio files come from uploads (see attachment UI).
+ */
+async function processFileSpecs(files) {
+  if (!Array.isArray(files) || !files.length) return;
+  for (const spec of files) {
+    const type = (spec.type || '').toLowerCase();
+    const filename = spec.filename || spec.name;
+    try {
+      if (type === 'pdf') {
+        const blob = await createPdfBlob({
+          title: spec.title || 'Document',
+          content: spec.content || spec.text || '',
+        });
+        downloadBlob(blob, safeFilename(filename, '.pdf'));
+      } else if (type === 'image' && (spec.data || spec.base64)) {
+        const data = spec.data || spec.base64;
+        const mime = spec.mime || spec.contentType || 'image/png';
+        const blob = createImageBlobFromBase64(data, mime);
+        downloadBlob(blob, safeFilename(filename, '.png'));
+      } else if (type === 'text') {
+        const content = spec.content || spec.text || '';
+        const blob = createTextBlob(content, spec.mime || 'text/plain');
+        downloadBlob(blob, safeFilename(filename, '.txt'));
+      }
+    } catch (err) {
+      DEBUG.error('file creation failed', { type, err });
+    }
   }
 }
 
@@ -184,7 +261,7 @@ const bridge = new CartesiaAudioBridge({
   apiKey: apiKey || undefined,
   voiceId: voiceId || undefined,
   ttsModel: 'sonic-turbo',
-  audioWorkletBasePath: new URL('audio/', document.baseURI).href,
+  audioWorkletBasePath: new URL('../audio/', import.meta.url).href,
   onPartialTranscript: (text, isFinal) => {
     if (!isFinal && text.trim()) setStatus(`Listening… "${text.slice(0, 40)}${text.length > 40 ? '…' : ''}"`, 'listening');
   },
@@ -199,14 +276,31 @@ const bridge = new CartesiaAudioBridge({
     try {
       appendMessage('user', trimmed);
       setStatus('Processing…', 'listening');
-      const replyText = await getLLMReply(trimmed, { source: 'voice' });
+      const { reply: replyText, data: replyData } = await getLLMReply(trimmed, { source: 'voice' });
       appendMessage('assistant', replyText);
+      const files = extractFilesFromJson(replyData);
       if (apiKey) {
         setStatus('Speaking…', 'speaking');
         try {
           await bridge.speakText(replyText);
-          setStatus('Ready');
-          bridge.startAgentSilenceTimer();
+          setStatus('Connecting…', '');
+          try {
+            try {
+              const saved = typeof localStorage !== 'undefined' && localStorage.getItem(MIC_BOOST_STORAGE_KEY);
+              if (saved != null) {
+                const v = parseFloat(saved);
+                if (!Number.isNaN(v)) bridge.setInputGain(Math.max(0.5, Math.min(2, v)));
+              }
+            } catch { /* ignore */ }
+            await bridge.startSTT();
+            syncMicButton(true, false);
+            setStatus('Listening…', 'listening');
+            bridge.startAgentSilenceTimer();
+          } catch (sttErr) {
+            DEBUG.error('Failed to restart STT after TTS', sttErr);
+            setStatus('Ready (mic restart failed)', '');
+          }
+          if (files.length) await processFileSpecs(files);
         } catch (err) {
           DEBUG.error('TTS error in onTranscript', err);
           setStatus('Ready (TTS error)', '');
@@ -214,6 +308,7 @@ const bridge = new CartesiaAudioBridge({
         }
       } else {
         setStatus('Ready (no voice: add CARTESIA_API_KEY for TTS)', '');
+        if (files.length) await processFileSpecs(files);
       }
     } catch (err) {
       DEBUG.error('onTranscript error', err);
@@ -231,6 +326,7 @@ const bridge = new CartesiaAudioBridge({
   onSTTStopped: () => {
     DEBUG.trace('onSTTStopped: mic reverting to idle (syncMicButton false)');
     syncMicButton(false, false);
+    bridge.stopLevelMeter();
     setStatus('Ready');
   },
   // VAD callbacks — Heuristic S2: Make system status clear (bOoK oN vOiCe BoT dEsIgN.md)
@@ -262,30 +358,10 @@ const bridge = new CartesiaAudioBridge({
 if (typeof window !== 'undefined' && (DEBUG.enabled || (window.location && window.location.search && /[?&]debug=1/.test(window.location.search)))) {
   window.JARVIS_DEBUG_SEND_TEST = async function () {
     const msg = 'Hello from JARVIS debug';
-    const payload = buildPayload(msg, { source: 'text' });
     /* eslint-disable no-console -- debug tool */
-    console.log('[JARVIS DEBUG] Sending test message to n8n...', payload.message);
+    console.log('[JARVIS DEBUG] Sending test message to n8n...', msg);
     try {
-      const res = await fetch(n8nWebhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const contentType = res.headers.get('content-type') || '';
-      let data = {};
-      if (contentType.includes('application/json')) {
-        data = await res.json().catch(() => ({}));
-      } else {
-        const text = await res.text().catch(() => '');
-        if (text.trim()) {
-          try {
-            data = JSON.parse(text);
-          } catch {
-            data = { output: text.trim() };
-          }
-        }
-      }
-      const reply = extractReplyFromJson(data);
+      const { reply, data } = await getLLMReply(msg, { source: 'text' });
       if (typeof reply === 'string') {
         console.log('[JARVIS DEBUG] Reply OK:', reply.slice(0, 120) + (reply.length > 120 ? '…' : ''));
         return { ok: true, reply };
@@ -332,19 +408,24 @@ btnSend.addEventListener('click', async () => {
   pendingAttachments = [];
   setStatus('Processing…', 'listening');
   try {
-    const replyText = await getLLMReply(text, { source: 'text', attachments: attachmentsForPayload });
+    const attachmentPayload = await filesToAttachmentPayload(attachmentsForPayload);
+    await addOcrToAttachments(attachmentPayload);
+    const { reply: replyText, data: replyData } = await getLLMReply(text, { source: 'text', attachments: attachmentPayload });
     appendMessage('assistant', replyText);
+    const files = extractFilesFromJson(replyData);
     if (apiKey) {
       setStatus('Speaking…', 'speaking');
       try {
         await bridge.speakText(replyText);
         setStatus('Ready');
+        if (files.length) await processFileSpecs(files);
       } catch (err) {
         setStatus('Error', 'error');
         appendMessage('assistant', 'Sorry, something went wrong. ' + (err?.message || err));
       }
     } else {
       setStatus('Ready (no voice: add CARTESIA_API_KEY for TTS)', '');
+      if (files.length) await processFileSpecs(files);
     }
   } catch (err) {
     setStatus('Error', 'error');
@@ -379,6 +460,13 @@ btnMic.addEventListener('click', async () => {
     setStatus('Connecting…');
     await bridge.connectTTS().catch(() => {});
     DEBUG.trace('TTS connected, starting STT…');
+    try {
+      const saved = typeof localStorage !== 'undefined' && localStorage.getItem(MIC_BOOST_STORAGE_KEY);
+      if (saved != null) {
+        const v = parseFloat(saved);
+        if (!Number.isNaN(v)) bridge.setInputGain(Math.max(0.5, Math.min(2, v)));
+      }
+    } catch { /* ignore */ }
     await bridge.startSTT();
     syncMicButton(true, false);
     setStatus('Listening…', 'listening');
@@ -390,6 +478,32 @@ btnMic.addEventListener('click', async () => {
 });
 
 btnPaperclip.addEventListener('click', () => fileInput.click());
+
+if (btnExportPdf) {
+  btnExportPdf.addEventListener('click', async () => {
+    if (!chatContainer) return;
+    const messages = chatContainer.querySelectorAll('.message');
+    const lines = [];
+    for (const msg of messages) {
+      const label = msg.querySelector('.label');
+      const content = msg.querySelector('.content');
+      const who = label ? label.textContent.trim() : 'Unknown';
+      const text = content ? content.textContent.trim() : '';
+      if (text) lines.push(`${who}:\n${text}\n`);
+    }
+    const content = lines.join('\n') || 'No messages yet.';
+    try {
+      setStatus('Creating PDF…', '');
+      const blob = await createPdfBlob({ title: 'JARVIS Chat', content });
+      downloadBlob(blob, safeFilename('jarvis-chat.pdf', '.pdf'));
+      setStatus('Ready');
+    } catch (err) {
+      DEBUG.error('Export PDF failed', err);
+      setStatus('Error', 'error');
+    }
+  });
+}
+
 fileInput.addEventListener('change', () => {
   const files = Array.from(fileInput.files || []);
   if (!files.length) return;

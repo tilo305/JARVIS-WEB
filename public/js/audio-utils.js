@@ -30,16 +30,12 @@ export function int16ToFloat32(int16Array) {
 }
 
 /**
- * Convert Float32Array (VAD output, -1 to 1) to Int16 PCM (Cartesia STT)
- * VAD produces 16kHz Float32; Cartesia expects 16kHz PCM s16le
+ * Convert Float32Array (VAD output, -1 to 1) to Int16 PCM (Cartesia STT).
+ * VAD produces 16kHz Float32; Cartesia expects 16kHz PCM s16le.
+ * Delegates to floatTo16BitPCM to avoid duplicate implementation.
  */
 export function float32ToInt16(float32Array) {
-  const int16Array = new Int16Array(float32Array.length);
-  for (let i = 0; i < float32Array.length; i++) {
-    const s = Math.max(-1, Math.min(1, float32Array[i]));
-    int16Array[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-  }
-  return int16Array;
+  return floatTo16BitPCM(float32Array);
 }
 
 /**

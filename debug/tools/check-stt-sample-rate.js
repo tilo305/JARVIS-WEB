@@ -39,7 +39,7 @@ async function main() {
   // Cartesia STT: config via URL query params (not first message). @cartesia/cartesia-js SDK style.
   const url = new URL(CARTESIA_CONFIG.STT.ENDPOINT);
   url.searchParams.set('api_key', API_KEY);
-  url.searchParams.set('cartesia_version', '2024-06-10');
+  url.searchParams.set('cartesia_version', '2025-04-16'); // Must match src/config.ts API_VERSION
   url.searchParams.set('model', CARTESIA_CONFIG.STT.MODEL);
   url.searchParams.set('encoding', 'pcm_s16le');
   url.searchParams.set('sample_rate', '16000');

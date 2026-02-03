@@ -43,6 +43,30 @@ export function extractReplyFromJson(data) {
   return null;
 }
 
+/** Keys checked for files array in n8n webhook JSON response */
+const N8N_FILES_KEYS = ['files', 'createFiles', 'file_outputs', 'attachments'];
+
+/**
+ * Extract optional file-creation specs from n8n webhook JSON response.
+ * Used when the assistant is asked to create audio, PDF, image, or text files.
+ * Each item: { type: 'audio'|'pdf'|'image'|'text', ... } with type-specific fields.
+ * @param {Object} data - Parsed JSON response from n8n
+ * @returns {Array<Object>} - Array of file specs (may be empty)
+ */
+export function extractFilesFromJson(data) {
+  if (!data || typeof data !== 'object') return [];
+  let list = null;
+  for (const key of N8N_FILES_KEYS) {
+    const v = data[key];
+    if (Array.isArray(v) && v.length) {
+      list = v;
+      break;
+    }
+  }
+  if (!list) return [];
+  return list.filter((f) => f && typeof f === 'object' && f.type);
+}
+
 /**
  * Get client location/timezone and locale.
  * Works in browser (navigator, Intl) and Node (Intl only).
@@ -67,6 +91,23 @@ export function getClientLocation() {
 }
 
 /**
+ * Natural fallback replies when n8n doesn't return a proper reply.
+ * Single source of truth for app.js and fallback-revert-debug.html.
+ * @param {string} [userMessage] - Raw user message
+ * @returns {string|null} - Fallback reply or null
+ */
+export function getNaturalFallback(userMessage) {
+  const m = (userMessage || '').trim().toLowerCase().replace(/[!?.,]+$/, '');
+  if (!m) return null;
+  const greetings = ['hello', 'hi', 'hey', 'hi there', 'hello there', 'good morning', 'good afternoon', 'good evening', 'greetings', 'howdy'];
+  if (greetings.some((g) => m === g || m.startsWith(g + ' '))) return "Hello! How can I assist you today?";
+  if (m === 'goodbye' || m === 'bye' || m === 'see you') return "Goodbye. I'll be here when you need me.";
+  if (m === 'thanks' || m === 'thank you' || m === 'thanks!') return "You're welcome.";
+  if (m === 'yes' || m === 'no') return "Understood.";
+  return null;
+}
+
+/**
  * Build full payload for n8n webhook. All fields n8n may expect:
  * - session_id / sessionId: per-tab/session continuity
  * - timestamp: ISO 8601 when message was sent
@@ -74,7 +115,7 @@ export function getClientLocation() {
  * - location: same as timezone
  * - message_id / messageId: unique per message (tracing, idempotency)
  * - source: 'voice' | 'text'
- * - attachments: array of { name, type, size }
+ * - attachments: array of { name, type, size, data? } — data is base64 file content when present
  * - locale, language: browser locale/language
  *
  * @param {string} message - User message text
@@ -91,7 +132,12 @@ export function buildN8nPayload(message, options = {}) {
 
   const attachments = rawAttachments.map((f) => {
     if (f instanceof File) return { name: f.name, type: f.type, size: f.size };
-    if (f && typeof f === 'object' && 'name' in f) return { name: f.name, type: f.type ?? '', size: f.size ?? 0 };
+    if (f && typeof f === 'object' && 'name' in f) {
+      const a = { name: f.name, type: f.type ?? '', size: f.size ?? 0 };
+      if (typeof f.data === 'string') a.data = f.data; // base64 file content for n8n
+      if (typeof f.ocrText === 'string') a.ocrText = f.ocrText; // OCR text from multimodal OCR tool
+      return a;
+    }
     return null;
   }).filter(Boolean);
 

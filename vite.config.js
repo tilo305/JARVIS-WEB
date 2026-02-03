@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const CARTESIA_VERSION = '2024-06-10';
+const CARTESIA_VERSION = '2025-04-16'; // Must match src/config.ts API_VERSION
 const STT_WS = 'wss://api.cartesia.ai/stt/websocket';
 const TTS_WS = 'wss://api.cartesia.ai/tts/websocket';
 const WS_CHECK_MS = 30_000;

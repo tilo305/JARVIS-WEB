@@ -18,7 +18,6 @@ import { buildN8nPayload, extractReplyFromJson } from '../../public/js/n8n-paylo
 
 const DEFAULT_APP_URL = 'http://localhost:3000';
 const DEFAULT_WEBHOOK_URL = 'https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4';
-const PRODUCTION_WEBHOOK_URL = 'https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4';
 const FETCH_TIMEOUT_MS = 15000;
 
 async function getWebhookUrlResolved() {
@@ -81,7 +80,7 @@ async function nodeFetchTest(webhookUrl) {
 function suggestFixes(webhookUrl, nodeResult) {
   const fixes = [];
   if (webhookUrl.includes('webhook-test')) {
-    fixes.push(`Use production URL, not test: ${PRODUCTION_WEBHOOK_URL}`);
+    fixes.push(`Use production URL, not test: ${DEFAULT_WEBHOOK_URL}`);
   }
   if (nodeResult.status === 404) {
     fixes.push('n8n workflow is inactive. Activate the workflow in n8n.');
@@ -105,7 +104,7 @@ async function main() {
 
   if (webhookUrl.includes('webhook-test')) {
     console.warn('[DEBUG] WARNING: Using webhook-test URL. Use production URL for chat to work:');
-    console.warn('[DEBUG]   ', PRODUCTION_WEBHOOK_URL);
+    console.warn('[DEBUG]   ', DEFAULT_WEBHOOK_URL);
   }
 
   const nodeResult = await nodeFetchTest(webhookUrl);

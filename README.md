@@ -32,6 +32,15 @@ VITE_N8N_WEBHOOK_URL=https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-
 
 **n8n LLM integration:** The chat UI sends user messages to the n8n webhook (POST JSON `{ "message": "..." }`). Your n8n workflow should return a JSON response with a reply field (`output`, `reply`, `result`, `text`, or `message`). The webhook URL is configured in `src/config.ts` and defaults to the value above; override with `VITE_N8N_WEBHOOK_URL` in `.env`.
 
+**File creation:** When the user asks for a PDF, image, or text file, your n8n workflow can return a `files` array (or `createFiles`) alongside the reply. Each item must have `type` and type-specific fields; the app will generate and trigger a download. Supported types:
+- **pdf**: `{ type: "pdf", title?: "Title", content: "Body text", filename?: "report.pdf" }`.
+- **image**: `{ type: "image", data: "base64...", mime?: "image/png", filename?: "image.png" }`.
+- **text**: `{ type: "text", content: "...", filename?: "notes.txt" }`.
+
+**Audio files** are created from **uploads**: attach an audio file (e.g. MP3, WebM, OGG) with the paperclip; in the message you’ll see **Download** to save the file in its original format. WAV conversion from uploaded audio is available internally (e.g. for n8n or programmatic use) via `createWavBlobFromAudioFile` in `public/js/file-creator.js`.
+
+The UI also has **Export chat to PDF** (header) for one-click export.
+
 Then run the Vite dev server:
 
 ```bash

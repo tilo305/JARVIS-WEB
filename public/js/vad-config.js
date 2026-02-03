@@ -44,10 +44,20 @@ export const VAD_CONFIG = {
 
   // silenceAfterSpeechToStopMicMs: After user stops speaking (onSpeechEnd), wait this
   // many ms of silence. Then stop mic and send buffered transcript to agent.
-  // Natural bidirectional flow: user speaks → 2.5s silence → stop mic → agent responds.
-  silenceAfterSpeechToStopMicMs: 2500,
+  // 3.5s avoids conversation "stopping too early" when user pauses briefly (see debug/SILENCE-AND-CONVERSATION-TIMER-FIXES.md).
+  silenceAfterSpeechToStopMicMs: 3500,
 
-  // silenceClosingMessageMs: After the agent finishes speaking (TTS done), wait this
+  // maxListeningMs: Maximum time the mic can stay on in one session (ms). After this,
+  // we force-stop and send any transcript. Ensures the mic always stops even if VAD
+  // never fires onSpeechEnd (e.g. constant background noise).
+  maxListeningMs: 60000,
+
+  // silenceClosingDelayAfterTtsMs: Wait this long after TTS "done" before starting the
+  // 10s silence countdown. TTS "done" fires when the server finishes sending audio;
+  // playback may still be draining. This avoids the 10s feeling like it started too soon.
+  silenceClosingDelayAfterTtsMs: 3500,
+
+  // silenceClosingMessageMs: After the agent finishes speaking (TTS done + delay above), wait this
   // many ms of no user speech. Then output a single dynamic closing message to let
   // the user know the agent is still there, then INACTIVE.
   silenceClosingMessageMs: 10000,

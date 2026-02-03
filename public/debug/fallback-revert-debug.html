@@ -72,7 +72,7 @@
   </section>
 
   <script type="module">
-    import { buildN8nPayload, extractReplyFromJson } from '../js/n8n-payload.js';
+    import { buildN8nPayload, extractReplyFromJson, getNaturalFallback } from '../js/n8n-payload.js';
 
     const DEFAULT_WEBHOOK = 'https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4';
 
@@ -80,17 +80,6 @@
       const win = typeof window !== 'undefined' ? window : {};
       const cfg = win.JARVIS_CONFIG || {};
       return cfg.n8nWebhookUrl || DEFAULT_WEBHOOK;
-    }
-
-    function getNaturalFallback(userMessage) {
-      const m = (userMessage || '').trim().toLowerCase().replace(/[!?.,]+$/, '');
-      if (!m) return null;
-      const greetings = ['hello', 'hi', 'hey', 'hi there', 'hello there', 'good morning', 'good afternoon', 'good evening', 'greetings', 'howdy'];
-      if (greetings.some((g) => m === g || m.startsWith(g + ' '))) return "Hello! How can I assist you today?";
-      if (m === 'goodbye' || m === 'bye' || m === 'see you') return "Goodbye. I'll be here when you need me.";
-      if (m === 'thanks' || m === 'thank you' || m === 'thanks!') return "You're welcome.";
-      if (m === 'yes' || m === 'no') return "Understood.";
-      return null;
     }
 
     const urlInput = document.getElementById('webhookUrl');
