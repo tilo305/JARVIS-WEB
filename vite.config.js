@@ -39,7 +39,7 @@ function cartesiaWebSocketStatusPlugin() {
     apply: 'serve',
     configureServer() {
       const env = loadEnv('development', process.cwd(), '');
-      const apiKey = env.CARTESIA_API_KEY || process.env.CARTESIA_API_KEY || '';
+      const apiKey = env.VITE_CARTESIA_API_KEY || env.CARTESIA_API_KEY || process.env.CARTESIA_API_KEY || '';
 
       async function checkEndpoint(baseUrl) {
         const url = `${baseUrl}?api_key=${encodeURIComponent(apiKey)}&cartesia_version=${CARTESIA_VERSION}`;
@@ -105,16 +105,20 @@ export default defineConfig(({ mode }) => {
       cartesiaWebSocketStatusPlugin(),
     ],
     build: {
-      outDir: 'dist-public', // relative to config file (project root), not to root: 'public'
+      outDir: join(__dirname, 'dist-public'), // absolute path to project root
       emptyOutDir: true,
     },
     server: {
       port: Number(process.env.PORT) || 3000,
       open: true,
     },
+    preview: {
+      port: Number(process.env.PORT) || 3000,
+      open: true,
+    },
     define: {
-      'import.meta.env.VITE_CARTESIA_API_KEY': JSON.stringify(env.CARTESIA_API_KEY || ''),
-      'import.meta.env.VITE_CARTESIA_VOICE_ID': JSON.stringify(env.CARTESIA_VOICE_ID || ''),
+      'import.meta.env.VITE_CARTESIA_API_KEY': JSON.stringify(env.VITE_CARTESIA_API_KEY || ''),
+      'import.meta.env.VITE_CARTESIA_VOICE_ID': JSON.stringify(env.VITE_CARTESIA_VOICE_ID || ''),
       'import.meta.env.VITE_N8N_WEBHOOK_URL': JSON.stringify(
         env.VITE_N8N_WEBHOOK_URL || 'https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4'
       ),

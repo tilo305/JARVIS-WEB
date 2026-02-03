@@ -22,8 +22,8 @@ export class CartesiaAudioBridge {
     this.apiKey = options.apiKey ?? DEFAULT_API_KEY;
     this.voiceId = options.voiceId || DEFAULT_VOICE_ID;
     this.language = options.language || 'en';
-    /** sonic-turbo: 40ms first byte; sonic-3: 90ms (more emotive) */
-    this.ttsModel = options.ttsModel || 'sonic-turbo';
+    /** sonic-turbo: 40ms first byte; sonic-3: 90ms (more emotive, better quality) */
+    this.ttsModel = options.ttsModel || 'sonic-3';
 
     this.audioContext = null;
     this.sttNode = null;
@@ -73,6 +73,9 @@ export class CartesiaAudioBridge {
     /** Level meter: interval and callback for UI */
     this._levelMeterInterval = null;
     this._levelMeterCallback = null;
+    /** Audio recording: buffer for capturing audio chunks during STT */
+    this._recordedAudioChunks = [];
+    this._isRecordingAudio = false;
   }
 
   /** Set mic input gain (0.5–3). Use when STT is active to boost quiet mics. */
@@ -110,6 +113,74 @@ export class CartesiaAudioBridge {
       this._levelMeterInterval = null;
     }
     this._levelMeterCallback = null;
+  }
+
+  /**
+   * Get recorded audio chunks as base64 string.
+   * Returns null if no audio was recorded or if audio is too large.
+   * @returns {string|null} Base64 encoded PCM audio data (pcm_s16le @ 16kHz)
+   */
+  getRecordedAudioBase64() {
+    if (!this._recordedAudioChunks || this._recordedAudioChunks.length === 0) {
+      return null;
+    }
+    // Calculate total size and validate chunks
+    let totalSize = 0;
+    for (const chunk of this._recordedAudioChunks) {
+      if (!(chunk instanceof Uint8Array)) {
+        DEBUG.error('Invalid audio chunk type', { type: typeof chunk, isUint8Array: chunk instanceof Uint8Array });
+        return null;
+      }
+      totalSize += chunk.length;
+    }
+    if (totalSize === 0) return null;
+    // Limit audio size to prevent huge payloads (15MB binary = ~20MB base64)
+    const MAX_AUDIO_SIZE = 15 * 1024 * 1024; // 15 MB
+    if (totalSize > MAX_AUDIO_SIZE) {
+      DEBUG.error('Recorded audio too large', { size: totalSize, max: MAX_AUDIO_SIZE });
+      return null;
+    }
+    // Combine all chunks into a single Uint8Array
+    const combined = new Uint8Array(totalSize);
+    let offset = 0;
+    for (const chunk of this._recordedAudioChunks) {
+      combined.set(chunk, offset);
+      offset += chunk.length;
+    }
+    // Convert to base64 - use efficient method for large arrays
+    // Build binary string in chunks to avoid stack overflow
+    try {
+      const CHUNK_SIZE = 0x8000; // 32KB chunks - safe for apply()
+      const chunks = [];
+      for (let i = 0; i < combined.length; i += CHUNK_SIZE) {
+        const end = Math.min(i + CHUNK_SIZE, combined.length);
+        const chunk = combined.subarray(i, end);
+        // Convert chunk to array for apply() - chunk size is safe (32KB max)
+        const chunkArray = Array.from(chunk);
+        chunks.push(String.fromCharCode.apply(null, chunkArray));
+      }
+      const binary = chunks.join('');
+      return btoa(binary);
+    } catch {
+      // Fallback: if apply() fails, use byte-by-byte method (slower but always works)
+      try {
+        let binary = '';
+        for (let i = 0; i < combined.length; i++) {
+          binary += String.fromCharCode(combined[i]);
+        }
+        return btoa(binary);
+      } catch (fallbackErr) {
+        DEBUG.error('Failed to encode audio to base64', { error: fallbackErr, size: totalSize });
+        return null;
+      }
+    }
+  }
+
+  /**
+   * Clear recorded audio chunks.
+   */
+  clearRecordedAudio() {
+    this._recordedAudioChunks = [];
   }
 
   /** Whether the mic/STT pipeline is currently running (for UI sync) */
@@ -222,7 +293,11 @@ export class CartesiaAudioBridge {
       DEBUG.trace('AudioContext created', { state: this.audioContext.state, sampleRate: this.audioContext.sampleRate });
       
       // Resolve AudioWorklet module paths
-      const basePath = this.options.audioWorkletBasePath || './audio/';
+      let basePath = this.options.audioWorkletBasePath || './audio/';
+      // Ensure basePath ends with a slash to avoid path concatenation issues
+      if (!basePath.endsWith('/')) {
+        basePath += '/';
+      }
       const sttPath = `${basePath}stt-capture-processor.js`;
       const ttsPath = `${basePath}tts-playback-processor.js`;
       
@@ -403,6 +478,14 @@ export class CartesiaAudioBridge {
 
   _flushPreSpeechBuffer() {
     for (const buf of this._preSpeechBuffer) {
+      // Record pre-speech buffer chunks if recording is enabled
+      if (this._isRecordingAudio && buf instanceof ArrayBuffer) {
+        try {
+          this._recordedAudioChunks.push(new Uint8Array(buf));
+        } catch (err) {
+          DEBUG.error('Failed to record pre-speech audio chunk', { error: err });
+        }
+      }
       this._sendChunkToSTT(buf);
     }
     this._preSpeechBuffer = [];
@@ -482,6 +565,15 @@ export class CartesiaAudioBridge {
             DEBUG.error('STT processor sent invalid data type', { type: typeof buf, isArrayBuffer: buf instanceof ArrayBuffer });
             return;
           }
+          // Record audio chunk if recording is enabled
+          if (this._isRecordingAudio) {
+            try {
+              // Create a copy of the buffer to store
+              this._recordedAudioChunks.push(new Uint8Array(buf));
+            } catch (err) {
+              DEBUG.error('Failed to record audio chunk', { error: err });
+            }
+          }
           if (this._sttStreaming) {
             this._sendChunkToSTT(buf);
           } else {
@@ -521,15 +613,22 @@ export class CartesiaAudioBridge {
           this._clearSilenceClosingTimer();
           this._pendingFinalTranscript = null;
           this._lastTranscriptText = '';
+          // Start recording audio for this speech segment
+          // Clear previous recording and start new one
+          this._recordedAudioChunks = [];
+          this._isRecordingAudio = true;
           this.onSpeechStart();
           this._bargeIn();
           this._sttStreaming = true;
+          // Flush pre-speech buffer (will also record those chunks if recording is enabled)
           this._flushPreSpeechBuffer();
         },
         onSpeechEnd: () => {
           DEBUG.trace('VAD onSpeechEnd - sending finalize, starting silence-after-speech mic stop timer');
           this.onSpeechEnd();
           this._sttStreaming = false;
+          // Stop recording audio when speech ends
+          this._isRecordingAudio = false;
           this._pendingFinalTranscript = null;
           if (this.sttWs?.readyState === WebSocket.OPEN) {
             try {
@@ -660,6 +759,8 @@ export class CartesiaAudioBridge {
     this._pendingFinalTranscript = null;
     this._lastTranscriptText = '';
     this._hadTranscriptFromPreviousSegment = false;
+    // Stop recording audio
+    this._isRecordingAudio = false;
     const wasActive = this._sttActive;
     this._sttActive = false;
     if (this.vad) {

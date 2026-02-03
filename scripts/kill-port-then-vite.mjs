@@ -134,11 +134,19 @@ async function main() {
 
   console.log(`\n🚀 Starting Vite...\n`);
 
-  const vite = spawn('npx', viteArgs, {
+  // On Windows, we need shell: true for npx to work
+  // The deprecation warning about shell: true is expected on Windows but safe here:
+  // - We pass args as an array (not a string), which is safer
+  // - The args are controlled (vite/vite build), not user input
+  // - This is a known limitation on Windows for npx
+  const spawnOptions = {
     stdio: 'inherit',
     cwd: rootDir,
-    shell: isWindows,
-  });
+  };
+  if (isWindows) {
+    spawnOptions.shell = true; // Required on Windows for npx
+  }
+  const vite = spawn('npx', viteArgs, spawnOptions);
 
   vite.on('exit', (code, signal) => {
     process.exit(code != null ? code : signal ? 1 : 0);

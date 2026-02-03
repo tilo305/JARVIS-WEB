@@ -294,8 +294,17 @@ async function processFileSpecs(files) {
 const bridge = new CartesiaAudioBridge({
   apiKey: apiKey || undefined,
   voiceId: voiceId || undefined,
-  ttsModel: 'sonic-turbo',
-  audioWorkletBasePath: new URL('../audio/', import.meta.url).href,
+  ttsModel: 'sonic-3', // Better quality, more emotive (90ms latency vs 40ms)
+  audioWorkletBasePath: (() => {
+    // Use absolute path for AudioWorklet modules
+    // In browser, this resolves to /audio/ from the root
+    // @vite-ignore - URL is resolved at runtime, not build time
+    const url = new URL('../audio/', import.meta.url);
+    // Use href (full URL) and ensure trailing slash
+    let path = url.href;
+    if (!path.endsWith('/')) path += '/';
+    return path;
+  })(),
   onPartialTranscript: (text, isFinal) => {
     if (!isFinal && text.trim()) setStatus(`Listening… "${text.slice(0, 40)}${text.length > 40 ? '…' : ''}"`, 'listening');
   },
@@ -307,10 +316,33 @@ const bridge = new CartesiaAudioBridge({
       return;
     }
     DEBUG.trace('onTranscript: sending voice payload to n8n', { length: trimmed.length, preview: trimmed.slice(0, 80) });
+    // Get recorded audio as base64 before any async operations
+    let audioBase64 = null;
+    try {
+      audioBase64 = bridge.getRecordedAudioBase64();
+      // Validate base64 string
+      if (audioBase64 && (typeof audioBase64 !== 'string' || audioBase64.length === 0)) {
+        DEBUG.error('Invalid audio base64', { type: typeof audioBase64, length: audioBase64?.length });
+        audioBase64 = null;
+      }
+    } catch (err) {
+      DEBUG.error('Failed to get recorded audio', { error: err });
+      audioBase64 = null;
+    }
+    // Clear recorded audio immediately after getting it (to free memory)
+    bridge.clearRecordedAudio();
+    
     try {
       appendMessage('user', trimmed);
       setStatus('Processing…', 'listening');
-      const { reply: replyText, data: replyData } = await getLLMReply(trimmed, { source: 'voice' });
+      const audioAttachments = audioBase64 ? [{
+        name: 'voice-recording.pcm',
+        type: 'audio/pcm',
+        size: Math.floor(audioBase64.length * 3 / 4), // Base64 size to binary size approximation
+        data: audioBase64,
+      }] : [];
+      DEBUG.trace('onTranscript: audio attachment', { hasAudio: !!audioBase64, size: audioAttachments[0]?.size || 0 });
+      const { reply: replyText, data: replyData } = await getLLMReply(trimmed, { source: 'voice', attachments: audioAttachments });
       appendMessage('assistant', replyText);
       const files = extractFilesFromJson(replyData);
       if (apiKey) {
@@ -449,6 +481,10 @@ if (btnSend) {
     }
     textInput.value = '';
     textInput.placeholder = 'Type or speak...';
+    // Reset textarea height after clearing
+    if (textInput.style.height) {
+      textInput.style.height = 'auto';
+    }
     const attachmentsForPayload = [...pendingAttachments];
     appendMessage('user', text, attachmentsForPayload.length ? attachmentsForPayload : []);
     pendingAttachments = [];
@@ -483,10 +519,29 @@ if (btnSend) {
 }
 
 if (textInput) {
+  // Auto-resize textarea as user types
+  function autoResizeTextarea() {
+    if (!textInput) return;
+    textInput.style.height = 'auto';
+    const scrollHeight = textInput.scrollHeight;
+    const maxHeight = 120; // matches CSS max-height
+    textInput.style.height = Math.min(scrollHeight, maxHeight) + 'px';
+  }
+  
+  textInput.addEventListener('input', autoResizeTextarea);
   textInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if (btnSend) btnSend.click();
+      // Reset height after sending
+      setTimeout(() => {
+        if (textInput && !textInput.value.trim()) {
+          textInput.style.height = 'auto';
+        }
+      }, 0);
+    } else {
+      // Allow textarea to resize on Enter+Shift or other keys
+      setTimeout(autoResizeTextarea, 0);
     }
   });
 } else {
@@ -565,13 +620,17 @@ if (btnExportPdf) {
   });
 }
 
-fileInput.addEventListener('change', () => {
-  const files = Array.from(fileInput.files || []);
-  if (!files.length) return;
-  pendingAttachments.push(...files);
-  const n = pendingAttachments.length;
-  textInput.placeholder = n ? `${n} file(s) attached — type a message...` : 'Type or speak...';
-  fileInput.value = '';
-});
+if (fileInput && textInput) {
+  fileInput.addEventListener('change', () => {
+    const files = Array.from(fileInput.files || []);
+    if (!files.length) return;
+    pendingAttachments.push(...files);
+    const n = pendingAttachments.length;
+    textInput.placeholder = n ? `${n} file(s) attached — type a message...` : 'Type or speak...';
+    fileInput.value = '';
+  });
+} else {
+  DEBUG.error('fileInput or textInput not found - cannot attach file change handler', { fileInput: !!fileInput, textInput: !!textInput });
+}
 
 window.addEventListener('beforeunload', () => bridge.destroy());

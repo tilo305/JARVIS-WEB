@@ -15,7 +15,7 @@ export const CARTESIA_CONFIG = {
   // Note: Using 44100 Hz (not 8000) for better quality; processor expects 44100
   TTS: {
     ENDPOINT: 'wss://api.cartesia.ai/tts/websocket',
-    MODEL: 'sonic-turbo' as const, // 40ms first byte for live real-time; use 'sonic-3' for 90ms
+    MODEL: 'sonic-3' as const, // 90ms first byte, most emotive (better quality); use 'sonic-turbo' for 40ms latency
     LANGUAGE: 'en',
     SAMPLE_RATE: 44100, // Matches bridge and processor; 8000 is lower latency but 44100 is better quality
     ENCODING: 'pcm_s16le',
