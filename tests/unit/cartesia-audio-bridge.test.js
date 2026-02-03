@@ -41,12 +41,13 @@ describe('CartesiaAudioBridge', () => {
     expect(typeof CartesiaAudioBridge.checkRecordingSupport).toBe('function');
   });
 
-  it('STT config must use sample_rate as integer (Cartesia rejects string)', () => {
-    // Regression: Cartesia STT returns "Invalid sample rate: make sure it is a whole number" if string.
+  it('STT config must use URL query params (sample_rate, model, encoding) per Cartesia SDK', () => {
     const { readFileSync } = require('fs');
     const { join } = require('path');
     const source = readFileSync(join(__dirname, '../../public/js/cartesia-audio-bridge.js'), 'utf8');
-    expect(source).toMatch(/sample_rate:\s*16000\b/);
-    expect(source).not.toMatch(/sample_rate:\s*['"]16000['"]/);
+    // Cartesia STT: config in URL query params (not first message)
+    expect(source).toMatch(/searchParams\.set\(['"]sample_rate['"],\s*['"]16000['"]\)/);
+    expect(source).toMatch(/searchParams\.set\(['"]model['"]/);
+    expect(source).toMatch(/CARTESIA_VERSION\s*=\s*['"]2024-06-10['"]/);
   });
 });

@@ -19,8 +19,8 @@ module.exports = {
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
   collectCoverageFrom: [
-    'src/config.ts',
-    'src/index.ts',
+    'src/**/*.ts',
+    '!src/examples/**',
     'public/js/audio-utils.js',
     'public/js/vad-config.js',
     '!**/*.test.{js,ts}',

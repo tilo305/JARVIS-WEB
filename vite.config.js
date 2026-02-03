@@ -1,10 +1,36 @@
 import { defineConfig, loadEnv } from 'vite';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const CARTESIA_VERSION = '2025-04-16';
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+const CARTESIA_VERSION = '2024-06-10';
 const STT_WS = 'wss://api.cartesia.ai/stt/websocket';
 const TTS_WS = 'wss://api.cartesia.ai/tts/websocket';
 const WS_CHECK_MS = 30_000;
+
+/** Vite plugin: ensure built index.html preserves full source (chat-interface, JARVIS_CONFIG, favicon, etc.) */
+function preserveIndexHtmlPlugin() {
+  return {
+    name: 'preserve-index-html',
+    apply: 'build',
+    writeBundle(options, bundle) {
+      const outDir = options.dir || join(__dirname, 'dist-public');
+      const jsChunk = Object.keys(bundle).find((k) => k.startsWith('assets/') && k.endsWith('.js'));
+      if (!jsChunk) return;
+      const scriptSrc = '/' + jsChunk;
+      const sourcePath = join(__dirname, 'public', 'index.html');
+      let html = readFileSync(sourcePath, 'utf8');
+      html = html.replace(
+        /<script\s+type="module"\s+src="[^"]*"><\/script>/,
+        `<script type="module" crossorigin src="${scriptSrc}"></script>`
+      );
+      writeFileSync(join(outDir, 'index.html'), html);
+    },
+  };
+}
 
 /** Vite plugin: log Cartesia STT/TTS WebSocket reachability at startup and on an interval. */
 function cartesiaWebSocketStatusPlugin() {
@@ -68,9 +94,12 @@ export default defineConfig(({ mode }) => {
     root: 'public',
     publicDir: false,
     plugins: [
+      preserveIndexHtmlPlugin(),
       viteStaticCopy({
         targets: [
           { src: 'audio/*', dest: 'audio' },
+          { src: 'debug/*.html', dest: 'debug' },
+          { src: 'js/n8n-payload.js', dest: 'js' },
         ],
       }),
       cartesiaWebSocketStatusPlugin(),

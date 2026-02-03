@@ -112,4 +112,56 @@ describe('Embedded CSS', () => {
       expect(html).toMatch(/result\s*\+\s*status|className.*result/);
     });
   });
+
+  describe('public/debug/fallback-revert-debug.html', () => {
+    let html, css;
+    beforeAll(() => {
+      html = readFileSync(join(ROOT, 'public/debug/fallback-revert-debug.html'), 'utf8');
+      css = extractStyle(html);
+    });
+
+    it('has a non-empty style block', () => {
+      expect(css.length).toBeGreaterThan(50);
+    });
+
+    it('has balanced braces', () => {
+      expect(balancedBraces(css)).toBe(true);
+    });
+
+    it('has expected structure (section, button, input)', () => {
+      expect(css).toMatch(/section|\.ok|\.fail/);
+    });
+
+    it('imports n8n-payload and has Test n8n button', () => {
+      expect(html).toMatch(/n8n-payload\.js/);
+      expect(html).toMatch(/btnTest|Test n8n/);
+    });
+  });
+
+  describe('public/debug/voice-pipeline-debug.html', () => {
+    let html, css;
+    beforeAll(() => {
+      html = readFileSync(join(ROOT, 'public/debug/voice-pipeline-debug.html'), 'utf8');
+      css = extractStyle(html);
+    });
+
+    it('has a non-empty style block', () => {
+      expect(css.length).toBeGreaterThan(50);
+    });
+
+    it('has balanced braces', () => {
+      expect(balancedBraces(css)).toBe(true);
+    });
+
+    it('has result/pass/fail/pending/info rules', () => {
+      expect(css).toMatch(/\.result\s*\{/);
+      expect(css).toMatch(/\.pass\s*\{/);
+      expect(css).toMatch(/\.fail\s*\{/);
+      expect(css).toMatch(/\.info\s*\{/);
+    });
+
+    it('has runAll and runVoice buttons', () => {
+      expect(html).toMatch(/runAll|runVoice/);
+    });
+  });
 });

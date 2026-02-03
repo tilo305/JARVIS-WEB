@@ -1,9 +1,47 @@
 /**
- * Shared n8n webhook payload builder — single source of truth for all n8n requests.
- * Used by: chat UI (app.js), debug tools (check-n8n-webhook), live tests (n8n-webhook.test).
- * Ensures session_id, timezone, location, and all fields are always sent.
+ * Shared n8n webhook payload builder and reply extraction — single source of truth for all n8n requests.
+ * Used by: chat UI (app.js), debug tools (check-n8n-webhook, open-app-debug-send), live tests, fallback-revert-debug.
+ * Ensures session_id, timezone, location, and all fields are always sent; reply parsing handles arrays and n8n item format.
  */
 'use strict';
+
+/** Keys checked (in order) for reply text in n8n webhook JSON response */
+export const N8N_REPLY_KEYS = ['output', 'reply', 'result', 'text', 'message', 'response', 'answer', 'content'];
+
+/**
+ * Extract reply string from n8n webhook JSON response.
+ * Checks top-level keys, then array (e.g. [{ output: "..." }] from Respond to Webhook "First Incoming Item"),
+ * including n8n item format { json: { output: "..." } }, then nested objects.
+ * @param {Object} data - Parsed JSON response from n8n
+ * @returns {string|null} - Reply text or null if none found
+ */
+export function extractReplyFromJson(data) {
+  if (!data || typeof data !== 'object') return null;
+  for (const key of N8N_REPLY_KEYS) {
+    const v = data[key];
+    if (typeof v === 'string') return v;
+  }
+  if (Array.isArray(data) && data.length) {
+    const first = data[0];
+    if (typeof first === 'string') return first;
+    if (first && typeof first === 'object') {
+      const fromFirst = extractReplyFromJson(first);
+      if (fromFirst) return fromFirst;
+      if (first.json && typeof first.json === 'object') {
+        const fromJson = extractReplyFromJson(first.json);
+        if (fromJson) return fromJson;
+      }
+    }
+  }
+  for (const v of Object.values(data)) {
+    if (typeof v === 'string') return v;
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      const nested = extractReplyFromJson(v);
+      if (nested) return nested;
+    }
+  }
+  return null;
+}
 
 /**
  * Get client location/timezone and locale.

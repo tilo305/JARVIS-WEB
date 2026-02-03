@@ -72,36 +72,14 @@
   </section>
 
   <script type="module">
-    import { buildN8nPayload } from '../js/n8n-payload.js';
+    import { buildN8nPayload, extractReplyFromJson } from '../js/n8n-payload.js';
 
     const DEFAULT_WEBHOOK = 'https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4';
-    const N8N_REPLY_KEYS = ['output', 'reply', 'result', 'text', 'message', 'response', 'answer', 'content'];
 
     function getConfig() {
       const win = typeof window !== 'undefined' ? window : {};
       const cfg = win.JARVIS_CONFIG || {};
       return cfg.n8nWebhookUrl || DEFAULT_WEBHOOK;
-    }
-
-    function extractReplyFromJson(data) {
-      if (!data || typeof data !== 'object') return null;
-      for (const key of N8N_REPLY_KEYS) {
-        const v = data[key];
-        if (typeof v === 'string') return v;
-      }
-      if (Array.isArray(data) && data.length) {
-        const first = data[0];
-        if (typeof first === 'string') return first;
-        if (first && typeof first === 'object') return extractReplyFromJson(first);
-      }
-      for (const v of Object.values(data)) {
-        if (typeof v === 'string') return v;
-        if (v && typeof v === 'object' && !Array.isArray(v)) {
-          const nested = extractReplyFromJson(v);
-          if (nested) return nested;
-        }
-      }
-      return null;
     }
 
     function getNaturalFallback(userMessage) {

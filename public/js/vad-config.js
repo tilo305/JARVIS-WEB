@@ -9,6 +9,11 @@
  *   when speech is detected, avoiding empty/silence submissions
  * - Heuristic S4: Gracefully end when user is done — VAD detects natural end of turn
  * - Heuristic S2: Clear system status — onSpeechStart/onSpeechEnd drive UI feedback
+ *
+ * Keys passed to @ricky0123/vad-web MicVAD: model, redemptionMs, preSpeechPadMs,
+ * minSpeechMs, positiveSpeechThreshold, negativeSpeechThreshold, submitUserSpeechOnPause,
+ * baseAssetPath, onnxWASMBasePath. App-only (used by cartesia-audio-bridge): silenceAfterSpeechToStopMicMs,
+ * silenceClosingMessageMs, silenceClosingPhrases.
  */
 export const VAD_CONFIG = {
   // Silero model: "v5" (newer, more accurate) or "legacy"

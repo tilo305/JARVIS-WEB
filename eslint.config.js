@@ -15,7 +15,6 @@ export default tseslint.config(
       "dist-public/**",
       "**/dist-public/**",
       "coverage/**",
-      "debug/**",
       "*.md",
       "*.min.js",
     ],
@@ -92,6 +91,23 @@ export default tseslint.config(
         currentFrame: "readonly",
         currentTime: "readonly",
         sampleRate: "readonly",
+      },
+    },
+    rules: {
+      "no-console": "off",
+      "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
+    },
+  },
+
+  // Debug scripts and live tests (Node + Jest)
+  {
+    files: ["debug/**/*.js", "debug/**/*.mjs"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: {
+        ...globals.node,
+        ...globals.jest,
       },
     },
     rules: {

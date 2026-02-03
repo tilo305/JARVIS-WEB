@@ -10,7 +10,7 @@
  * Debug: Add ?debug=1 to URL or set window.JARVIS_DEBUG = true
  */
 import { CartesiaAudioBridge } from './cartesia-audio-bridge.js';
-import { buildN8nPayload } from './n8n-payload.js';
+import { buildN8nPayload, extractReplyFromJson } from './n8n-payload.js';
 import { DEBUG } from './debug.js';
 
 const chatContainer = document.getElementById('chatContainer');
@@ -102,35 +102,6 @@ function escapeHtml(s) {
   return div.innerHTML;
 }
 
-const N8N_REPLY_KEYS = ['output', 'reply', 'result', 'text', 'message', 'response', 'answer', 'content'];
-
-/**
- * Extract reply string from n8n webhook JSON response.
- * Checks keys: output, reply, result, text, message, response, answer, content; then arrays and nested objects.
- * @param {Object} data - Parsed JSON response from n8n
- * @returns {string|null} - Reply text or null if none found
- */
-function extractReplyFromJson(data) {
-  if (!data || typeof data !== 'object') return null;
-  for (const key of N8N_REPLY_KEYS) {
-    const v = data[key];
-    if (typeof v === 'string') return v;
-  }
-  if (Array.isArray(data) && data.length) {
-    const first = data[0];
-    if (typeof first === 'string') return first;
-    if (first && typeof first === 'object') return extractReplyFromJson(first);
-  }
-  for (const v of Object.values(data)) {
-    if (typeof v === 'string') return v;
-    if (v && typeof v === 'object' && !Array.isArray(v)) {
-      const nested = extractReplyFromJson(v);
-      if (nested) return nested;
-    }
-  }
-  return null;
-}
-
 /**
  * Natural fallback replies when n8n doesn't return a proper reply.
  * Keeps the conversation friendly instead of showing technical instructions.
@@ -185,11 +156,16 @@ async function getLLMReply(userText, options = {}) {
     }
     const reply = extractReplyFromJson(data);
     DEBUG.trace('n8n: response', { status: res.status, hasReply: !!reply, replyPreview: typeof reply === 'string' ? reply.slice(0, 50) : '' });
+    if (typeof reply === 'string') return reply;
+    // No reply extracted — log so we can diagnose fallback
+    const hasNatural = !!getNaturalFallback(payload.message);
+    if (!hasNatural) {
+      // eslint-disable-next-line no-console -- intentional: user needs to see why fallback was used
+      console.warn('[JARVIS] n8n fallback: no reply in response. Status:', res.status, 'Body:', JSON.stringify(data).slice(0, 300));
+    }
     if (DEBUG.enabled && typeof reply !== 'string') {
       DEBUG.trace('n8n: response body (no reply extracted)', data);
     }
-    if (typeof reply === 'string') return reply;
-    // No reply in body — often because Webhook node didn't wait for Respond to Webhook node
     if (res.ok && (Object.keys(data).length === 0 || !extractReplyFromJson(data))) {
       DEBUG.error('n8n: empty or no reply in response body. In n8n, set Webhook node Respond to "Using Respond to Webhook Node". See debug/N8N-RESPOND-TO-WEBHOOK-FIX.md');
     }
@@ -220,18 +196,30 @@ const bridge = new CartesiaAudioBridge({
       return;
     }
     DEBUG.trace('onTranscript: sending voice payload to n8n', { length: trimmed.length, preview: trimmed.slice(0, 80) });
-    appendMessage('user', trimmed);
-    setStatus('Processing…', 'listening');
-    const replyText = await getLLMReply(trimmed, { source: 'voice' });
-    appendMessage('assistant', replyText);
-    setStatus('Speaking…', 'speaking');
-    bridge.speakText(replyText).then(() => {
-      setStatus('Ready');
-      bridge.startAgentSilenceTimer();
-    }).catch((err) => {
+    try {
+      appendMessage('user', trimmed);
+      setStatus('Processing…', 'listening');
+      const replyText = await getLLMReply(trimmed, { source: 'voice' });
+      appendMessage('assistant', replyText);
+      if (apiKey) {
+        setStatus('Speaking…', 'speaking');
+        try {
+          await bridge.speakText(replyText);
+          setStatus('Ready');
+          bridge.startAgentSilenceTimer();
+        } catch (err) {
+          DEBUG.error('TTS error in onTranscript', err);
+          setStatus('Ready (TTS error)', '');
+          appendMessage('assistant', 'Sorry, I could not speak that. ' + (err?.message || err));
+        }
+      } else {
+        setStatus('Ready (no voice: add CARTESIA_API_KEY for TTS)', '');
+      }
+    } catch (err) {
+      DEBUG.error('onTranscript error', err);
       setStatus('Error', 'error');
-      appendMessage('assistant', 'Sorry, I could not speak that. ' + (err?.message || err));
-    });
+      appendMessage('assistant', 'Sorry, something went wrong. ' + (err?.message || err));
+    }
   },
   onTTSChunk: () => {},
   onError: (err) => {
@@ -313,6 +301,22 @@ if (typeof window !== 'undefined' && (DEBUG.enabled || (window.location && windo
     }
   };
   console.log('[JARVIS DEBUG] Run JARVIS_DEBUG_SEND_TEST() in the console to send a test message and check the n8n response.');
+  window.JARVIS_DEBUG_CHECK_CONFIG = function () {
+    console.log('[JARVIS DEBUG] Configuration check:');
+    console.log('  apiKey:', apiKey ? `Set (${apiKey.slice(0, 10)}...)` : 'NOT SET');
+    console.log('  voiceId:', voiceId || 'NOT SET');
+    console.log('  n8nWebhookUrl:', n8nWebhookUrl);
+    console.log('  Mic support:', CartesiaAudioBridge.checkRecordingSupport());
+    console.log('  Bridge STT active:', bridge.isSTTActive());
+    return {
+      hasApiKey: !!apiKey,
+      hasVoiceId: !!voiceId,
+      n8nWebhookUrl,
+      micSupport: CartesiaAudioBridge.checkRecordingSupport(),
+      sttActive: bridge.isSTTActive(),
+    };
+  };
+  console.log('[JARVIS DEBUG] Run JARVIS_DEBUG_CHECK_CONFIG() to see current configuration and mic status.');
 }
 /* eslint-enable no-console */
 

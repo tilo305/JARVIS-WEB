@@ -15,6 +15,7 @@ class TTSPlaybackProcessor extends AudioWorkletProcessor {
     this.port.onmessage = (e) => {
       if (e.data.type === 'audio') {
         const samples = e.data.samples;
+        if (samples == null) return;
         if (Array.isArray(samples)) {
           this.buffer.push(...samples);
         } else if (samples instanceof Int16Array) {
@@ -22,6 +23,8 @@ class TTSPlaybackProcessor extends AudioWorkletProcessor {
         } else if (samples instanceof ArrayBuffer) {
           const arr = new Int16Array(samples);
           this.buffer.push(...Array.from(arr));
+        } else if (ArrayBuffer.isView(samples)) {
+          this.buffer.push(...Array.from(samples));
         }
       } else if (e.data.type === 'clear') {
         this.buffer = [];
@@ -35,7 +38,7 @@ class TTSPlaybackProcessor extends AudioWorkletProcessor {
     return n >= 0x8000 ? -(0x10000 - n) / 0x8000 : n / 0x7FFF;
   }
 
-  process(inputs, outputs) {
+  process(inputs, outputs, _parameters) {
     const output = outputs[0]?.[0];
     if (!output) return true;
 

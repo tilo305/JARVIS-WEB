@@ -14,22 +14,26 @@ Per **zEn DeBuGgEr.md** — all fixes documented here. Ensure fixes are 100% wor
 
 ### Root Cause
 
-Cartesia STT API rejects `sample_rate` when sent as string `"16000"`; it expects a whole number (integer).
+Cartesia STT WebSocket expects config in **URL query parameters**, not as the first JSON message. Sending config as the first message triggered "Invalid sample rate" validation errors.
 
-### Fix
+### Fix (Conclusive 2025-02-02)
 
-In `public/js/cartesia-audio-bridge.js`, changed STT config:
-- **Before:** `sample_rate: '16000'` (string)
-- **After:** `sample_rate: 16000` (integer)
+In `public/js/cartesia-audio-bridge.js`, STT connection:
+- **Before:** Sent config (model, encoding, sample_rate, etc.) as first WebSocket message → API returns "Invalid sample rate"
+- **After:** Pass config as URL query params (`?model=ink-whisper&encoding=pcm_s16le&sample_rate=16000&...`) → API accepts
+
+**Reference:** @cartesia/cartesia-js SDK (`wrapper/SttWebsocket.js`) uses query params only; no config message after connect.
 
 ### Files
 
 - `public/js/cartesia-audio-bridge.js`
 - `tests/unit/cartesia-audio-bridge.test.js` (regression test)
+- `debug/SAMPLE-RATE-RESEARCH.md` (new)
 
 ### Verify
 
-Reload `http://localhost:3000/?debug=1`, click mic, speak — STT should connect, transcripts should reach n8n, voice response should play.
+- **CLI:** `npm run debug:stt` — connects to STT WebSocket with `sample_rate: 16000` (integer), reports OK/FAIL
+- **Browser:** Reload `http://localhost:3000/?debug=1`, click mic, speak — STT should connect, transcripts should reach n8n, voice response should play
 
 ---
 

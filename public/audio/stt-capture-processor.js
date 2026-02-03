@@ -40,7 +40,7 @@ class STTCaptureProcessor extends AudioWorkletProcessor {
     return out;
   }
 
-  process(inputs, _outputs) {
+  process(inputs, _outputs, _parameters) {
     const input = inputs[0]?.[0];
     if (!input || input.length === 0) return true;
 

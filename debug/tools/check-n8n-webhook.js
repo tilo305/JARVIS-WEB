@@ -6,7 +6,7 @@
  * @see zEn DeBuGgEr.md
  */
 import { N8N_WEBHOOK_URL } from '../../dist/config.js';
-import { buildN8nPayload } from '../../public/js/n8n-payload.js';
+import { buildN8nPayload, extractReplyFromJson } from '../../public/js/n8n-payload.js';
 
 const FETCH_TIMEOUT_MS = 15000;
 
@@ -24,7 +24,20 @@ async function main() {
       signal: controller.signal,
     }).finally(() => clearTimeout(to));
     const ok = res.ok;
-    const data = await res.json().catch(() => ({}));
+    const contentType = res.headers.get('content-type') || '';
+    let data = {};
+    if (contentType.includes('application/json')) {
+      data = await res.json().catch(() => ({}));
+    } else {
+      const text = await res.text().catch(() => '');
+      if (text.trim()) {
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = { output: text.trim() };
+        }
+      }
+    }
     console.log('[DEBUG] Status:', res.status, res.statusText);
     console.log('[DEBUG] Response:', JSON.stringify(data, null, 2));
     if (res.status === 404) {
@@ -35,7 +48,7 @@ async function main() {
       console.error('[DEBUG] FAIL: Webhook returned non-2xx');
       process.exit(1);
     }
-    const reply = data?.output ?? data?.reply ?? data?.result ?? data?.text ?? data?.message;
+    const reply = extractReplyFromJson(data);
     if (typeof reply === 'string') {
       console.log('[DEBUG] OK: Got reply:', reply.slice(0, 80) + (reply.length > 80 ? '...' : ''));
     } else {

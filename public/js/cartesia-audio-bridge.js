@@ -8,7 +8,7 @@ import { MicVAD } from '@ricky0123/vad-web';
 import { VAD_CONFIG } from './vad-config.js';
 import { DEBUG } from './debug.js';
 
-const CARTESIA_VERSION = '2025-04-16';
+const CARTESIA_VERSION = '2024-06-10'; // June 2024 — required for STT sample_rate compatibility
 const DEFAULT_API_KEY = '';
 const DEFAULT_VOICE_ID = '95131c95-525c-463b-893d-803bafdf93c4';
 const STT_CHUNK_MS = 100;
@@ -158,24 +158,21 @@ export class CartesiaAudioBridge {
   }
 
   async connectSTTWebSocket() {
+    // Cartesia STT: config via URL query params (not first message). @cartesia/cartesia-js SDK style.
     const url = new URL(STT_ENDPOINT);
     url.searchParams.set('api_key', this.apiKey);
     url.searchParams.set('cartesia_version', CARTESIA_VERSION);
+    url.searchParams.set('model', 'ink-whisper');
+    url.searchParams.set('encoding', 'pcm_s16le');
+    url.searchParams.set('sample_rate', '16000');
+    url.searchParams.set('language', this.language);
+    url.searchParams.set('min_volume', '0.0');
+    url.searchParams.set('max_silence_duration_secs', '2.0');
     DEBUG.trace('STT WebSocket connecting', { url: STT_ENDPOINT });
     this.sttWs = new WebSocket(url.toString());
     return new Promise((resolve, reject) => {
       this.sttWs.onopen = () => {
         DEBUG.trace('STT WebSocket open');
-        // cArTeSiA dOcS.md: sample_rate must be a whole number. Use integer to avoid float/string validation issues.
-        const sttConfig = {
-          model: 'ink-whisper',
-          language: this.language,
-          encoding: 'pcm_s16le',
-          sample_rate: 16000,
-          min_volume: '0.0',
-          max_silence_duration_secs: '2.0',
-        };
-        this.sttWs.send(JSON.stringify(sttConfig));
         resolve();
       };
       this.sttWs.onmessage = (e) => {
@@ -277,8 +274,17 @@ export class CartesiaAudioBridge {
         }
       };
 
+      // Only pass MicVAD-supported options; app-only (silenceClosing*, silenceAfterSpeechToStopMicMs) stay in VAD_CONFIG for bridge use
       const vadOptions = {
-        ...VAD_CONFIG,
+        model: VAD_CONFIG.model,
+        redemptionMs: VAD_CONFIG.redemptionMs,
+        preSpeechPadMs: VAD_CONFIG.preSpeechPadMs,
+        minSpeechMs: VAD_CONFIG.minSpeechMs,
+        positiveSpeechThreshold: VAD_CONFIG.positiveSpeechThreshold,
+        negativeSpeechThreshold: VAD_CONFIG.negativeSpeechThreshold,
+        submitUserSpeechOnPause: VAD_CONFIG.submitUserSpeechOnPause,
+        baseAssetPath: VAD_CONFIG.baseAssetPath,
+        onnxWASMBasePath: VAD_CONFIG.onnxWASMBasePath,
         getStream: () => Promise.resolve(stream),
         onSpeechStart: () => {
           DEBUG.trace('VAD onSpeechStart - enabling STT streaming');
@@ -450,21 +456,23 @@ export class CartesiaAudioBridge {
     await this.connectTTS();
     const ctxId = contextId || `ctx_${++this.contextIdCounter}_${Date.now()}`;
 
-      this.ttsWs.send(JSON.stringify({
-      model_id: this.ttsModel,
-      transcript,
-      voice: { mode: 'id', id: this.voiceId },
-      language: this.language,
-      context_id: ctxId,
-      output_format: {
-        container: 'raw',
-        encoding: 'pcm_s16le',
-        sample_rate: 44100,
-      },
-      add_timestamps: true,
-      continue: isContinue,
-      max_buffer_delay_ms: 0,
-    }));
+    this.ttsWs.send(
+      JSON.stringify({
+        model_id: this.ttsModel,
+        transcript,
+        voice: { mode: 'id', id: this.voiceId },
+        language: this.language,
+        context_id: ctxId,
+        output_format: {
+          container: 'raw',
+          encoding: 'pcm_s16le',
+          sample_rate: 44100,
+        },
+        add_timestamps: true,
+        continue: isContinue,
+        max_buffer_delay_ms: 0,
+      })
+    );
 
     if (isContinue) return Promise.resolve();
     return new Promise((resolve, reject) => {

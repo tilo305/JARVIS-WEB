@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from '@jest/globals';
 import { N8N_WEBHOOK_URL } from '../../dist/config.js';
-import { buildN8nPayload } from '../../public/js/n8n-payload.js';
+import { buildN8nPayload, extractReplyFromJson } from '../../public/js/n8n-payload.js';
 
 const FETCH_TIMEOUT_MS = 8000;
 
@@ -37,10 +37,23 @@ describe('LIVE: n8n webhook', () => {
     }
     // 2xx = success; 404 = webhook URL exists but workflow inactive
     expect(res.status).toBeLessThan(500);
-    const data = await res.json().catch(() => ({}));
+    const contentType = res.headers.get('content-type') || '';
+    let data = {};
+    if (contentType.includes('application/json')) {
+      data = await res.json().catch(() => ({}));
+    } else {
+      const text = await res.text().catch(() => '');
+      if (text.trim()) {
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = { output: text.trim() };
+        }
+      }
+    }
     expect(data).toBeDefined();
     if (res.ok) {
-      const reply = data?.output ?? data?.reply ?? data?.result ?? data?.text ?? data?.message;
+      const reply = extractReplyFromJson(data);
       if (typeof reply === 'string') {
         expect(reply.length).toBeGreaterThan(0);
       }

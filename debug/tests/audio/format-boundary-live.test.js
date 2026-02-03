@@ -7,7 +7,6 @@ import { describe, it, expect } from '@jest/globals';
 import {
   floatTo16BitPCM,
   int16ToFloat32,
-  float32ToInt16,
   decodeBase64PCM,
 } from '../../../public/js/audio-utils.js';
 

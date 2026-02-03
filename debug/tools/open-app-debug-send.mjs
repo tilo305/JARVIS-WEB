@@ -14,34 +14,12 @@
  */
 
 import { exec } from 'child_process';
+import { buildN8nPayload, extractReplyFromJson } from '../../public/js/n8n-payload.js';
 
 const DEFAULT_APP_URL = 'http://localhost:3000';
 const DEFAULT_WEBHOOK_URL = 'https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4';
 const PRODUCTION_WEBHOOK_URL = 'https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4';
 const FETCH_TIMEOUT_MS = 15000;
-
-const N8N_REPLY_KEYS = ['output', 'reply', 'result', 'text', 'message', 'response', 'answer', 'content'];
-
-function extractReplyFromJson(data) {
-  if (!data || typeof data !== 'object') return null;
-  for (const key of N8N_REPLY_KEYS) {
-    const v = data[key];
-    if (typeof v === 'string') return v;
-  }
-  if (Array.isArray(data) && data.length) {
-    const first = data[0];
-    if (typeof first === 'string') return first;
-    if (first && typeof first === 'object') return extractReplyFromJson(first);
-  }
-  for (const v of Object.values(data)) {
-    if (typeof v === 'string') return v;
-    if (v && typeof v === 'object' && !Array.isArray(v)) {
-      const nested = extractReplyFromJson(v);
-      if (nested) return nested;
-    }
-  }
-  return null;
-}
 
 async function getWebhookUrlResolved() {
   if (process.env.VITE_N8N_WEBHOOK_URL) return process.env.VITE_N8N_WEBHOOK_URL;
@@ -52,31 +30,6 @@ async function getWebhookUrlResolved() {
   } catch {
     return DEFAULT_WEBHOOK_URL;
   }
-}
-
-function buildPayload(message, sessionId) {
-  const now = new Date().toISOString();
-  const messageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
-  let timezone = 'UTC';
-  try {
-    if (typeof Intl !== 'undefined' && Intl.DateTimeFormat) {
-      timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || timezone;
-    }
-  } catch {
-    /* ignore */
-  }
-  return {
-    message: (message || '').trim(),
-    session_id: sessionId,
-    sessionId,
-    timestamp: now,
-    timezone,
-    location: timezone,
-    message_id: messageId,
-    messageId: messageId,
-    source: 'text',
-    attachments: [],
-  };
 }
 
 function openBrowser(url) {
@@ -93,8 +46,7 @@ function openBrowser(url) {
 }
 
 async function nodeFetchTest(webhookUrl) {
-  const sessionId = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
-  const payload = buildPayload('Hello from JARVIS debug', sessionId);
+  const payload = buildN8nPayload('Hello from JARVIS debug', { source: 'text' });
   console.log('[DEBUG] Node fetch: POST', webhookUrl);
   const controller = new AbortController();
   const to = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -105,7 +57,20 @@ async function nodeFetchTest(webhookUrl) {
       body: JSON.stringify(payload),
       signal: controller.signal,
     }).finally(() => clearTimeout(to));
-    const data = await res.json().catch(() => ({}));
+    const contentType = res.headers.get('content-type') || '';
+    let data = {};
+    if (contentType.includes('application/json')) {
+      data = await res.json().catch(() => ({}));
+    } else {
+      const text = await res.text().catch(() => '');
+      if (text.trim()) {
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = { output: text.trim() };
+        }
+      }
+    }
     const reply = extractReplyFromJson(data);
     return { ok: res.ok, status: res.status, data, reply };
   } catch (err) {

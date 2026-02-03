@@ -2,7 +2,7 @@
  * Unit tests for n8n payload builder — ensures full payload is always sent.
  */
 import { describe, it, expect } from '@jest/globals';
-import { buildN8nPayload, getClientLocation } from '../../public/js/n8n-payload.js';
+import { buildN8nPayload, getClientLocation, extractReplyFromJson } from '../../public/js/n8n-payload.js';
 
 const REQUIRED_KEYS = [
   'message',
@@ -65,6 +65,34 @@ describe('n8n-payload', () => {
       expect(loc).toHaveProperty('locale');
       expect(loc).toHaveProperty('language');
       expect(typeof loc.timezone).toBe('string');
+    });
+  });
+
+  describe('extractReplyFromJson', () => {
+    it('should return string for standard reply keys', () => {
+      expect(extractReplyFromJson({ output: 'Hi' })).toBe('Hi');
+      expect(extractReplyFromJson({ reply: 'Hello' })).toBe('Hello');
+      expect(extractReplyFromJson({ text: 'OK' })).toBe('OK');
+      expect(extractReplyFromJson({ message: 'Done' })).toBe('Done');
+    });
+
+    it('should return first item string for array (Respond to Webhook format)', () => {
+      expect(extractReplyFromJson([{ output: 'From array' }])).toBe('From array');
+    });
+
+    it('should handle n8n item format with json wrapper', () => {
+      expect(extractReplyFromJson([{ json: { output: 'From json wrapper' } }])).toBe('From json wrapper');
+    });
+
+    it('should return null for empty or non-object', () => {
+      expect(extractReplyFromJson(null)).toBeNull();
+      expect(extractReplyFromJson(undefined)).toBeNull();
+      expect(extractReplyFromJson({})).toBeNull();
+    });
+
+    it('should prefer first matching key per N8N_REPLY_KEYS order', () => {
+      const data = { message: 'first', output: 'second' };
+      expect(extractReplyFromJson(data)).toBe('second');
     });
   });
 });
