@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wake Word Detection Test</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #1a1a1a;
+      color: #e0e0e0;
+    }
+    h1 { color: #4CAF50; }
+    .status {
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 5px;
+      background: #2a2a2a;
+    }
+    .status.success { background: #2d5a2d; color: #90EE90; }
+    .status.error { background: #5a2d2d; color: #FF6B6B; }
+    .status.info { background: #2d4a5a; color: #87CEEB; }
+    button {
+      padding: 12px 24px;
+      font-size: 16px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin: 5px;
+    }
+    button:hover { background: #45a049; }
+    button:disabled { background: #666; cursor: not-allowed; }
+    .detections {
+      margin-top: 20px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .detection {
+      padding: 10px;
+      margin: 5px 0;
+      background: #2a2a2a;
+      border-left: 3px solid #4CAF50;
+      border-radius: 3px;
+    }
+    .detection time {
+      color: #888;
+      font-size: 0.9em;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎤 Wake Word Detection Test</h1>
+  
+  <div id="status" class="status info">Initializing...</div>
+  
+  <div>
+    <button id="startBtn">Start Listening</button>
+    <button id="stopBtn" disabled>Stop Listening</button>
+    <button id="testBtn" disabled>Test Detection (Simulate)</button>
+  </div>
+  
+  <div>
+    <h3>Detections:</h3>
+    <div id="detections" class="detections"></div>
+  </div>
+  
+  <script type="module">
+    // Import Porcupine - works when served via Vite dev server
+    import { Porcupine } from '@picovoice/porcupine-web';
+    
+    const statusEl = document.getElementById('status');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const testBtn = document.getElementById('testBtn');
+    const detectionsEl = document.getElementById('detections');
+    
+    let porcupine = null;
+    let audioContext = null;
+    let mediaStream = null;
+    let sourceNode = null;
+    let processor = null;
+    let isListening = false;
+    let detectionCount = 0;
+    
+    // Get configuration from environment (Vite injects these)
+    const accessKey = import.meta.env.VITE_PICOVOICE_ACCESS_KEY || 
+                      import.meta.env.PICOVOICE_ACCESS_KEY || 
+                      '';
+    // Get keyword with proper fallback
+    let keyword = import.meta.env.VITE_PORCUPINE_KEYWORD || 
+                  import.meta.env.PORCUPINE_KEYWORD || 
+                  'Jarvis';
+    
+    // Ensure keyword is always a valid string
+    if (!keyword || typeof keyword !== 'string' || keyword.trim() === '') {
+      console.warn('[CONFIG] Keyword is invalid, using default "Jarvis"');
+      keyword = 'Jarvis';
+    }
+    keyword = String(keyword).trim();
+    let sensitivity = parseFloat(
+      import.meta.env.VITE_PORCUPINE_SENSITIVITY || 
+      import.meta.env.PORCUPINE_SENSITIVITY || 
+      '0.5'
+    );
+    
+    // Validate configuration
+    if (!accessKey || accessKey.length < 20) {
+      updateStatus('Error: PICOVOICE_ACCESS_KEY is not configured. Check your .env file.', 'error');
+      console.error('[ERROR] AccessKey is missing or invalid');
+      console.error('[ERROR] AccessKey length:', accessKey.length);
+      throw new Error('AccessKey not configured');
+    }
+    
+    // Validate sensitivity
+    if (isNaN(sensitivity) || sensitivity < 0 || sensitivity > 1) {
+      console.warn('[CONFIG] Invalid sensitivity, using default 0.5');
+      sensitivity = 0.5;
+    }
+    
+    console.log('[CONFIG] AccessKey:', accessKey.substring(0, 10) + '...');
+    console.log('[CONFIG] Keyword:', keyword);
+    console.log('[CONFIG] Sensitivity:', sensitivity);
+    
+    function updateStatus(message, type = 'info') {
+      statusEl.textContent = message;
+      statusEl.className = `status ${type}`;
+      console.log(`[STATUS] ${message}`);
+    }
+    
+    function addDetection(keywordIndex) {
+      detectionCount++;
+      const time = new Date().toLocaleTimeString();
+      const detection = document.createElement('div');
+      detection.className = 'detection';
+      detection.innerHTML = `
+        <strong>Detection #${detectionCount}</strong><br>
+        <time>${time}</time> - Keyword Index: ${keywordIndex}
+      `;
+      detectionsEl.insertBefore(detection, detectionsEl.firstChild);
+      console.log(`[DETECTION] #${detectionCount} at ${time} - Keyword Index: ${keywordIndex}`);
+    }
+    
+    async function initialize() {
+      try {
+        updateStatus('Initializing Porcupine...', 'info');
+        
+        // Check if keyword is built-in
+        const builtInKeywords = ['Alexa', 'Americano', 'Blueberry', 'Bumblebee', 'Computer', 
+          'Grapefruit', 'Grasshopper', 'Hey Google', 'Hey Siri', 'Jarvis', 
+          'Okay Google', 'Picovoice', 'Porcupine', 'Terminator'];
+        
+        // Validate and normalize keyword with fallback
+        let normalizedKeyword = keyword || 'Jarvis';
+        if (typeof normalizedKeyword !== 'string') {
+          console.warn('[INIT] Keyword is not a string, using default "Jarvis"');
+          normalizedKeyword = 'Jarvis';
+        }
+        normalizedKeyword = String(normalizedKeyword).trim();
+        
+        if (normalizedKeyword === '' || normalizedKeyword === 'undefined' || normalizedKeyword === 'null') {
+          console.warn('[INIT] Keyword is empty or invalid, using default "Jarvis"');
+          normalizedKeyword = 'Jarvis';
+        }
+        
+        console.log('[INIT] Normalized keyword:', normalizedKeyword);
+        console.log('[INIT] Keyword type:', typeof normalizedKeyword);
+        console.log('[INIT] Keyword length:', normalizedKeyword.length);
+        
+        // Find the exact built-in keyword name (case-sensitive for Porcupine)
+        const exactBuiltInKeyword = builtInKeywords.find(k => k.toLowerCase() === normalizedKeyword.toLowerCase());
+        let keywordPath;
+        
+        if (exactBuiltInKeyword) {
+          keywordPath = exactBuiltInKeyword;
+          console.log('[INIT] Using built-in keyword:', keywordPath);
+        } else {
+          keywordPath = `/keywords/${normalizedKeyword}`;
+          console.log('[INIT] Using custom keyword file:', keywordPath);
+        }
+        
+        // Final validation - ensure keywordPath is valid
+        if (!keywordPath || typeof keywordPath !== 'string' || keywordPath.trim() === '') {
+          throw new Error(`Invalid keyword path: ${keywordPath}. Using fallback "Jarvis"`);
+        }
+        
+        // Create keywords array - must be non-empty array with valid string
+        const keywordsArray = [keywordPath];
+        
+        // Validate the array before passing to Porcupine
+        if (!Array.isArray(keywordsArray) || keywordsArray.length === 0) {
+          throw new Error('Keywords array is empty');
+        }
+        
+        if (!keywordsArray[0] || typeof keywordsArray[0] !== 'string' || keywordsArray[0].trim() === '') {
+          throw new Error(`Invalid keyword in array: ${keywordsArray[0]}`);
+        }
+        
+        console.log('[INIT] Final keywords array:', keywordsArray);
+        console.log('[INIT] Keywords array length:', keywordsArray.length);
+        console.log('[INIT] First keyword:', keywordsArray[0]);
+        console.log('[INIT] Creating Porcupine with:', {
+          accessKeyPrefix: accessKey.substring(0, 10) + '...',
+          accessKeyLength: accessKey.length,
+          keywords: keywordsArray,
+          keywordsLength: keywordsArray.length,
+          sensitivities: [sensitivity]
+        });
+        
+        porcupine = await Porcupine.create({
+          accessKey: accessKey,
+          keywords: keywordsArray,
+          sensitivities: [sensitivity]
+        });
+        
+        updateStatus(`Porcupine initialized! Sample rate: ${porcupine.sampleRate}Hz, Frame length: ${porcupine.frameLength}`, 'success');
+        startBtn.disabled = false;
+        
+        console.log('[INIT] Porcupine initialized successfully');
+        console.log(`[INIT] Sample rate: ${porcupine.sampleRate}Hz`);
+        console.log(`[INIT] Frame length: ${porcupine.frameLength} samples`);
+        
+      } catch (err) {
+        updateStatus(`Initialization failed: ${err.message}`, 'error');
+        console.error('[ERROR]', err);
+        throw err;
+      }
+    }
+    
+    async function startListening() {
+      try {
+        // Check if Porcupine is initialized
+        if (!porcupine) {
+          updateStatus('Error: Porcupine not initialized. Please refresh the page.', 'error');
+          console.error('[ERROR] Porcupine is null - initialization may have failed');
+          return;
+        }
+        
+        updateStatus('Requesting microphone access...', 'info');
+        
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioContext = new AudioContext({ sampleRate: porcupine.sampleRate });
+        
+        sourceNode = audioContext.createMediaStreamSource(mediaStream);
+        
+        // Create ScriptProcessorNode for audio processing
+        processor = audioContext.createScriptProcessor(4096, 1, 1);
+        
+        let buffer = [];
+        const frameLength = porcupine.frameLength;
+        const targetSampleRate = porcupine.sampleRate;
+        const contextSampleRate = audioContext.sampleRate;
+        const resampleRatio = contextSampleRate / targetSampleRate;
+        
+        // Resample Float32 to target sample rate
+        function resampleToTarget(float32Array) {
+          const outLength = Math.floor(float32Array.length / resampleRatio);
+          const out = new Float32Array(outLength);
+          for (let i = 0; i < outLength; i++) {
+            const srcIdx = i * resampleRatio;
+            const idx = Math.floor(srcIdx);
+            const frac = srcIdx - idx;
+            const nextIdx = Math.min(idx + 1, float32Array.length - 1);
+            out[i] = float32Array[idx] * (1 - frac) + float32Array[nextIdx] * frac;
+          }
+          return out;
+        }
+        
+        // Convert Float32 to Int16
+        function floatToInt16(float32Array) {
+          const int16 = new Int16Array(float32Array.length);
+          for (let i = 0; i < float32Array.length; i++) {
+            const s = Math.max(-1, Math.min(1, float32Array[i]));
+            int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          }
+          return int16;
+        }
+        
+        processor.onaudioprocess = (e) => {
+          if (!isListening || !porcupine) return;
+          
+          try {
+            const input = e.inputBuffer.getChannelData(0);
+            if (!input || input.length === 0) return;
+            
+            // Resample to target sample rate (16kHz for Porcupine)
+            const resampled = resampleToTarget(input);
+            
+            // Convert to Int16
+            const int16 = floatToInt16(resampled);
+            
+            // Buffer samples (prevent buffer overflow)
+            const maxBufferSize = frameLength * 10;
+            for (let i = 0; i < int16.length; i++) {
+              buffer.push(int16[i]);
+            }
+            
+            // Prevent buffer from growing too large
+            if (buffer.length > maxBufferSize) {
+              buffer = buffer.slice(-maxBufferSize);
+              console.warn('[WARN] Buffer overflow, dropping old samples');
+            }
+            
+            // Process complete frames
+            while (buffer.length >= frameLength) {
+              const frame = new Int16Array(frameLength);
+              for (let i = 0; i < frameLength; i++) {
+                frame[i] = buffer.shift();
+              }
+              
+              try {
+                const keywordIndex = porcupine.process(frame);
+                if (keywordIndex >= 0) {
+                  addDetection(keywordIndex);
+                  updateStatus(`Wake word detected! (Total: ${detectionCount})`, 'success');
+                }
+              } catch (err) {
+                console.error('[ERROR] Processing frame:', err);
+                // Don't break the loop, continue processing
+              }
+            }
+          } catch (err) {
+            console.error('[ERROR] Audio processing error:', err);
+          }
+        };
+        
+        sourceNode.connect(processor);
+        processor.connect(audioContext.destination);
+        
+        isListening = true;
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        testBtn.disabled = false;
+        
+        updateStatus('Listening for wake word...', 'success');
+        console.log('[START] Listening for wake word');
+        
+      } catch (err) {
+        updateStatus(`Failed to start: ${err.message}`, 'error');
+        console.error('[ERROR]', err);
+      }
+    }
+    
+    function stopListening() {
+      isListening = false;
+      
+      try {
+        if (processor) {
+          processor.disconnect();
+          processor.onaudioprocess = null;
+          processor = null;
+        }
+        
+        if (sourceNode) {
+          sourceNode.disconnect();
+          sourceNode = null;
+        }
+        
+        if (mediaStream) {
+          mediaStream.getTracks().forEach(track => {
+            track.stop();
+            track.enabled = false;
+          });
+          mediaStream = null;
+        }
+        
+        if (audioContext && audioContext.state !== 'closed') {
+          audioContext.close().catch(err => {
+            console.error('[ERROR] Failed to close audio context:', err);
+          });
+          audioContext = null;
+        }
+        
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+        testBtn.disabled = true;
+        
+        updateStatus('Stopped listening', 'info');
+        console.log('[STOP] Stopped listening');
+      } catch (err) {
+        console.error('[ERROR] Error stopping listener:', err);
+        updateStatus(`Error stopping: ${err.message}`, 'error');
+      }
+    }
+    
+    async function testDetection() {
+      // Simulate a detection for testing
+      addDetection(0);
+      updateStatus(`Test detection triggered! (Total: ${detectionCount})`, 'success');
+      console.log('[TEST] Simulated detection');
+    }
+    
+    startBtn.addEventListener('click', startListening);
+    stopBtn.addEventListener('click', stopListening);
+    testBtn.addEventListener('click', testDetection);
+    
+    // Initialize on load
+    initialize().catch(err => {
+      updateStatus(`Failed to initialize: ${err.message}`, 'error');
+    });
+    
+    // Cleanup on unload
+    window.addEventListener('beforeunload', async () => {
+      stopListening();
+      if (porcupine) {
+        try {
+          await porcupine.release();
+          console.log('[CLEANUP] Porcupine released');
+        } catch (err) {
+          console.error('[ERROR] Failed to release Porcupine:', err);
+        }
+      }
+    });
+    
+    // Handle page visibility changes (pause when hidden)
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && isListening) {
+        console.log('[PAUSE] Page hidden, pausing detection');
+        // Optionally pause here, or keep listening
+      }
+    });
+  </script>
+</body>
+</html>

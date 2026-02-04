@@ -20,7 +20,9 @@ import {
   isAudioFile,
   safeFilename,
 } from './file-creator.js';
-import { DEBUG } from './debug.js';
+import { DEBUG, escapeHtml } from './debug.js';
+import { WakeWordTracker } from './wake-word-tracker.js';
+import { WakeWordErrorMonitor } from './wake-word-error-monitor.js';
 
 const chatContainer = document.getElementById('chatContainer');
 const textInput = document.getElementById('textInput');
@@ -62,16 +64,149 @@ function getConfig() {
   const env = typeof import.meta !== 'undefined' ? import.meta.env : {};
   const win = typeof window !== 'undefined' ? window : {};
   const cfg = win.JARVIS_CONFIG || {};
+  
+  // Wake word config
+  const picovoiceAccessKey = env.VITE_PICOVOICE_ACCESS_KEY || cfg.picovoiceAccessKey || '';
+  // Default to "Jarvis" built-in keyword if wake word is enabled but no keyword specified
+  const wakeWordEnabled = (env.VITE_WAKE_WORD_ENABLED || cfg.wakeWordEnabled || 'false').toLowerCase() === 'true';
+  // Get keyword and trim whitespace - if empty after trim, use default
+  const rawKeyword = env.VITE_PORCUPINE_KEYWORD || cfg.porcupineKeyword || '';
+  const trimmedKeyword = rawKeyword.trim();
+  const porcupineKeyword = trimmedKeyword || (wakeWordEnabled && picovoiceAccessKey ? 'Jarvis' : '');
+  const porcupineSensitivity = parseFloat(env.VITE_PORCUPINE_SENSITIVITY || cfg.porcupineSensitivity || '0.5');
+  const debugWakeWord = (env.VITE_DEBUG_WAKE_WORD || cfg.debugWakeWord || 'false').toLowerCase() === 'true';
+  
+  // Construct keyword path - supports both built-in keywords and custom .ppn files
+  // Built-in keywords: "Jarvis", "Computer", "Alexa", "Hey Google", "Hey Siri", etc.
+  // Custom keywords: Path to .ppn file (e.g., "keywords/jarvis_en_wasm_v3_0_0.ppn")
+  // Default: Uses built-in "Jarvis" keyword for fastest initialization (no file download needed)
+  let keywordPaths = [];
+  if (porcupineKeyword && picovoiceAccessKey) {
+    const builtInKeywords = ['Alexa', 'Americano', 'Blueberry', 'Bumblebee', 'Computer', 'Grapefruit', 'Grasshopper', 'Hey Google', 'Hey Siri', 'Jarvis', 'Okay Google', 'Picovoice', 'Porcupine', 'Terminator'];
+    
+    // Check if it's a built-in keyword (case-insensitive)
+    const keywordMatch = builtInKeywords.find(k => k.toLowerCase() === porcupineKeyword.toLowerCase());
+    if (keywordMatch) {
+      // Use built-in keyword directly
+      keywordPaths = [keywordMatch];
+      DEBUG.trace('Using built-in Porcupine keyword', { keyword: keywordMatch });
+    } else {
+      // Assume it's a custom keyword - try multiple possible paths
+      const keywordName = porcupineKeyword.toLowerCase().replace(/\s+/g, '-');
+      const possiblePaths = [
+        `keywords/${keywordName}_en_wasm_v3_0_0.ppn`, // Default Picovoice naming
+        `keywords/${keywordName}.ppn`, // Simple naming
+        `./keywords/${keywordName}_en_wasm_v3_0_0.ppn`,
+        `./keywords/${keywordName}.ppn`,
+      ];
+      // Use first path as default (user can override via config)
+      keywordPaths = [possiblePaths[0]];
+      DEBUG.trace('Using custom keyword file path', { path: keywordPaths[0] });
+    }
+  }
+  
   return {
     apiKey: env.VITE_CARTESIA_API_KEY || cfg.apiKey || '',
     voiceId: env.VITE_CARTESIA_VOICE_ID || cfg.voiceId || '',
     n8nWebhookUrl: env.VITE_N8N_WEBHOOK_URL || cfg.n8nWebhookUrl || 'https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4',
+    picovoiceAccessKey,
+    porcupineKeyword,
+    porcupineSensitivity: isNaN(porcupineSensitivity) ? 0.5 : Math.max(0, Math.min(1, porcupineSensitivity)),
+    wakeWordEnabled,
+    debugWakeWord,
+    keywordPaths: (() => {
+      // Allow override via window.JARVIS_CONFIG, but validate the entries
+      if (cfg.keywordPaths && Array.isArray(cfg.keywordPaths) && cfg.keywordPaths.length > 0) {
+        const filtered = cfg.keywordPaths.filter(p => p && typeof p === 'string' && p.trim().length > 0);
+        // If filtered config paths are valid, use them; otherwise fall back to computed paths
+        return filtered.length > 0 ? filtered : keywordPaths;
+      }
+      return keywordPaths;
+    })(), // Allow override via window.JARVIS_CONFIG
   };
 }
-const { apiKey, voiceId, n8nWebhookUrl } = getConfig();
+const { apiKey, voiceId, n8nWebhookUrl, picovoiceAccessKey, porcupineSensitivity, wakeWordEnabled, debugWakeWord, keywordPaths } = getConfig();
+
+// Log button initialization status (always visible, not just in debug mode)
+/* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+console.log('[JARVIS] Button initialization complete', {
+  btnSend: !!btnSend,
+  btnMic: !!btnMic,
+  btnPaperclip: !!btnPaperclip,
+  textInput: !!textInput,
+  fileInput: !!fileInput,
+  n8nWebhookUrl: n8nWebhookUrl || 'NOT SET'
+});
 
 /** Session ID for n8n workflow continuity (persists for page lifetime) */
 const sessionId = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+
+/** Initialize wake word tracker - always show for testing */
+let wakeWordTracker = null;
+try {
+  wakeWordTracker = new WakeWordTracker();
+  // Show tracker panel (always visible for testing)
+  const trackerEl = document.getElementById('wakeWordTracker');
+  if (trackerEl) {
+    trackerEl.style.display = 'flex';
+  }
+  
+  // Immediately set status based on configuration
+  // Use multiple attempts to ensure status updates
+  const updateStatusDirectly = () => {
+    const statusTextEl = document.getElementById('trackerStatusText');
+    if (statusTextEl) {
+      if (!wakeWordEnabled || !picovoiceAccessKey || keywordPaths.length === 0) {
+        statusTextEl.textContent = 'Wake word not configured';
+        DEBUG.trace('Wake word not configured - set status directly');
+      }
+    }
+  };
+  
+  // Try immediately
+  updateStatusDirectly();
+  
+  // Try after short delay
+  setTimeout(updateStatusDirectly, 50);
+  
+  if (!wakeWordEnabled || !picovoiceAccessKey || keywordPaths.length === 0) {
+    DEBUG.trace('Wake word not configured - setting tracker status immediately');
+    // Use setTimeout to ensure DOM is ready
+    setTimeout(() => {
+      if (wakeWordTracker) {
+        wakeWordTracker.setStatus('error', 'Wake word not configured');
+      } else {
+        updateStatusDirectly();
+      }
+    }, 100);
+  } else {
+    // Wake word is enabled - status will be updated after initialization
+    DEBUG.trace('Wake word configured - will initialize and update status');
+    // Still update to show we're initializing
+    setTimeout(() => {
+      if (wakeWordTracker) {
+        wakeWordTracker.setStatus('waiting', 'Initializing...');
+      } else {
+        const statusTextEl = document.getElementById('trackerStatusText');
+        if (statusTextEl) {
+          statusTextEl.textContent = 'Initializing...';
+        }
+      }
+    }, 100);
+  }
+} catch (err) {
+  DEBUG.error('Failed to initialize wake word tracker', err);
+  // Hide tracker if initialization failed
+  const trackerEl = document.getElementById('wakeWordTracker');
+  if (trackerEl) {
+    trackerEl.style.display = 'none';
+  }
+  // Still try to update status text directly
+  const statusTextEl = document.getElementById('trackerStatusText');
+  if (statusTextEl) {
+    statusTextEl.textContent = 'Initialization failed';
+  }
+}
 
 /** Build payload with app's session ID */
 function buildPayload(message, options) {
@@ -147,12 +282,6 @@ function appendMessage(role, content, attachments = []) {
   return wrap;
 }
 
-function escapeHtml(s) {
-  const div = document.createElement('div');
-  div.textContent = s;
-  return div.innerHTML;
-}
-
 /** Max attachment size (bytes) — larger files are skipped to avoid huge payloads */
 const MAX_ATTACHMENT_SIZE = 15 * 1024 * 1024; // 15 MB
 
@@ -194,9 +323,55 @@ async function filesToAttachmentPayload(files) {
  */
 async function getLLMReply(userText, options = {}) {
   const payload = buildPayload(userText, options);
-  if (!payload.message) return { reply: "I didn't catch that. Try again?", data: {} };
-  DEBUG.trace('n8n: sending payload', { message: payload.message.slice(0, 50), source: payload.source, url: n8nWebhookUrl });
+  if (!payload.message) {
+    /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+    console.warn('[JARVIS] getLLMReply: empty message in payload');
+    return { reply: "I didn't catch that. Try again?", data: {} };
+  }
+  // Always log payload sending (not just in debug mode) for troubleshooting
+  /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+  console.log('[JARVIS] Sending payload to n8n', { 
+    message: payload.message.slice(0, 50), 
+    source: payload.source, 
+    url: n8nWebhookUrl,
+    messageId: payload.messageId,
+    sessionId: payload.sessionId,
+    hasAttachments: payload.attachments?.length > 0,
+    fullPayload: {
+      message: payload.message,
+      source: payload.source,
+      session_id: payload.session_id,
+      sessionId: payload.sessionId,
+      timestamp: payload.timestamp,
+      timezone: payload.timezone,
+      location: payload.location,
+      message_id: payload.message_id,
+      messageId: payload.messageId,
+      attachments: payload.attachments?.map(a => ({ 
+        name: a.name, 
+        type: a.type, 
+        size: a.size, 
+        hasData: !!a.data,
+        dataLength: a.data?.length || 0
+      })) || [],
+      locale: payload.locale,
+      language: payload.language,
+      allKeys: Object.keys(payload),
+      payloadSize: JSON.stringify(payload).length
+    }
+  });
+  DEBUG.trace('n8n: sending payload', { 
+    message: payload.message.slice(0, 50), 
+    source: payload.source, 
+    url: n8nWebhookUrl,
+    messageId: payload.messageId,
+    sessionId: payload.sessionId,
+    hasAttachments: payload.attachments?.length > 0,
+    fullPayload: payload
+  });
   if (!n8nWebhookUrl || typeof n8nWebhookUrl !== 'string' || !n8nWebhookUrl.trim()) {
+    /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+    console.error('[JARVIS] n8n webhook URL is missing or invalid', { n8nWebhookUrl });
     DEBUG.error('n8n webhook URL is missing or invalid', { n8nWebhookUrl });
     return { reply: "Configuration error: N8N webhook URL is not set. Please check your configuration.", data: {} };
   }
@@ -204,12 +379,29 @@ async function getLLMReply(userText, options = {}) {
   try {
     const controller = new AbortController();
     timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    const payloadJson = JSON.stringify(payload);
+    /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+    console.log('[JARVIS] Making POST request to n8n webhook', { 
+      url: n8nWebhookUrl, 
+      payloadSize: payloadJson.length,
+      source: payload.source,
+      exactPayloadJson: payloadJson.length > 1000 ? payloadJson.slice(0, 1000) + '... [truncated]' : payloadJson
+    });
+    DEBUG.trace('n8n: POST request to webhook', { 
+      url: n8nWebhookUrl, 
+      payloadSize: payloadJson.length,
+      source: payload.source,
+      payloadJson: payloadJson
+    });
     const res = await fetch(n8nWebhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: payloadJson,
       signal: controller.signal,
     });
+    /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+    console.log('[JARVIS] POST request completed', { status: res.status, statusText: res.statusText, ok: res.ok });
+    DEBUG.trace('n8n: POST request completed', { status: res.status, statusText: res.statusText });
     clearTimeout(timeoutId);
     const contentType = res.headers.get('content-type') || '';
     let data = {};
@@ -226,8 +418,14 @@ async function getLLMReply(userText, options = {}) {
       }
     }
     const reply = extractReplyFromJson(data);
+    /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+    console.log('[JARVIS] n8n response parsed', { status: res.status, hasReply: !!reply, replyPreview: typeof reply === 'string' ? reply.slice(0, 50) : '', dataKeys: Object.keys(data) });
     DEBUG.trace('n8n: response', { status: res.status, hasReply: !!reply, replyPreview: typeof reply === 'string' ? reply.slice(0, 50) : '' });
-    if (typeof reply === 'string') return { reply, data };
+    if (typeof reply === 'string') {
+      /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+      console.log('[JARVIS] Successfully extracted reply from n8n response', { replyLength: reply.length });
+      return { reply, data };
+    }
     // No reply extracted — log so we can diagnose fallback
     const hasNatural = !!getNaturalFallback(payload.message);
     if (!hasNatural) {
@@ -243,16 +441,24 @@ async function getLLMReply(userText, options = {}) {
     const natural = getNaturalFallback(payload.message);
     const fallback = natural || "I heard you. I'm still getting set up — please try again in a moment.";
     DEBUG.trace('n8n: using fallback (no reply in response)', { natural: !!natural, fallbackPreview: fallback.slice(0, 50) });
-    return { reply: natural ? natural : fallback, data };
+    return { reply: fallback, data };
   } catch (err) {
     if (timeoutId) clearTimeout(timeoutId);
+    /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+    console.error('[JARVIS] Error in getLLMReply', { err, name: err.name, message: err.message, url: n8nWebhookUrl });
     if (err.name === 'AbortError') {
+      /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+      console.error('[JARVIS] n8n webhook timeout after 30s', { url: n8nWebhookUrl, message: payload.message.slice(0, 50) });
       DEBUG.error('n8n webhook timeout after 30s', { url: n8nWebhookUrl, message: payload.message.slice(0, 50) });
       return { reply: "Request timed out. The assistant is taking too long to respond. Please try again.", data: {} };
     } else if (err.message && (err.message.includes('CORS') || err.message.includes('Failed to fetch'))) {
+      /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+      console.error('[JARVIS] n8n webhook CORS or network error', { url: n8nWebhookUrl, err: err.message });
       DEBUG.error('n8n webhook CORS or network error', { url: n8nWebhookUrl, err: err.message });
       return { reply: "Network error: Could not reach the assistant. Check your connection and CORS settings.", data: {} };
     } else {
+      /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+      console.error('[JARVIS] n8n webhook error', { url: n8nWebhookUrl, err });
       DEBUG.error('n8n webhook error', { url: n8nWebhookUrl, err });
       return { reply: "Sorry, I couldn't reach the assistant. Please try again.", data: {} };
     }
@@ -305,6 +511,11 @@ const bridge = new CartesiaAudioBridge({
     if (!path.endsWith('/')) path += '/';
     return path;
   })(),
+  // Wake word configuration
+  wakeWordEnabled: wakeWordEnabled && picovoiceAccessKey && keywordPaths.length > 0,
+  picovoiceAccessKey: picovoiceAccessKey || undefined,
+  wakeWordKeywordPaths: keywordPaths,
+  wakeWordSensitivities: [porcupineSensitivity],
   onPartialTranscript: (text, isFinal) => {
     if (!isFinal && text.trim()) setStatus(`Listening… "${text.slice(0, 40)}${text.length > 40 ? '…' : ''}"`, 'listening');
   },
@@ -312,10 +523,32 @@ const bridge = new CartesiaAudioBridge({
     if (!isFinal) return;
     const trimmed = (text || '').trim();
     if (!trimmed) {
+      /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+      console.log('[JARVIS] onTranscript: empty text, skipping n8n (no payload sent)');
       DEBUG.trace('onTranscript: empty text, skipping n8n (no payload sent)');
       return;
     }
-    DEBUG.trace('onTranscript: sending voice payload to n8n', { length: trimmed.length, preview: trimmed.slice(0, 80) });
+    /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+    console.log('[JARVIS] onTranscript: FINAL transcript received (mic button flow)', { 
+      textLength: trimmed.length, 
+      preview: trimmed.slice(0, 80),
+      isFinal 
+    });
+    const isWakeWordTriggered = bridge.isWakeWordWaiting() === false && bridge.isSTTActive();
+    // Always log voice transcript sending (not just in debug mode) for troubleshooting
+    /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+    console.log('[JARVIS] onTranscript: sending voice payload to n8n', { 
+      length: trimmed.length, 
+      preview: trimmed.slice(0, 80),
+      wakeWordTriggered: isWakeWordTriggered,
+      source: 'voice'
+    });
+    DEBUG.trace('onTranscript: sending voice payload to n8n', { 
+      length: trimmed.length, 
+      preview: trimmed.slice(0, 80),
+      wakeWordTriggered: isWakeWordTriggered,
+      source: 'voice'
+    });
     // Get recorded audio as base64 before any async operations
     let audioBase64 = null;
     try {
@@ -342,13 +575,57 @@ const bridge = new CartesiaAudioBridge({
         data: audioBase64,
       }] : [];
       DEBUG.trace('onTranscript: audio attachment', { hasAudio: !!audioBase64, size: audioAttachments[0]?.size || 0 });
+      
+      // Build payload explicitly to log it before sending (for debugging)
+      const voicePayload = buildPayload(trimmed, { source: 'voice', attachments: audioAttachments });
+      /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+      console.log('[JARVIS] Mic button payload (full structure):', {
+        message: voicePayload.message,
+        source: voicePayload.source,
+        session_id: voicePayload.session_id,
+        sessionId: voicePayload.sessionId,
+        message_id: voicePayload.message_id,
+        messageId: voicePayload.messageId,
+        timestamp: voicePayload.timestamp,
+        timezone: voicePayload.timezone,
+        location: voicePayload.location,
+        locale: voicePayload.locale,
+        language: voicePayload.language,
+        attachments: voicePayload.attachments?.map(a => ({ 
+          name: a.name, 
+          type: a.type, 
+          size: a.size, 
+          hasData: !!a.data,
+          dataLength: a.data?.length || 0
+        })) || [],
+        payloadKeys: Object.keys(voicePayload),
+        payloadSize: JSON.stringify(voicePayload).length
+      });
+      DEBUG.trace('onTranscript: full voice payload structure', voicePayload);
+      
       const { reply: replyText, data: replyData } = await getLLMReply(trimmed, { source: 'voice', attachments: audioAttachments });
+      /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+      console.log('[JARVIS] Mic button: received reply from n8n', { 
+        replyLength: replyText?.length || 0, 
+        hasData: !!replyData,
+        replyPreview: typeof replyText === 'string' ? replyText.slice(0, 100) : '',
+        hasApiKey: !!apiKey
+      });
       appendMessage('assistant', replyText);
       const files = extractFilesFromJson(replyData);
       if (apiKey) {
         setStatus('Speaking…', 'speaking');
         try {
+          /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+          console.log('[JARVIS] Mic button: starting TTS for voice response', { 
+            replyLength: replyText?.length || 0,
+            replyPreview: typeof replyText === 'string' ? replyText.slice(0, 100) : '',
+            hasApiKey: !!apiKey,
+            hasVoiceId: !!voiceId
+          });
           await bridge.speakText(replyText);
+          /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+          console.log('[JARVIS] Mic button: TTS completed successfully');
           setStatus('Connecting…', '');
           try {
             try {
@@ -358,17 +635,33 @@ const bridge = new CartesiaAudioBridge({
                 if (!Number.isNaN(v)) bridge.setInputGain(Math.max(0.5, Math.min(2, v)));
               }
             } catch { /* ignore */ }
-            await bridge.startSTT();
-            syncMicButton(true, false);
-            setStatus('Listening…', 'listening');
+      await bridge.startSTT();
+      // Check if we're waiting for wake word - if so, show waiting status
+      // Otherwise, STT is active and we should show listening status
+      if (bridge.isWakeWordWaiting()) {
+        syncMicButton(false, false); // Not recording yet, waiting for wake word
+        setStatus('Waiting for wake word…', 'listening');
+      } else {
+        syncMicButton(true, false);
+        setStatus('Listening…', 'listening');
+      }
             bridge.startAgentSilenceTimer();
           } catch (sttErr) {
+            /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+            console.error('[JARVIS] Mic button: Failed to restart STT after TTS', sttErr);
             DEBUG.error('Failed to restart STT after TTS', sttErr);
             syncMicButton(false, false);
             setStatus('Ready (mic restart failed)', '');
           }
           if (files.length) await processFileSpecs(files);
         } catch (err) {
+          /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+          console.error('[JARVIS] Mic button: TTS error in onTranscript', { 
+            error: err, 
+            errorMessage: err?.message, 
+            errorName: err?.name,
+            stack: err?.stack 
+          });
           DEBUG.error('TTS error in onTranscript', err);
           setStatus('Ready (TTS error)', '');
           appendMessage('assistant', 'Sorry, I could not speak that. ' + (err?.message || err));
@@ -396,11 +689,21 @@ const bridge = new CartesiaAudioBridge({
       syncMicButton(false, false);
     }
   },
+  onSTTStarted: () => {
+    DEBUG.trace('onSTTStarted: STT is now active, updating mic button');
+    syncMicButton(true, false);
+    // Status will be updated by onWakeWordDetected or onSpeechStart
+  },
   onSTTStopped: () => {
     DEBUG.trace('onSTTStopped: mic reverting to idle (syncMicButton false)');
     syncMicButton(false, false);
     bridge.stopLevelMeter();
-    setStatus('Ready');
+    // If wake word is enabled, show that we're waiting for wake word
+    if (wakeWordEnabled && picovoiceAccessKey && keywordPaths.length > 0) {
+      setStatus('Ready (waiting for wake word)');
+    } else {
+      setStatus('Ready');
+    }
   },
   // VAD callbacks — Heuristic S2: Make system status clear (bOoK oN vOiCe BoT dEsIgN.md)
   onSpeechStart: () => setStatus('Listening…', 'listening'),
@@ -411,6 +714,47 @@ const bridge = new CartesiaAudioBridge({
     setTimeout(() => {
       if (statusEl.textContent.includes('Try again')) setStatus('Listening…', 'listening');
     }, 2500);
+  },
+  onWakeWordDetected: async (keywordIndex) => {
+    DEBUG.trace('Wake word detected! Activating STT pipeline...', { keywordIndex });
+    if (debugWakeWord) {
+      DEBUG.trace('Wake word detected!', { keywordIndex });
+    }
+    
+    // Record detection in tracker
+    if (wakeWordTracker) {
+      const metrics = bridge.getWakeWordMetrics();
+      const latency = metrics?.avgDetectionLatency || 0;
+      // Extract keyword name from path (e.g., "keywords/jarvis_en_wasm_v3_0_0.ppn" -> "jarvis")
+      let keywordName = `Keyword ${keywordIndex}`;
+      if (keywordPaths && keywordPaths[keywordIndex]) {
+        const path = keywordPaths[keywordIndex];
+        const match = path.match(/([^/\\]+)\.ppn$/);
+        if (match) {
+          keywordName = match[1].replace(/[-_]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+      }
+      wakeWordTracker.recordDetection({
+        keywordIndex,
+        keywordName,
+        latency,
+      });
+    }
+    
+    setStatus('Wake word detected — listening…', 'listening');
+    // Sync mic button to show it's active when wake word activates STT
+    // The bridge will activate STT asynchronously, so we'll sync after a brief delay
+    setTimeout(() => {
+      if (bridge.isSTTActive()) {
+        DEBUG.trace('Wake word: STT pipeline is now active, ready to capture speech');
+        syncMicButton(true, false);
+        setStatus('Listening…', 'listening');
+      } else {
+        // If STT didn't activate, keep status showing wake word detected
+        DEBUG.warn('Wake word: STT pipeline did not activate after wake word detection');
+        setStatus('Wake word detected — starting…', 'listening');
+      }
+    }, 100);
   },
   // ~10s silence: single British closing message (TTS), then INACTIVE.
   // Uses same Cartesia voice as bridge (VITE_CARTESIA_VOICE_ID from .env).
@@ -423,15 +767,187 @@ const bridge = new CartesiaAudioBridge({
     const text = phrase.trim();
     setStatus('Standing by…', '');
     appendMessage('assistant', text);
-    bridge.speakText(text).then(() => setStatus('Ready')).catch(() => setStatus('Ready'));
+    bridge.speakText(text).then(() => {
+      setStatus('Ready');
+      // If wake word is enabled, re-initialize it for always-listening after TTS
+      if (wakeWordEnabled && picovoiceAccessKey && keywordPaths.length > 0) {
+        bridge.initWakeWord().catch(err => {
+          DEBUG.error('Failed to re-initialize wake word after silence', err);
+        });
+      }
+    }).catch(() => setStatus('Ready'));
   },
 });
 
+// Initialize wake word error monitor
+let wakeWordErrorMonitor = null;
+if (wakeWordEnabled && picovoiceAccessKey && keywordPaths.length > 0) {
+  try {
+    wakeWordErrorMonitor = new WakeWordErrorMonitor({
+      bridge: bridge,
+      onFixApplied: (fix) => {
+        DEBUG.trace('Wake word error fix applied', fix);
+        /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+        console.log('[JARVIS] Wake word error auto-fixed:', {
+          errorType: fix.errorType,
+          action: fix.fix?.action || 'Unknown action',
+          fixed: fix.fix?.fixed || false
+        });
+        
+        // Update tracker if fix was successful
+        if (fix.fix && fix.fix.fixed && wakeWordTracker) {
+          setTimeout(() => {
+            updateTrackerStatus();
+          }, 500);
+        }
+      },
+      onErrorDetected: (error) => {
+        DEBUG.trace('Wake word error detected', error);
+      }
+    });
+    wakeWordErrorMonitor.start();
+    DEBUG.trace('Wake word error monitor started');
+    
+    // Expose monitor to window for debugging (when debug mode is enabled)
+    if (DEBUG.enabled && typeof window !== 'undefined') {
+      window.JARVIS_WAKE_WORD_ERROR_MONITOR = wakeWordErrorMonitor;
+      /* eslint-disable-next-line no-console -- intentional: debug tool */
+      console.log('[JARVIS] Wake word error monitor available at window.JARVIS_WAKE_WORD_ERROR_MONITOR');
+      /* eslint-disable-next-line no-console -- intentional: debug tool */
+      console.log('[JARVIS] Available methods: getErrorHistory(), getFixHistory(), getStats(), clearHistory()');
+    }
+  } catch (err) {
+    DEBUG.error('Failed to initialize wake word error monitor', err);
+  }
+}
+
+// Store metrics interval for cleanup
+let metricsInterval = null;
+
+// Function to update wake word tracker status (accessible from mic button handler)
+const updateTrackerStatus = () => {
+  if (!wakeWordTracker) {
+    DEBUG.trace('updateTrackerStatus: wakeWordTracker is null (may be disabled)');
+    return;
+  }
+  
+  if (!bridge) {
+    DEBUG.error('updateTrackerStatus: bridge is null');
+    if (wakeWordTracker) {
+      wakeWordTracker.setStatus('error', 'Bridge not initialized');
+    }
+    return;
+  }
+  
+  try {
+    // Check if wake word was actually initialized (getWakeWordMetrics returns null if not initialized)
+    const metrics = bridge.getWakeWordMetrics();
+    DEBUG.trace('Wake word initialization check', { 
+      hasMetrics: metrics !== null,
+      hasTracker: !!wakeWordTracker,
+      metrics: metrics
+    });
+    
+    if (metrics !== null) {
+      // Wake word successfully initialized
+      wakeWordTracker.setStatus('waiting', 'Wake word active — waiting...');
+      DEBUG.trace('Wake word tracker status updated to: waiting');
+      
+      // Start periodic metrics update
+      if (metricsInterval) clearInterval(metricsInterval);
+      metricsInterval = setInterval(() => {
+        if (wakeWordTracker && bridge) {
+          const currentMetrics = bridge.getWakeWordMetrics();
+          if (currentMetrics) {
+            wakeWordTracker.updateMetrics(currentMetrics);
+          }
+        }
+      }, 1000);
+    } else {
+      // Wake word manager not initialized (likely mic permission not granted)
+      wakeWordTracker.setStatus('error', 'Microphone permission needed — click mic button');
+      DEBUG.trace('Wake word tracker status updated to: error (no mic permission)');
+    }
+  } catch (err) {
+    DEBUG.error('updateTrackerStatus: Error checking wake word status', err);
+    if (wakeWordTracker) {
+      wakeWordTracker.setStatus('error', 'Error checking wake word status');
+    }
+  }
+};
+
+// Initialize wake word for always-listening mode if enabled
+if (wakeWordEnabled && picovoiceAccessKey && keywordPaths.length > 0) {
+  // Initialize wake word after a short delay to ensure bridge is ready
+  setTimeout(() => {
+    DEBUG.trace('Starting wake word initialization...');
+    
+    // Ensure tracker status is visible before starting
+    if (wakeWordTracker) {
+      wakeWordTracker.setStatus('waiting', 'Initializing wake word...');
+    }
+    
+    // initWakeWord now always returns a promise with {success, reason}
+    // Timeout is handled internally in cartesia-audio-bridge.js (15 seconds, increased for slow networks)
+    bridge.initWakeWord().then(result => {
+      DEBUG.trace('Wake word initialization completed', result);
+      
+      if (result.success) {
+        DEBUG.trace('Wake word initialized successfully', { reason: result.reason });
+      } else {
+        DEBUG.warn('Wake word initialization failed', { reason: result.reason });
+        if (wakeWordTracker) {
+          wakeWordTracker.setStatus('error', `Wake word initialization failed: ${result.reason || 'Unknown error'}`);
+        }
+      }
+      
+      // Small delay to ensure bridge state is updated
+      setTimeout(() => {
+        updateTrackerStatus();
+      }, 200);
+    }).catch(err => {
+      DEBUG.error('Failed to initialize wake word for always-listening', err);
+      if (wakeWordTracker) {
+        const errorMsg = err?.message || String(err) || 'Unknown error';
+        wakeWordTracker.setStatus('error', `Wake word initialization failed: ${errorMsg}`);
+      }
+    });
+  }, 500);
+} else if (wakeWordTracker) {
+  // Wake word not enabled but tracker exists (shouldn't happen, but handle gracefully)
+  DEBUG.trace('Wake word not configured - setting tracker to error state');
+  wakeWordTracker.setStatus('error', 'Wake word not configured');
+}
+
+// Clean up intervals when page unloads
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    if (metricsInterval) {
+      clearInterval(metricsInterval);
+      metricsInterval = null;
+    }
+    if (wakeWordTracker) {
+      wakeWordTracker.destroy();
+    }
+    if (wakeWordErrorMonitor) {
+      wakeWordErrorMonitor.stop();
+      wakeWordErrorMonitor = null;
+    }
+  });
+}
+
 /** Debug tool: when ?debug=1, expose JARVIS_DEBUG_SEND_TEST() in console to send a test message and check n8n response. */
 if (typeof window !== 'undefined' && (DEBUG.enabled || (window.location && window.location.search && /[?&]debug=1/.test(window.location.search)))) {
+  /* eslint-disable no-console -- debug tool */
+  console.log('%c[JARVIS DEBUG] Debug mode enabled!', 'color: #FFB800; font-weight: bold; font-size: 14px;');
+  console.log('%c[JARVIS DEBUG] DevTools Access:', 'color: #FFB800; font-weight: bold;');
+  console.log('  • Press F12 (Windows/Linux) or Cmd+Option+I (Mac) to open DevTools');
+  console.log('  • Or right-click → Inspect → Console tab');
+  console.log('  • Debug pages: http://localhost:3000/debug/voice-pipeline-debug.html');
+  console.log('');
+  
   window.JARVIS_DEBUG_SEND_TEST = async function () {
     const msg = 'Hello from JARVIS debug';
-    /* eslint-disable no-console -- debug tool */
     console.log('[JARVIS DEBUG] Sending test message to n8n...', msg);
     try {
       const { reply, data } = await getLLMReply(msg, { source: 'text' });
@@ -450,6 +966,7 @@ if (typeof window !== 'undefined' && (DEBUG.enabled || (window.location && windo
     }
   };
   console.log('[JARVIS DEBUG] Run JARVIS_DEBUG_SEND_TEST() in the console to send a test message and check the n8n response.');
+  
   window.JARVIS_DEBUG_CHECK_CONFIG = function () {
     console.log('[JARVIS DEBUG] Configuration check:');
     console.log('  apiKey:', apiKey ? `Set (${apiKey.slice(0, 10)}...)` : 'NOT SET');
@@ -466,6 +983,71 @@ if (typeof window !== 'undefined' && (DEBUG.enabled || (window.location && windo
     };
   };
   console.log('[JARVIS DEBUG] Run JARVIS_DEBUG_CHECK_CONFIG() to see current configuration and mic status.');
+  
+  // Helper to show all available debug functions
+  window.JARVIS_DEBUG_HELP = function () {
+    console.log('%c[JARVIS DEBUG] Available Debug Functions:', 'color: #FFB800; font-weight: bold; font-size: 14px;');
+    console.log('  • JARVIS_DEBUG_SEND_TEST() - Send test message to n8n');
+    console.log('  • JARVIS_DEBUG_CHECK_CONFIG() - Check configuration and mic status');
+    console.log('  • JARVIS_DEBUG_HELP() - Show this help message');
+    console.log('  • JARVIS_DEBUG_OPEN_DEVTOOLS() - Try to open DevTools (may not work in all browsers)');
+    console.log('');
+    console.log('%c[JARVIS DEBUG] Debug Pages:', 'color: #FFB800; font-weight: bold;');
+    console.log('  • Voice Pipeline: http://localhost:3000/debug/voice-pipeline-debug.html');
+    console.log('  • AudioWorklet: http://localhost:3000/debug/debug-audioworklet.html');
+    console.log('  • Fallback Revert: http://localhost:3000/debug/fallback-revert-debug.html');
+    console.log('');
+    console.log('%c[JARVIS DEBUG] DevTools Access Methods:', 'color: #FFB800; font-weight: bold;');
+    console.log('  Method 1: Keyboard Shortcuts');
+    console.log('    • F12 (Windows/Linux/Mac)');
+    console.log('    • Ctrl+Shift+I (Windows/Linux) or Cmd+Option+I (Mac)');
+    console.log('    • Ctrl+Shift+J (Windows/Linux) or Cmd+Option+J (Mac) - Console only');
+    console.log('    • Ctrl+Shift+C (Windows/Linux) or Cmd+Option+C (Mac) - Inspect Element');
+    console.log('  Method 2: Right-click menu');
+    console.log('    • Right-click anywhere on page → "Inspect" or "Inspect Element"');
+    console.log('  Method 3: Browser menu');
+    console.log('    • Chrome/Edge: Menu (⋮) → More Tools → Developer Tools');
+    console.log('    • Firefox: Menu (☰) → More Tools → Web Developer Tools');
+    console.log('    • Safari: Develop menu (enable in Preferences → Advanced)');
+    console.log('  Method 4: If F12 is blocked');
+    console.log('    • Check if browser extensions are blocking it');
+    console.log('    • Try in incognito/private mode');
+    console.log('    • Check Windows/browser settings for disabled shortcuts');
+  };
+  
+  // Helper to attempt opening DevTools (limited browser support)
+  window.JARVIS_DEBUG_OPEN_DEVTOOLS = function () {
+    console.log('%c[JARVIS DEBUG] Attempting to open DevTools...', 'color: #FFB800; font-weight: bold;');
+    console.log('Note: Most browsers block programmatic DevTools access for security.');
+    console.log('If this doesn\'t work, use one of these methods:');
+    console.log('  1. Press F12');
+    console.log('  2. Right-click → Inspect');
+    console.log('  3. Browser menu → Developer Tools');
+    console.log('  4. Ctrl+Shift+I (Windows/Linux) or Cmd+Option+I (Mac)');
+    
+    // Try to trigger DevTools (may not work due to browser security)
+    try {
+      // This is a common trick but may not work in modern browsers
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      document.body.appendChild(iframe);
+      iframe.contentWindow.console.log('%c', '');
+      document.body.removeChild(iframe);
+    } catch {
+      // Expected to fail in most browsers
+    }
+    
+    // Show alert with instructions
+    alert('DevTools cannot be opened programmatically for security reasons.\n\n' +
+          'Please use one of these methods:\n' +
+          '• Press F12\n' +
+          '• Right-click → Inspect\n' +
+          '• Ctrl+Shift+I (Windows/Linux) or Cmd+Option+I (Mac)\n' +
+          '• Browser menu → Developer Tools');
+  };
+  
+  console.log('[JARVIS DEBUG] Run JARVIS_DEBUG_HELP() for a list of all debug functions and shortcuts.');
+  console.log('[JARVIS DEBUG] Run JARVIS_DEBUG_OPEN_DEVTOOLS() for help opening DevTools if F12 is blocked.');
 }
 /* eslint-enable no-console */
 
@@ -473,9 +1055,14 @@ let pendingAttachments = [];
 
 if (btnSend) {
   btnSend.addEventListener('click', async () => {
+    // Always log button clicks (not just in debug mode) for troubleshooting
+    /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+    console.log('[JARVIS] Send button clicked', { hasText: !!textInput.value.trim(), textLength: textInput.value.trim().length });
     DEBUG.trace('btnSend clicked', { hasText: !!textInput.value.trim(), textLength: textInput.value.trim().length });
     const text = textInput.value.trim();
     if (!text) {
+      /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+      console.log('[JARVIS] Send button: empty text, returning early');
       DEBUG.trace('btnSend: empty text, returning early');
       return;
     }
@@ -490,18 +1077,59 @@ if (btnSend) {
     pendingAttachments = [];
     setStatus('Processing…', 'listening');
     try {
+      /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+      console.log('[JARVIS] Preparing to send text message to n8n', { text: text.slice(0, 50), n8nWebhookUrl });
       const attachmentPayload = await filesToAttachmentPayload(attachmentsForPayload);
       await addOcrToAttachments(attachmentPayload);
+      /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+      console.log('[JARVIS] Calling getLLMReply with text payload', { textLength: text.length, hasAttachments: attachmentPayload.length > 0 });
+      
+      // Build payload explicitly to log it before sending (for debugging)
+      const textPayload = buildPayload(text, { source: 'text', attachments: attachmentPayload });
+      /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+      console.log('[JARVIS] Text button payload (full structure):', {
+        message: textPayload.message,
+        source: textPayload.source,
+        session_id: textPayload.session_id,
+        sessionId: textPayload.sessionId,
+        message_id: textPayload.message_id,
+        messageId: textPayload.messageId,
+        timestamp: textPayload.timestamp,
+        timezone: textPayload.timezone,
+        location: textPayload.location,
+        locale: textPayload.locale,
+        language: textPayload.language,
+        attachments: textPayload.attachments?.map(a => ({ 
+          name: a.name, 
+          type: a.type, 
+          size: a.size, 
+          hasData: !!a.data,
+          dataLength: a.data?.length || 0
+        })) || [],
+        payloadKeys: Object.keys(textPayload),
+        payloadSize: JSON.stringify(textPayload).length
+      });
+      DEBUG.trace('Text button: full payload structure', textPayload);
+      
       const { reply: replyText, data: replyData } = await getLLMReply(text, { source: 'text', attachments: attachmentPayload });
+      /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+      console.log('[JARVIS] Received reply from n8n', { replyLength: replyText?.length || 0, hasData: !!replyData });
       appendMessage('assistant', replyText);
       const files = extractFilesFromJson(replyData);
       if (apiKey) {
         setStatus('Speaking…', 'speaking');
         try {
+          /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+          console.log('[JARVIS] Speaking text response...');
+          // speakText() will call connectTTS() internally, which ensures TTS node is initialized
           await bridge.speakText(replyText);
+          /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+          console.log('[JARVIS] Finished speaking text');
           setStatus('Ready');
           if (files.length) await processFileSpecs(files);
         } catch (err) {
+          /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+          console.error('[JARVIS] Error in TTS/speak', err);
           setStatus('Error', 'error');
           appendMessage('assistant', 'Sorry, something went wrong. ' + (err?.message || err));
         }
@@ -510,11 +1138,17 @@ if (btnSend) {
         if (files.length) await processFileSpecs(files);
       }
     } catch (err) {
+      /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+      console.error('[JARVIS] Error in send button handler', err);
       setStatus('Error', 'error');
       appendMessage('assistant', 'Sorry, something went wrong. ' + (err?.message || err));
     }
   });
+  /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+  console.log('[JARVIS] Send button click handler attached');
 } else {
+  /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+  console.error('[JARVIS] btnSend not found - cannot attach click handler');
   DEBUG.error('btnSend not found - cannot attach click handler');
 }
 
@@ -530,6 +1164,14 @@ if (textInput) {
   
   textInput.addEventListener('input', autoResizeTextarea);
   textInput.addEventListener('keydown', (e) => {
+    // Never block DevTools shortcuts (F12, Ctrl+Shift+I, etc.)
+    if (e.key === 'F12' || e.keyCode === 123 ||
+        (e.key === 'I' && (e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey) ||
+        (e.key === 'J' && (e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey) ||
+        (e.key === 'C' && (e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey)) {
+      // Allow DevTools shortcuts to work normally - don't prevent default
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if (btnSend) btnSend.click();
@@ -548,10 +1190,45 @@ if (textInput) {
   DEBUG.error('textInput not found - cannot attach keydown handler');
 }
 
+// Ensure DevTools shortcuts always work at document level (regardless of focus)
+// This prevents any code from accidentally blocking F12 or other DevTools shortcuts
+document.addEventListener('keydown', (e) => {
+  // F12 key (keyCode 123 for compatibility with older browsers)
+  if (e.key === 'F12' || e.keyCode === 123) {
+    // Explicitly allow F12 - never prevent default
+    return;
+  }
+  // Ctrl+Shift+I (Windows/Linux) or Cmd+Option+I (Mac) - Open DevTools
+  if (e.key === 'I' && (e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey) {
+    // Allow - don't prevent default
+    return;
+  }
+  // Ctrl+Shift+J (Windows/Linux) or Cmd+Option+J (Mac) - Open Console
+  if (e.key === 'J' && (e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey) {
+    // Allow - don't prevent default
+    return;
+  }
+  // Ctrl+Shift+C (Windows/Linux) or Cmd+Option+C (Mac) - Inspect Element
+  if (e.key === 'C' && (e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey) {
+    // Allow - don't prevent default
+    return;
+  }
+  // Ctrl+U (Windows/Linux) or Cmd+Option+U (Mac) - View Source
+  if (e.key === 'U' && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+    // Allow - don't prevent default
+    return;
+  }
+}, { capture: true }); // Use capture phase to ensure we run before other handlers
+
 if (btnMic) {
   btnMic.addEventListener('click', async () => {
+    // Always log button clicks (not just in debug mode) for troubleshooting
+    /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+    console.log('[JARVIS] Mic button clicked', { sttActive: bridge.isSTTActive() });
     DEBUG.trace('Mic clicked', { sttActive: bridge.isSTTActive() });
     if (bridge.isSTTActive()) {
+      /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+      console.log('[JARVIS] Stopping STT (mic was active)');
       bridge.stopSTT();
       return;
     }
@@ -577,15 +1254,33 @@ if (btnMic) {
         }
       } catch { /* ignore */ }
       await bridge.startSTT();
-      syncMicButton(true, false);
-      setStatus('Listening…', 'listening');
+      // Check if we're waiting for wake word - if so, show waiting status
+      // Otherwise, STT is active and we should show listening status
+      if (bridge.isWakeWordWaiting()) {
+        syncMicButton(false, false); // Not recording yet, waiting for wake word
+        setStatus('Waiting for wake word…', 'listening');
+      } else {
+        syncMicButton(true, false);
+        setStatus('Listening…', 'listening');
+      }
+      // Update wake word tracker status after mic permission is granted and STT starts
+      // This ensures the tracker shows the correct status after user grants permission
+      if (wakeWordEnabled && picovoiceAccessKey && keywordPaths.length > 0) {
+        setTimeout(() => {
+          updateTrackerStatus();
+        }, 500); // Small delay to ensure wake word is initialized
+      }
     } catch (err) {
       const msg = err?.message || String(err);
       setStatus(msg.startsWith('Mic ') ? msg : 'Mic: ' + msg, 'error');
       syncMicButton(false, false);
     }
   });
+  /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+  console.log('[JARVIS] Mic button click handler attached');
 } else {
+  /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+  console.error('[JARVIS] btnMic not found - cannot attach click handler');
   DEBUG.error('btnMic not found - cannot attach click handler');
 }
 

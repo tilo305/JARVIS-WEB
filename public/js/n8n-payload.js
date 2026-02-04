@@ -1,6 +1,6 @@
 /**
  * Shared n8n webhook payload builder and reply extraction — single source of truth for all n8n requests.
- * Used by: chat UI (app.js), debug tools (check-n8n-webhook, open-app-debug-send), live tests, fallback-revert-debug.
+ * Used by: chat UI (app.js), live tests, fallback-revert-debug.
  * Ensures session_id, timezone, location, and all fields are always sent; reply parsing handles arrays and n8n item format.
  */
 'use strict';

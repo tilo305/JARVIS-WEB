@@ -105,16 +105,29 @@ So the **browser path** (bridge + Vite) and one debug tool use an **older** vers
 
 ## 4. Summary table
 
-| Category        | Item                          | Location(s)                                      | Action |
-|----------------|-------------------------------|---------------------------------------------------|--------|
-| Duplicate      | `getNaturalFallback`         | Done   | Single export from n8n-payload.js |
-| Duplicate      | `escapeHtml`                 | Optional | Still in app.js + fallback-revert-debug.html |
-| Duplicate      | Debug n8n fetch + reply      | Done   | JARVIS_DEBUG_SEND_TEST uses getLLMReply |
-| Duplicate      | `float32ToInt16` / floatTo16BitPCM | Done   | float32ToInt16 calls floatTo16BitPCM |
-| Duplicate      | Default webhook URL          | Done   | Removed PRODUCTION_WEBHOOK_URL from open-app-debug-send.mjs |
-| Old            | Cartesia API version         | Done   | 2025-04-16 everywhere,  comment “match config” |
-| Orphaned       | (none critical)              | —      | audio-utils float* used only in tests — keep as public API |
+| Category        | Item                          | Location(s)                                      | Action | Status |
+|----------------|-------------------------------|---------------------------------------------------|--------|--------|
+| Duplicate      | `getNaturalFallback`         | `public/js/n8n-payload.js` (exported) | ✅ Fixed | Single export, imported in app.js and fallback-revert-debug.html |
+| Duplicate      | `escapeHtml`                 | `app.js` + `fallback-revert-debug.html` | ⚠️ Optional | Minor duplicate, debug page intentionally self-contained |
+| Duplicate      | Debug n8n fetch + reply      | `app.js` - `JARVIS_DEBUG_SEND_TEST()` | ✅ Fixed | Now uses `getLLMReply()` |
+| Duplicate      | `float32ToInt16` / floatTo16BitPCM | `public/js/audio-utils.js` | ✅ Fixed | `float32ToInt16` calls `floatTo16BitPCM` |
+| Duplicate      | Default webhook URL          | Multiple files | ✅ Fixed | Removed `PRODUCTION_WEBHOOK_URL` duplicate |
+| Old            | Cartesia API version         | All files | ✅ Fixed | `2025-04-16` everywhere, comments added |
+| Orphaned       | (none critical)              | —      | ✅ Verified | audio-utils float* used only in tests — keep as public API |
 
 ---
 
-*Last updated after cleanup. One optional duplicate remains: escapeHtml (app.js + fallback-revert-debug.html).*
+## 5. Current Status (2026-02-02)
+
+**All critical duplicates have been fixed.** The codebase is in excellent condition:
+
+- ✅ `getNaturalFallback` - Single source of truth in `n8n-payload.js`
+- ✅ `float32ToInt16` - Delegates to `floatTo16BitPCM`
+- ✅ `JARVIS_DEBUG_SEND_TEST` - Uses `getLLMReply`
+- ✅ Cartesia API version - `2025-04-16` everywhere
+- ✅ Webhook URL - No duplicate constants
+- ⚠️ `escapeHtml` - Minor duplicate (optional cleanup, debug page intentionally self-contained)
+
+**No orphaned code or unused imports found.**
+
+See `CODE-AUDIT-REPORT.md` for detailed verification.

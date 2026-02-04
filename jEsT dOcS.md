@@ -1,4 +1,4 @@
-# JARVIS Desktop Voice AI - Jest Testing Documentation
+# JARVIS-WEB - Jest Testing Documentation
 
 ## 🚨 CRITICAL: MANDATORY RESEARCH PROTOCOL (MUST READ FIRST)
 
@@ -13,7 +13,7 @@
 
 #### 2. THEN RESEARCH THIS DOCUMENT
 - After researching jestjs.io/docs, read this document thoroughly
-- This document is **Jest project-specific** for the JARVIS desktop application
+- This document is **Jest project-specific** for the JARVIS-WEB application
 - Covers project-specific patterns, configurations, and implementations
 - Both documents are complementary and should be used together
 
@@ -23,7 +23,7 @@
    ↓
 2. This document (Project-specific Jest implementation)
    ↓
-3. Related testing docs (Electron testing, E2E testing, etc.)
+3. Related testing docs (Web testing, E2E testing, etc.)
 ```
 
 #### 4. WHY THIS ORDER MATTERS
@@ -41,54 +41,54 @@
 ---
 
 ## 📋 Table of Contents
-1. [Desktop Getting Started](#desktop-getting-started)
-2. [Desktop Installation & Setup](#desktop-installation--setup)
-3. [Desktop Configuration](#desktop-configuration)
-4. [Desktop Writing Tests](#desktop-writing-tests)
-5. [Desktop Testing Patterns](#desktop-testing-patterns)
-6. [Desktop Mocking](#desktop-mocking)
-7. [Desktop Async Testing](#desktop-async-testing)
-8. [Desktop Coverage](#desktop-coverage)
-9. [Desktop Advanced Features](#desktop-advanced-features)
-10. [Desktop Project-Specific Setup](#desktop-project-specific-setup)
-11. [Desktop Best Practices](#desktop-best-practices)
-12. [Desktop Troubleshooting](#desktop-troubleshooting)
+1. [Getting Started](#getting-started)
+2. [Installation & Setup](#installation--setup)
+3. [Configuration](#configuration)
+4. [Writing Tests](#writing-tests)
+5. [Testing Patterns](#testing-patterns)
+6. [Mocking](#mocking)
+7. [Async Testing](#async-testing)
+8. [Coverage](#coverage)
+9. [Advanced Features](#advanced-features)
+10. [Project-Specific Setup](#project-specific-setup)
+11. [Best Practices](#best-practices)
+12. [Troubleshooting](#troubleshooting)
 
 ---
 
-## 🚀 Desktop Getting Started
+## 🚀 Getting Started
 
-### What is Jest for JARVIS Desktop?
-Jest is a JavaScript testing framework designed to ensure correctness of any JavaScript codebase. For JARVIS Desktop Voice AI, Jest provides comprehensive testing for desktop applications, Electron integration, and real-time audio processing.
+### What is Jest for JARVIS-WEB?
+Jest is a JavaScript testing framework designed to ensure correctness of any JavaScript codebase. For JARVIS-WEB, Jest provides comprehensive testing for web applications, WebSocket integration, and real-time audio processing.
 
-### Desktop Key Features
-- **Zero Configuration**: Works out of the box for desktop applications
-- **Snapshots**: Capture large objects with ease for desktop testing
-- **Isolated**: Tests run in parallel processes for desktop performance
-- **Great API**: Built-in matchers and assertions for desktop validation
-- **Code Coverage**: Built-in coverage reports for desktop applications
-- **Mocking**: Powerful mocking capabilities for desktop services
-- **Desktop Integration**: Specialized testing for Electron applications
-- **Real-time Testing**: Testing for live audio processing and system monitoring
+### Key Features
+- **Zero Configuration**: Works out of the box for web applications
+- **Snapshots**: Capture large objects with ease for web testing
+- **Isolated**: Tests run in parallel processes for web performance
+- **Great API**: Built-in matchers and assertions for web validation
+- **Code Coverage**: Built-in coverage reports for web applications
+- **Mocking**: Powerful mocking capabilities for web services
+- **Web Integration**: Specialized testing for browser and Node.js environments
+- **Real-time Testing**: Testing for live audio processing and WebSocket communication
 
 ---
 
-## 📦 Desktop Installation & Setup
+## 📦 Installation & Setup
 
-### Desktop Basic Installation
+### Basic Installation
 
 ```bash
-# Using npm for desktop applications
+# Using npm for web applications
 npm install --save-dev jest @jest/globals
 
-# Install desktop-specific testing dependencies
+# Install web-specific testing dependencies
 npm install --save-dev @testing-library/jest-dom
 
-# Install Electron testing support
-npm install --save-dev electron
+# Install TypeScript support
+npm install --save-dev @types/jest ts-jest babel-jest
 ```
 
-### Desktop TypeScript Support
+### TypeScript Support
 
 ```bash
 # Install TypeScript support
@@ -117,7 +117,7 @@ Add to your `package.json`:
 
 ## ⚙️ Configuration
 
-### Basic Configuration (`jest.config.js`)
+### Basic Configuration (`jest.config.cjs`)
 
 ```javascript
 export default {
@@ -730,7 +730,7 @@ test.each([
 
 ## 🏗️ Project-Specific Setup
 
-### JARVIS-VISION Jest Configuration
+### JARVIS-WEB Jest Configuration
 
 Based on your current project setup:
 
@@ -1168,7 +1168,7 @@ node --inspect-brk node_modules/.bin/jest --runInBand
 
 Jest is a powerful testing framework that provides everything you need to test your JavaScript applications. With proper configuration and following best practices, you can create comprehensive test suites that ensure your code quality and reliability.
 
-For the JARVIS-VISION project, Jest is already configured and ready to use. The existing test structure provides a solid foundation for expanding test coverage and ensuring the reliability of your voice AI system.
+For the JARVIS-WEB project, Jest is already configured and ready to use. The existing test structure provides a solid foundation for expanding test coverage and ensuring the reliability of your voice AI system.
 
 Remember:
 - Write tests that are easy to understand and maintain

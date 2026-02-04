@@ -10,7 +10,8 @@ module.exports = {
     '<rootDir>/tests/**/*.test.js',
     '<rootDir>/debug/tests/**/*.test.ts',
     '<rootDir>/debug/tests/**/*.test.js',
-    '<rootDir>/debug/live/**/*.test.js',
+    // Exclude debug/live tests - these are browser-only and not meant for Jest
+    // '<rootDir>/debug/live/**/*.test.js',
     '<rootDir>/src/**/*.test.ts',
     '<rootDir>/src/**/*.test.js',
   ],

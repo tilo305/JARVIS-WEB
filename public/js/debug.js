@@ -48,3 +48,15 @@ const DEBUG = {
 
 DEBUG.init();
 export { DEBUG };
+
+/**
+ * Escape HTML special characters to prevent XSS
+ * @param {string} s - String to escape
+ * @returns {string} Escaped HTML string
+ */
+export function escapeHtml(s) {
+  if (typeof s !== 'string') return String(s);
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}

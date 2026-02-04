@@ -28,12 +28,10 @@
     "ci": "npm run build && npm run lint:check && npm run test:coverage",
     "verify": "npm run lint:check && npm run build && npm test",
     "debug": "node debug/run-debug-suite.mjs",
-    "debug:n8n": "npm run build && node debug/tools/check-n8n-webhook.js",
-    "debug:stt": "npm run build && node debug/tools/check-stt-sample-rate.js",
-    "debug:app": "node debug/tools/open-app-debug-send.mjs",
-    "debug:config": "npm run build && node debug/tools/validate-config.js",
     "debug:live": "jest debug/live",
-    "debug:env": "node debug/live/check-env.js",
+    "test:wakeword": "node debug/tools/test-wake-word-detection.js",
+    "test:wakeword:activation": "node debug/tools/test-wake-word-activation-flow.js",
+    "test:wakeword:cli": "node debug/tools/wake-word-activation-test-cli.js",
     "test:debug": "jest --coverage > debug/results/latest-test-run.txt 2>&1",
     "test:integration": "jest debug/tests/integration"
   },
@@ -48,6 +46,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@picovoice/porcupine-web": "^4.0.0",
     "@ricky0123/vad-web": "^0.0.30",
     "jspdf": "^4.1.0",
     "tesseract.js": "^5.1.0",

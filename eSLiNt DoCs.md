@@ -1,8 +1,8 @@
 # ESLint Documentation - Complete Guide
 
 ## 📁 Directory Context
-**Root**: `C:\Users\lazar\Downloads\Everything AI\Github\JARVIS-KING`
-**File Location**: `C:\Users\lazar\Downloads\Everything AI\Github\JARVIS-KING\eSlInT dOcS.md`
+**Root**: `C:\Users\lazar\Downloads\GitHub\JARVIS-WEB`
+**File Location**: `C:\Users\lazar\Downloads\GitHub\JARVIS-WEB\eSLiNt DoCs.md`
 
 ---
 
@@ -732,15 +732,15 @@ export default defineConfig([
 
 ## 🔧 Integration with Project
 
-### JARVIS-KING Integration
+### JARVIS-WEB Integration
 
 #### Current Setup
 
 Based on the project structure:
 
-**Root**: `C:\Users\lazar\Downloads\Everything AI\Github\JARVIS-KING`
+**Root**: `C:\Users\lazar\Downloads\GitHub\JARVIS-WEB`
 
-**Configuration file**: `C:\Users\lazar\Downloads\Everything AI\Github\JARVIS-KING\eslint.config.js`
+**Configuration file**: `C:\Users\lazar\Downloads\GitHub\JARVIS-WEB\eslint.config.js`
 
 #### Recommended Configuration for This Project
 
@@ -767,20 +767,20 @@ export default defineConfig([
         extends: ["js/recommended"],
     },
     
-    // Main process (Electron)
+    // Server files (Node.js)
     {
-        files: ["src/main.js", "src/preload.js"],
+        files: ["server.js", "scripts/**/*.mjs"],
         languageOptions: {
             globals: {
                 ...globals.node,
             },
         },
         rules: {
-            "no-console": "off",  // Console allowed in Electron main
+            "no-console": "off",  // Console allowed in server files
         },
     },
     
-    // Renderer process
+    // Browser JavaScript
     {
         files: ["public/**/*.js"],
         languageOptions: {
@@ -793,17 +793,17 @@ export default defineConfig([
         },
     },
     
-    // Services
+    // TypeScript source files
     {
-        files: ["src/services/**/*.js"],
+        files: ["src/**/*.ts"],
         languageOptions: {
             globals: {
                 ...globals.node,
             },
         },
         rules: {
-            "no-unused-vars": "warn",
-            "no-undef": "error",
+            "no-unused-vars": "off",  // Handled by TypeScript
+            "no-undef": "off",  // Handled by TypeScript
         },
     },
     

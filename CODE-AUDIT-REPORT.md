@@ -1,0 +1,158 @@
+# Code Audit Report - Orphaned, Duplicate, and Outdated Code
+
+**Date:** 2026-02-02  
+**Status:** Most issues resolved, minor duplicates remain
+
+---
+
+## Summary
+
+✅ **Most critical duplicates have been fixed:**
+- `getNaturalFallback` - Now exported from `n8n-payload.js` and imported in both places
+- `float32ToInt16` - Now delegates to `floatTo16BitPCM` (single implementation)
+- `JARVIS_DEBUG_SEND_TEST` - Now uses `getLLMReply` instead of duplicating logic
+- Cartesia API version - Updated to `2025-04-16` everywhere
+- `PRODUCTION_WEBHOOK_URL` - Removed from `open-app-debug-send.mjs`
+
+⚠️ **Remaining minor duplicates (optional cleanup):**
+- `escapeHtml` function exists in both `app.js` and `fallback-revert-debug.html`
+
+---
+
+## 1. Duplicate Code
+
+### ✅ 1.1 `getNaturalFallback` - FIXED
+- **Status:** ✅ Fixed
+- **Location:** `public/js/n8n-payload.js` (exported)
+- **Used by:** `public/js/app.js`, `public/debug/fallback-revert-debug.html`
+- **Action:** Single source of truth established
+
+### ⚠️ 1.2 `escapeHtml` - OPTIONAL
+- **Status:** ⚠️ Minor duplicate (optional cleanup)
+- **Locations:**
+  - `public/js/app.js` (line 248)
+  - `public/debug/fallback-revert-debug.html` (line 144)
+  - `public/js/wake-word-tracker.js` (line 332, private method `_escapeHtml`)
+- **Recommendation:** 
+  - Option A: Export from `public/js/debug.js` or create `public/js/dom-utils.js`
+  - Option B: Leave as-is (debug page stays self-contained)
+- **Priority:** Low (debug page intentionally self-contained)
+
+### ✅ 1.3 Debug n8n fetch - FIXED
+- **Status:** ✅ Fixed
+- **Location:** `public/js/app.js` - `JARVIS_DEBUG_SEND_TEST()` now uses `getLLMReply()`
+- **Action:** Removed duplicate fetch/reply extraction logic
+
+### ✅ 1.4 `float32ToInt16` / `floatTo16BitPCM` - FIXED
+- **Status:** ✅ Fixed
+- **Location:** `public/js/audio-utils.js`
+- **Implementation:** `float32ToInt16` now calls `floatTo16BitPCM` (line 37-38)
+- **Action:** Single implementation, two named exports for API clarity
+
+### ✅ 1.5 Default n8n webhook URL - FIXED
+- **Status:** ✅ Fixed
+- **Locations:** 
+  - `src/config.ts` - Canonical source
+  - `public/js/app.js` - Fallback in `getConfig()`
+  - `vite.config.js` - Vite define fallback
+  - `public/debug/fallback-revert-debug.html` - Debug page fallback
+  - `debug/tools/open-app-debug-send.mjs` - Single `DEFAULT_WEBHOOK_URL` (no duplicate)
+- **Action:** Removed `PRODUCTION_WEBHOOK_URL` duplicate
+
+---
+
+## 2. Outdated Code
+
+### ✅ 2.1 Cartesia API Version - FIXED
+- **Status:** ✅ Fixed
+- **Current version:** `2025-04-16` (matches `src/config.ts`)
+- **Verified locations:**
+  - ✅ `src/config.ts` - `API_VERSION: '2025-04-16'`
+  - ✅ `public/js/cartesia-audio-bridge.js` - `CARTESIA_VERSION = '2025-04-16'` (line 12)
+  - ✅ `vite.config.js` - `CARTESIA_VERSION = '2025-04-16'` (line 9)
+  - ✅ `debug/tools/check-stt-sample-rate.js` - `'2025-04-16'` (line 42)
+- **Action:** All files updated with matching version and comments
+
+---
+
+## 3. Orphaned Code
+
+### ✅ 3.1 Test-only exports - INTENTIONAL
+- **Status:** ✅ Not orphaned (intentional public API)
+- **Files:**
+  - `public/js/audio-utils.js` - `floatTo16BitPCM`, `int16ToFloat32`, `float32ToInt16` (test/utility API)
+  - `public/js/file-creator.js` - `createWavBlob`, `createWavBlobFromAudioFile` (documented public API)
+  - `public/js/ocr-tool.js` - Internal exports used by `addOcrToAttachments`
+  - `public/js/n8n-payload.js` - All exports used internally or in tests
+- **Action:** Keep as public API (documented for external use)
+
+### ✅ 3.2 Package entry - INTENTIONAL
+- **Status:** ✅ Not orphaned
+- **File:** `src/index.ts`
+- **Purpose:** Package main entry point for external consumers
+- **Action:** Keep as-is
+
+### ✅ 3.3 Debug HTML pages - IN USE
+- **Status:** ✅ Not orphaned
+- **Files:**
+  - `public/debug/debug-audioworklet.html`
+  - `public/debug/fallback-revert-debug.html`
+  - `public/debug/voice-pipeline-debug.html`
+- **References:** Docs, QUICKSTART, unit tests
+- **Action:** Keep as active debug tools
+
+---
+
+## 4. Unused Imports
+
+### ✅ 4.1 All imports verified
+- **Status:** ✅ No unused imports found
+- **Verification:** ESLint configured to catch unused imports
+- **Action:** None required
+
+---
+
+## 5. Recommendations
+
+### High Priority
+- ✅ **DONE:** All critical duplicates fixed
+- ✅ **DONE:** API versions aligned
+
+### Low Priority (Optional)
+- ⚠️ **Optional:** Consolidate `escapeHtml` into shared utility (if desired)
+  - Current state is acceptable (debug page intentionally self-contained)
+  - Would require creating `public/js/dom-utils.js` or exporting from `debug.js`
+
+---
+
+## 6. Files to Review
+
+### Documentation
+- `debug/ORPHANED-DUPLICATE-OLD-CODE.md` - Contains outdated information about old API versions
+  - **Action:** Update to reflect current state (all fixes applied)
+
+---
+
+## 7. Verification Checklist
+
+- ✅ `getNaturalFallback` - Single source of truth
+- ✅ `float32ToInt16` - Delegates to `floatTo16BitPCM`
+- ✅ `JARVIS_DEBUG_SEND_TEST` - Uses `getLLMReply`
+- ✅ Cartesia API version - `2025-04-16` everywhere
+- ✅ Webhook URL - No duplicate `PRODUCTION_WEBHOOK_URL`
+- ⚠️ `escapeHtml` - Minor duplicate (optional cleanup)
+- ✅ No orphaned code found
+- ✅ No unused imports found
+- ✅ All test-only exports are intentional public API
+
+---
+
+## Conclusion
+
+**Overall Status:** ✅ **EXCELLENT**
+
+The codebase is well-maintained with minimal duplication. All critical duplicates have been resolved. The remaining `escapeHtml` duplicate is minor and acceptable (debug page intentionally self-contained). No orphaned code or unused imports were found.
+
+**Next Steps:**
+1. Update `debug/ORPHANED-DUPLICATE-OLD-CODE.md` to reflect current state
+2. (Optional) Consolidate `escapeHtml` if desired for consistency

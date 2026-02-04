@@ -125,17 +125,6 @@ export class CartesiaSTTClient {
   }
 
   /**
-   * Configure STT session
-   * @deprecated Configuration is now done via URL query params in connect()
-   * This method is kept for backwards compatibility but is no longer called
-   */
-  private configure(): void {
-    // Configuration is now done via URL query params in connect()
-    // This method is kept for backwards compatibility
-    console.warn('[STT] configure() called but config is now via URL params');
-  }
-
-  /**
    * Handle incoming WebSocket messages
    */
   private handleMessage(data: WebSocket.Data): void {

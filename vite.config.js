@@ -100,6 +100,7 @@ export default defineConfig(({ mode }) => {
           { src: 'audio/*', dest: 'audio' },
           { src: 'debug/*.html', dest: 'debug' },
           { src: 'js/n8n-payload.js', dest: 'js' },
+          { src: 'keywords/*', dest: 'keywords' }, // Porcupine keyword files (.ppn)
         ],
       }),
       cartesiaWebSocketStatusPlugin(),
@@ -107,6 +108,13 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: join(__dirname, 'dist-public'), // absolute path to project root
       emptyOutDir: true,
+    },
+    optimizeDeps: {
+      include: ['@picovoice/porcupine-web'],
+      esbuildOptions: {
+        // Ensure proper handling of ESM packages
+        target: 'es2022',
+      },
     },
     server: {
       port: Number(process.env.PORT) || 3000,
@@ -122,6 +130,11 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.VITE_N8N_WEBHOOK_URL': JSON.stringify(
         env.VITE_N8N_WEBHOOK_URL || 'https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4'
       ),
+      'import.meta.env.VITE_PICOVOICE_ACCESS_KEY': JSON.stringify(env.VITE_PICOVOICE_ACCESS_KEY || env.PICOVOICE_ACCESS_KEY || ''),
+      'import.meta.env.VITE_PORCUPINE_KEYWORD': JSON.stringify(env.VITE_PORCUPINE_KEYWORD || env.PORCUPINE_KEYWORD || ''),
+      'import.meta.env.VITE_PORCUPINE_SENSITIVITY': JSON.stringify(env.VITE_PORCUPINE_SENSITIVITY || env.PORCUPINE_SENSITIVITY || '0.5'),
+      'import.meta.env.VITE_WAKE_WORD_ENABLED': JSON.stringify(env.VITE_WAKE_WORD_ENABLED || env.WAKE_WORD_ENABLED || 'false'),
+      'import.meta.env.VITE_DEBUG_WAKE_WORD': JSON.stringify(env.VITE_DEBUG_WAKE_WORD || env.DEBUG_WAKE_WORD || 'false'),
     },
   };
 });

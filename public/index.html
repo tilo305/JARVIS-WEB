@@ -159,6 +159,8 @@
         inset 0 1px 0 rgba(255, 255, 255, 0.12),
         0 0 30px rgba(196, 30, 58, 0.2),
         0 0 20px rgba(255, 184, 0, 0.15);
+      overflow: hidden;
+      min-width: 0;
     }
     .header::after {
       content: '';
@@ -321,6 +323,8 @@
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      flex-shrink: 0;
+      white-space: nowrap;
     }
     .header .status::before {
       content: '';
@@ -400,6 +404,200 @@
     .header-actions .btn-icon {
       width: 40px;
       height: 40px;
+    }
+
+    /* Wake Word Tracker Inline Styles (in header) */
+    .wake-word-tracker-inline {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-left: 1rem;
+      margin-right: 1rem;
+      flex: 1;
+      min-width: 0;
+      max-width: 100%;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    .wake-word-tracker-inline .tracker-status {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.25rem 0.375rem;
+      background: rgba(42, 52, 65, 0.4);
+      border: 1px solid rgba(196, 30, 58, 0.3);
+      border-radius: var(--radius-sm);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+    .wake-word-tracker-inline .tracker-status-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      box-shadow: 0 0 8px currentColor;
+      transition: all var(--ease-material) 300ms;
+      flex-shrink: 0;
+    }
+    .wake-word-tracker-inline .tracker-status-indicator.active {
+      background: var(--gold-bright);
+      box-shadow: 
+        0 0 12px var(--gold),
+        0 0 24px var(--gold);
+      animation: statusPulse 1.2s var(--ease-in-out) infinite;
+    }
+    .wake-word-tracker-inline .tracker-status-indicator.error {
+      background: var(--red);
+      box-shadow: 
+        0 0 12px var(--red),
+        0 0 24px var(--red);
+    }
+    .wake-word-tracker-inline .tracker-status-indicator.waiting {
+      background: var(--iron-red-bright);
+      box-shadow: 
+        0 0 12px var(--iron-red),
+        0 0 24px var(--iron-red);
+      animation: statusPulse 1.2s var(--ease-in-out) infinite;
+    }
+    .wake-word-tracker-inline #trackerStatusText {
+      font-size: 0.625rem;
+      color: var(--text);
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100px;
+    }
+    .wake-word-tracker-inline .tracker-metrics {
+      display: flex;
+      gap: 0.375rem;
+      flex-shrink: 0;
+      align-items: center;
+    }
+    .wake-word-tracker-inline .metric-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0.2rem 0.3rem;
+      background: rgba(42, 52, 65, 0.4);
+      border: 1px solid rgba(255, 184, 0, 0.2);
+      border-radius: var(--radius-sm);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      min-width: 45px;
+      flex-shrink: 0;
+    }
+    .wake-word-tracker-inline .metric-label {
+      font-size: 0.5rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.0625rem;
+      line-height: 1;
+    }
+    .wake-word-tracker-inline .metric-value {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      color: var(--gold-bright);
+      text-shadow: 0 0 10px rgba(255, 184, 0, 0.5);
+      line-height: 1;
+    }
+    .wake-word-tracker-inline .tracker-events {
+      display: none; /* Hide events in header to save space */
+    }
+    .wake-word-tracker-inline .tracker-events-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 0.25rem;
+      border-bottom: 1px solid rgba(255, 184, 0, 0.2);
+    }
+    .wake-word-tracker-inline .tracker-events-header span {
+      font-size: 0.625rem;
+      font-weight: 600;
+      color: var(--text);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .wake-word-tracker-inline .btn-clear-events {
+      font-size: 0.5625rem;
+      padding: 0.125rem 0.25rem;
+      border: 1px solid rgba(255, 184, 0, 0.3);
+      border-radius: 6px;
+      background: rgba(42, 52, 65, 0.4);
+      color: var(--gold);
+      cursor: pointer;
+      transition: all var(--ease-material) 200ms;
+    }
+    .wake-word-tracker-inline .btn-clear-events:hover {
+      background: rgba(255, 184, 0, 0.2);
+      border-color: var(--gold);
+      box-shadow: 0 0 10px rgba(255, 184, 0, 0.3);
+    }
+    .wake-word-tracker-inline .tracker-events-list {
+      max-height: 60px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    .wake-word-tracker-inline .tracker-events-list::-webkit-scrollbar {
+      width: 3px;
+    }
+    .wake-word-tracker-inline .tracker-events-list::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .wake-word-tracker-inline .tracker-events-list::-webkit-scrollbar-thumb {
+      background: rgba(255, 184, 0, 0.3);
+      border-radius: 2px;
+    }
+    .wake-word-tracker-inline .tracker-event {
+      padding: 0.25rem 0.375rem;
+      background: rgba(196, 30, 58, 0.15);
+      border: 1px solid rgba(196, 30, 58, 0.3);
+      border-radius: var(--radius-sm);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      display: flex;
+      flex-direction: column;
+      gap: 0.125rem;
+      animation: fadeIn 300ms var(--ease-out);
+    }
+    .wake-word-tracker-inline .tracker-event-time {
+      font-size: 0.5rem;
+      color: var(--text-muted);
+      font-family: 'Courier New', monospace;
+    }
+    .wake-word-tracker-inline .tracker-event-details {
+      font-size: 0.625rem;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+    .wake-word-tracker-inline .tracker-event-keyword {
+      font-weight: 600;
+      color: var(--gold-bright);
+      text-shadow: 0 0 8px rgba(255, 184, 0, 0.5);
+    }
+    .wake-word-tracker-inline .tracker-event-latency {
+      font-size: 0.5625rem;
+      color: var(--text-muted);
+      margin-left: auto;
+    }
+    .wake-word-tracker-inline .tracker-empty {
+      padding: 0.25rem;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.625rem;
+      font-style: italic;
+    }
+    @media (max-width: 768px) {
+      .wake-word-tracker-inline {
+        display: none; /* Hide on mobile to save space */
+      }
     }
 
     .chat-container {
@@ -948,6 +1146,7 @@
         height: 44px;
       }
     }
+
   </style>
 </head>
 <body>
@@ -955,6 +1154,36 @@
   <header class="header">
     <div class="logo" aria-hidden="true"></div>
     <h1>JARVIS</h1>
+    <!-- Wake Word Tracker Content (inline in header) -->
+    <div class="wake-word-tracker-inline" id="wakeWordTracker">
+      <div class="tracker-status" id="trackerStatus">
+        <div class="tracker-status-indicator" id="trackerStatusIndicator"></div>
+        <span id="trackerStatusText">Initializing...</span>
+      </div>
+      <div class="tracker-metrics">
+        <div class="metric-item">
+          <span class="metric-label">Detections</span>
+          <span class="metric-value" id="metricDetections">0</span>
+        </div>
+        <div class="metric-item">
+          <span class="metric-label">Avg Latency</span>
+          <span class="metric-value" id="metricLatency">0ms</span>
+        </div>
+        <div class="metric-item">
+          <span class="metric-label">Uptime</span>
+          <span class="metric-value" id="metricUptime">0s</span>
+        </div>
+      </div>
+      <div class="tracker-events" id="trackerEvents">
+        <div class="tracker-events-header">
+          <span>Recent Detections</span>
+          <button type="button" class="btn-clear-events" id="btnClearEvents" aria-label="Clear events">Clear</button>
+        </div>
+        <div class="tracker-events-list" id="trackerEventsList">
+          <div class="tracker-empty">No detections yet</div>
+        </div>
+      </div>
+    </div>
     <span class="status" id="status">Ready</span>
     <div class="header-actions">
       <button type="button" class="btn-icon btn-export" id="btnExportPdf" title="Export chat to PDF" aria-label="Export chat to PDF">
@@ -1001,6 +1230,7 @@
   </div>
   </div>
 
+
   <script>
     window.JARVIS_CONFIG = window.JARVIS_CONFIG || {};
     // Cartesia API Configuration
@@ -1008,8 +1238,46 @@
     window.JARVIS_CONFIG.voiceId = '95131c95-525c-463b-893d-803bafdf93c4';
     
     // Enable debug: ?debug=1 in URL, or set window.JARVIS_DEBUG = true
-    if (/[?&]debug=1/.test(location.search) || /[?&]debug=true/.test(location.search)) {
+    const isDebugMode = /[?&]debug=1/.test(location.search) || /[?&]debug=true/.test(location.search);
+    if (isDebugMode) {
       window.JARVIS_DEBUG = true;
+    }
+    
+    // Show dev tools access hint in console (always available, not just in debug mode)
+    if (typeof console !== 'undefined' && console.log) {
+      console.log('%c[JARVIS] DevTools Access:', 'color: #FFB800; font-weight: bold;');
+      console.log('  Method 1: Press F12 (if blocked, try methods below)');
+      console.log('  Method 2: Right-click anywhere → "Inspect" or "Inspect Element"');
+      console.log('  Method 3: Ctrl+Shift+I (Windows/Linux) or Cmd+Option+I (Mac)');
+      console.log('  Method 4: Browser menu → More Tools → Developer Tools');
+      console.log('  Method 5: Ctrl+Shift+J (Windows/Linux) or Cmd+Option+J (Mac) - Console only');
+      if (isDebugMode) {
+        console.log('%c[JARVIS] Debug mode enabled! Check console for debug functions.', 'color: #FFB800; font-weight: bold; font-size: 14px;');
+        console.log('  Run JARVIS_DEBUG_OPEN_DEVTOOLS() if F12 is blocked');
+      } else {
+        console.log('  Add ?debug=1 to URL for enhanced debug logging');
+      }
+    }
+    
+    // Fallback: Ensure status text updates even if main script fails
+    // This runs after DOM is ready to update the status
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(function() {
+          const statusEl = document.getElementById('trackerStatusText');
+          if (statusEl && statusEl.textContent === 'Initializing...') {
+            // If still initializing after 2 seconds, update to show we're checking
+            statusEl.textContent = 'Checking status...';
+          }
+        }, 2000);
+      });
+    } else {
+      setTimeout(function() {
+        const statusEl = document.getElementById('trackerStatusText');
+        if (statusEl && statusEl.textContent === 'Initializing...') {
+          statusEl.textContent = 'Checking status...';
+        }
+      }, 2000);
     }
   </script>
   <script type="module" src="./js/app.js"></script>

@@ -101,7 +101,7 @@ export default tseslint.config(
     },
   },
 
-  // Debug scripts and live tests (Node + Jest)
+  // Debug scripts and live tests (Node + Jest + Browser)
   {
     files: ["debug/**/*.js", "debug/**/*.mjs"],
     languageOptions: {
@@ -110,6 +110,7 @@ export default tseslint.config(
       globals: {
         ...globals.node,
         ...globals.jest,
+        ...globals.browser,
       },
     },
     rules: {
