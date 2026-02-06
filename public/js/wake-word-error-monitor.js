@@ -29,7 +29,12 @@ export class WakeWordErrorMonitor {
     this.errorHistory = [];
     this.fixHistory = [];
     this.maxHistorySize = 100;
-    
+
+    /** Cooldown (ms) before retrying init after an initialization timeout. Prevents cascade of retries. */
+    this.initializationTimeoutCooldownMs = 18000;
+    /** Last time _fixInitializationTimeout ran (attempted fix). */
+    this._lastInitializationTimeoutFixTime = 0;
+
     // Original console methods (for restoration)
     this._originalConsoleError = null;
     this._originalConsoleWarn = null;
@@ -49,6 +54,15 @@ export class WakeWordErrorMonitor {
         /picovoice.*access.*key.*invalid/i,
         /access.*key.*authentication/i,
         /unauthorized.*access.*key/i
+      ],
+      
+      // Picovoice activation refused (invalid/expired key, quota, or domain) - do not retry
+      activationRefused: [
+        /PorcupineActivationRefusedError/i,
+        /ActivationRefused/i,
+        /_status.*10011|10011.*_status/i,
+        /"_status"\s*:\s*10011/i,
+        /activation.*refused/i
       ],
       
       // Keyword file errors
@@ -252,8 +266,9 @@ export class WakeWordErrorMonitor {
       ]
     };
     
-    // Fix strategies
+    // Fix strategies (activationRefused must be before porcupineError so we don't reinit on invalid key)
     this.fixStrategies = {
+      activationRefused: this._fixActivationRefused.bind(this),
       invalidAccessKey: this._fixInvalidAccessKey.bind(this),
       keywordFileNotFound: this._fixKeywordFileNotFound.bind(this),
       initializationTimeout: this._fixInitializationTimeout.bind(this),
@@ -490,6 +505,19 @@ export class WakeWordErrorMonitor {
   // ========== Fix Strategies ==========
   
   /**
+   * Activation refused (invalid/expired key, quota, or domain) - do NOT reinitialize.
+   * Reinitializing would just fail again and spam the console.
+   */
+  // eslint-disable-next-line no-unused-vars
+  _fixActivationRefused(_errorEntry) {
+    return {
+      fixed: false,
+      reason: 'Wake word connection failed.',
+      suggestion: 'Is the OpenWakeWord server running? Run: python scripts/openwakeword-server.py. Use the mic button to talk.'
+    };
+  }
+  
+  /**
    * Fix: Invalid AccessKey
    */
   // eslint-disable-next-line no-unused-vars
@@ -498,47 +526,34 @@ export class WakeWordErrorMonitor {
       return { fixed: false, reason: 'No bridge instance available' };
     }
     
-    // Check if AccessKey is in window.JARVIS_CONFIG
+    // Check if openWakeWord is configured
     if (typeof window !== 'undefined' && window.JARVIS_CONFIG) {
-      const accessKey = window.JARVIS_CONFIG.picovoiceAccessKey;
+      const wsUrl = window.JARVIS_CONFIG.openWakeWordWsUrl || import.meta?.env?.VITE_OPENWAKEWORD_WS_URL;
       
-      if (!accessKey || accessKey.trim().length === 0) {
+      if (!wsUrl || typeof wsUrl !== 'string' || !wsUrl.trim()) {
         return {
           fixed: false,
-          reason: 'AccessKey not found in window.JARVIS_CONFIG.picovoiceAccessKey',
-          suggestion: 'Please set window.JARVIS_CONFIG.picovoiceAccessKey with your Picovoice AccessKey from https://console.picovoice.ai/'
+          reason: 'OpenWakeWord WebSocket URL not found',
+          suggestion: 'Set VITE_OPENWAKEWORD_WS_URL=ws://localhost:8765/ws and run: python scripts/openwakeword-server.py'
         };
       }
       
-      // AccessKey exists but might be invalid - try to reinitialize
-      if (this.bridge.options && this.bridge.options.picovoiceAccessKey !== accessKey) {
-        this.bridge.options.picovoiceAccessKey = accessKey;
-        DEBUG.trace('WakeWordErrorMonitor: Updated AccessKey in bridge options');
-        
-        // Try to reinitialize wake word
-        try {
-          const result = await this.bridge.initWakeWord();
-          if (result && result.success) {
-            return {
-              fixed: true,
-              action: 'Updated AccessKey and reinitialized wake word',
-              result
-            };
-          }
-        } catch (err) {
-          return {
-            fixed: false,
-            reason: `Reinitialization failed: ${err.message}`
-          };
+      // Try to reinitialize wake word
+      try {
+        const result = await this.bridge.initWakeWord();
+        if (result && result.success) {
+          return { fixed: true, action: 'Reinitialized wake word', result };
         }
+      } catch (err) {
+        return { fixed: false, reason: `Reinitialization failed: ${err?.message || err}` };
       }
     }
     
-    return { fixed: false, reason: 'AccessKey validation failed' };
+    return { fixed: false, reason: 'Wake word config validation failed' };
   }
   
   /**
-   * Fix: Keyword file not found
+   * Fix: Keyword file not found (legacy; OpenWakeWord uses built-in "hey jarvis")
    */
   // eslint-disable-next-line no-unused-vars
   async _fixKeywordFileNotFound(_errorEntry) {
@@ -546,53 +561,38 @@ export class WakeWordErrorMonitor {
       return { fixed: false, reason: 'No bridge instance available' };
     }
     
-    if (this.bridge.options && this.bridge.options.wakeWordKeywordPaths) {
-      const keywordPaths = this.bridge.options.wakeWordKeywordPaths;
-      const validPaths = Array.isArray(keywordPaths) ? keywordPaths : [keywordPaths];
-      
-      // Check if any paths are invalid file paths
-      const hasInvalidPaths = validPaths.some(path => {
-        if (!path || typeof path !== 'string') return true;
-        // Check if it's a file path (not a built-in keyword)
-        return path.includes('.ppn') || path.includes('/') || path.includes('\\');
-      });
-      
-      if (hasInvalidPaths) {
-        // Replace with built-in keyword
-        this.bridge.options.wakeWordKeywordPaths = ['Jarvis'];
-        DEBUG.trace('WakeWordErrorMonitor: Replaced invalid keyword paths with built-in keyword "Jarvis"');
-        
-        // Try to reinitialize
-        try {
-          const result = await this.bridge.initWakeWord();
-          if (result && result.success) {
-            return {
-              fixed: true,
-              action: 'Replaced invalid keyword file paths with built-in keyword "Jarvis"',
-              result
-            };
-          }
-        } catch (err) {
-          return {
-            fixed: false,
-            reason: `Reinitialization failed: ${err.message}`
-          };
-        }
+    // OpenWakeWord has no keyword files; try reinitializing
+    try {
+      const result = await this.bridge.initWakeWord();
+      if (result && result.success) {
+        return { fixed: true, action: 'Reinitialized wake word', result };
       }
+    } catch (err) {
+      return { fixed: false, reason: `Reinitialization failed: ${err?.message || err}` };
     }
-    
-    return { fixed: false, reason: 'Could not determine fix for keyword file error' };
+    return { fixed: false, reason: 'Could not fix keyword file error' };
   }
   
   /**
    * Fix: Initialization timeout
+   * Uses a cooldown so we don't cascade retries when many timeout errors fire at once.
    */
   // eslint-disable-next-line no-unused-vars
   async _fixInitializationTimeout(_errorEntry) {
     if (!this.bridge) {
       return { fixed: false, reason: 'No bridge instance available' };
     }
-    
+
+    const now = Date.now();
+    const cooldownMs = this.initializationTimeoutCooldownMs || 18000;
+    if (now - this._lastInitializationTimeoutFixTime < cooldownMs) {
+      return {
+        fixed: false,
+        reason: `Cooldown: wait ${Math.ceil((cooldownMs - (now - this._lastInitializationTimeoutFixTime)) / 1000)}s before retrying wake word init`
+      };
+    }
+    this._lastInitializationTimeoutFixTime = now;
+
     // Release existing wake word manager if stuck
     if (this.bridge.wakeWordManager) {
       try {
@@ -603,10 +603,10 @@ export class WakeWordErrorMonitor {
         DEBUG.error('WakeWordErrorMonitor: Error releasing wake word manager', err);
       }
     }
-    
+
     // Wait a bit before retrying
     await new Promise(resolve => setTimeout(resolve, 1000));
-    
+
     // Try to reinitialize with longer timeout (if bridge supports it)
     try {
       const result = await this.bridge.initWakeWord();
@@ -762,13 +762,26 @@ export class WakeWordErrorMonitor {
   /**
    * Fix: Porcupine error
    */
-  // eslint-disable-next-line no-unused-vars
-  async _fixPorcupineError(_errorEntry) {
-    // General Porcupine errors - try to release and reinitialize
+  async _fixPorcupineError(errorEntry) {
     if (!this.bridge) {
       return { fixed: false, reason: 'No bridge instance available' };
     }
-    
+    // Do not reinitialize on activation refused - it will never succeed
+    const text = (errorEntry && errorEntry.text) ? errorEntry.text : '';
+    if (/PorcupineActivationRefusedError|ActivationRefused|_status.*10011|10011.*_status/i.test(text)) {
+      return {
+        fixed: false,
+        reason: 'Activation refused; reinitialization would fail. Use mic button or fix Picovoice key.'
+      };
+    }
+    // Do not reinitialize on activation limit (10009) or throttled (10010) — each init burns another activation
+    if (/PorcupineActivationLimitReachedError|PorcupineActivationThrottledError|_status.*10009|10009.*_status|_status.*10010|10010.*_status/i.test(text)) {
+      return {
+        fixed: false,
+        reason: 'Activation limit or throttled; reinitialization would consume more activations. Close other tabs or try again later.'
+      };
+    }
+    // General Porcupine errors - try to release and reinitialize
     if (this.bridge.wakeWordManager) {
       try {
         await this.bridge.wakeWordManager.release();

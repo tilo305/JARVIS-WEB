@@ -7,10 +7,14 @@ import { spawn, exec } from 'child_process';
 import { promisify } from 'util';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { loadEnvEverywhere, getProjectRoot } from './load-env-everywhere.mjs';
 
 const execAsync = promisify(exec);
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const rootDir = join(__dirname, '..');
+const rootDir = getProjectRoot(__dirname);
+// Load .env from project root only
+loadEnvEverywhere(rootDir);
+
 const PORT = Number(process.env.PORT) || 3000;
 
 const isWindows = process.platform === 'win32';
@@ -134,19 +138,17 @@ async function main() {
 
   console.log(`\n🚀 Starting Vite...\n`);
 
-  // On Windows, we need shell: true for npx to work
-  // The deprecation warning about shell: true is expected on Windows but safe here:
-  // - We pass args as an array (not a string), which is safer
-  // - The args are controlled (vite/vite build), not user input
-  // - This is a known limitation on Windows for npx
+  // Use project's local Vite binary directly (avoids npx installing to wrong location)
+  const viteBin = join(rootDir, 'node_modules', 'vite', 'bin', 'vite.js');
+  const node = process.execPath;
+  const spawnArgs = [viteBin, ...viteArgs.slice(1)];
   const spawnOptions = {
     stdio: 'inherit',
     cwd: rootDir,
+    // Don't use shell: true — it breaks when node path has spaces (e.g. "C:\Program Files\...")
+    windowsHide: true,
   };
-  if (isWindows) {
-    spawnOptions.shell = true; // Required on Windows for npx
-  }
-  const vite = spawn('npx', viteArgs, spawnOptions);
+  const vite = spawn(node, spawnArgs, spawnOptions);
 
   vite.on('exit', (code, signal) => {
     process.exit(code != null ? code : signal ? 1 : 0);

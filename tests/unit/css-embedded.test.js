@@ -164,4 +164,47 @@ describe('Embedded CSS', () => {
       expect(html).toMatch(/runAll|runVoice/);
     });
   });
+
+  describe('public/debug/wake-word-activation-test.html', () => {
+    let css;
+    beforeAll(() => {
+      const html = readFileSync(join(ROOT, 'public/debug/wake-word-activation-test.html'), 'utf8');
+      css = extractStyle(html);
+    });
+
+    it('has a non-empty style block', () => {
+      expect(css.length).toBeGreaterThan(50);
+    });
+
+    it('has balanced braces', () => {
+      expect(balancedBraces(css)).toBe(true);
+    });
+
+    it('has result/pass/fail/pending rules', () => {
+      expect(css).toMatch(/\.test-result\.pass/);
+      expect(css).toMatch(/\.test-result\.fail/);
+      expect(css).toMatch(/\.test-result\.pending/);
+    });
+  });
+
+  describe('public/debug/console-errors-live.html', () => {
+    let css;
+    beforeAll(() => {
+      const html = readFileSync(join(ROOT, 'public/debug/console-errors-live.html'), 'utf8');
+      css = extractStyle(html);
+    });
+
+    it('has a non-empty style block', () => {
+      expect(css.length).toBeGreaterThan(20);
+    });
+
+    it('has balanced braces', () => {
+      expect(balancedBraces(css)).toBe(true);
+    });
+
+    it('has panel and error-item rules', () => {
+      expect(css).toMatch(/\.panel/);
+      expect(css).toMatch(/\.error-item/);
+    });
+  });
 });

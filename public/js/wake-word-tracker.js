@@ -190,11 +190,11 @@ export class WakeWordTracker {
 
     this._renderEvents();
     this._updateMetrics();
-    this.setStatus('active', 'Wake word detected!');
+    this.setStatus('active', 'Wake word active');
     
     // Reset to waiting after 2 seconds
     setTimeout(() => {
-      this.setStatus('waiting', 'Waiting for wake word...');
+      this.setStatus('waiting', 'Wake word active');
     }, 2000);
   }
 

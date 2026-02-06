@@ -3,12 +3,13 @@
  * cArTeSiA dOcS.md: optimal latency and bidirectional flow.
  * cArTeSiA wEbSoCkEt.md: research https://docs.cartesia.ai/api-reference/tts/websocket for issues/fixes.
  */
+const defaultN8n = 'https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4';
 export const N8N_WEBHOOK_URL =
-  'https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4';
+  process.env.VITE_N8N_WEBHOOK_URL ?? process.env.N8N_WEBHOOK_URL ?? defaultN8n;
 
 export const CARTESIA_CONFIG = {
-  API_KEY: process.env.CARTESIA_API_KEY ?? '',
-  VOICE_ID: '95131c95-525c-463b-893d-803bafdf93c4',
+  API_KEY: process.env.CARTESIA_API_KEY ?? process.env.VITE_CARTESIA_API_KEY ?? '',
+  VOICE_ID: process.env.CARTESIA_VOICE_ID ?? process.env.VITE_CARTESIA_VOICE_ID ?? '95131c95-525c-463b-893d-803bafdf93c4',
   API_VERSION: '2025-04-16',
 
   // TTS: cArTeSiA dOcS — sonic-turbo 40ms first byte (real-time), sonic-3 90ms (emotive)

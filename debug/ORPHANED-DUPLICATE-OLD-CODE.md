@@ -15,12 +15,9 @@ Findings from a full project parse. Use this to clean up dead code, consolidate 
 
 ---
 
-### 1.2 `escapeHtml` (same helper in two places)
+### 1.2 `escapeHtml` (same helper in two places) — ✅ Fixed
 
-- **`public/js/app.js`**: `function escapeHtml(s) { ... }`
-- **`public/debug/fallback-revert-debug.html`**: inline `function escapeHtml(s) { ... }` in the script.
-
-**Recommendation:** Either export `escapeHtml` from a shared util (e.g. `public/js/debug.js` or a tiny `public/js/dom-utils.js`) and use it in both, or leave as-is if you want the debug page to stay self-contained.
+- **`public/js/debug.js`**: Single export `escapeHtml(s)` — imported by `app.js`, `fallback-revert-debug.html`, `console-errors-live.html`, and `wake-word-tracker.js`.
 
 ---
 
@@ -42,18 +39,9 @@ Findings from a full project parse. Use this to clean up dead code, consolidate 
 
 ---
 
-### 1.5 Default n8n webhook URL (repeated in many files)
+### 1.5 Default n8n webhook URL (repeated in many files) — ✅ Acceptable
 
-Same URL string appears in:
-
-- `src/config.ts` (`N8N_WEBHOOK_URL`)
-- `public/js/app.js` (getConfig fallback)
-- `vite.config.js` (define fallback)
-- `public/debug/fallback-revert-debug.html` (`DEFAULT_WEBHOOK`)
-- `debug/tools/open-app-debug-send.mjs` (`DEFAULT_WEBHOOK_URL` and `PRODUCTION_WEBHOOK_URL` — both identical)
-- README, QUICKSTART, docs, debug markdown
-
-**Recommendation:** Keep `src/config.ts` as the canonical default for Node/build. For browser, Vite injects from env; fallbacks in `app.js` and `vite.config.js` are acceptable. In **open-app-debug-send.mjs** remove the redundant `PRODUCTION_WEBHOOK_URL` and use a single constant (e.g. `DEFAULT_WEBHOOK_URL`), optionally read from `dist/config.js` when available.
+Same URL string appears in `src/config.ts`, `public/js/app.js` (getConfig fallback), `vite.config.js` (define fallback), `public/debug/fallback-revert-debug.html` (`DEFAULT_WEBHOOK`), and docs. `src/config.ts` is canonical for Node/build; Vite injects for browser.
 
 ---
 
@@ -62,14 +50,7 @@ Same URL string appears in:
 ### 2.1 Cartesia API version mismatch
 
 - **`src/config.ts`**: `API_VERSION: '2025-04-16'` (current).
-- **`public/js/cartesia-audio-bridge.js`**: `CARTESIA_VERSION = '2024-06-10'`.
-- **`vite.config.js`**: `CARTESIA_VERSION = '2024-06-10'`.
-- **`debug/tools/check-stt-sample-rate.js`**: hardcoded `'2024-06-10'`.
-- **Docs** (`cArTeSiA dOcS.md`, `aUdiO dOcS.md`): reference `2025-04-16`.
-
-So the **browser path** (bridge + Vite) and one debug tool use an **older** version than config and docs.
-
-**Recommendation:** Update `cartesia-audio-bridge.js`, `vite.config.js`, and `check-stt-sample-rate.js` to use `'2025-04-16'` and add a short comment that this must match `src/config.ts` `API_VERSION`. If the STT API ever requires a different version, document that in one place (e.g. config or a shared constant).
+- **`public/js/cartesia-audio-bridge.js`**, **`vite.config.js`**: `CARTESIA_VERSION = '2025-04-16'` — ✅ Fixed.
 
 ---
 
@@ -108,16 +89,38 @@ So the **browser path** (bridge + Vite) and one debug tool use an **older** vers
 | Category        | Item                          | Location(s)                                      | Action | Status |
 |----------------|-------------------------------|---------------------------------------------------|--------|--------|
 | Duplicate      | `getNaturalFallback`         | `public/js/n8n-payload.js` (exported) | ✅ Fixed | Single export, imported in app.js and fallback-revert-debug.html |
-| Duplicate      | `escapeHtml`                 | `app.js` + `fallback-revert-debug.html` | ⚠️ Optional | Minor duplicate, debug page intentionally self-contained |
+| Duplicate      | `escapeHtml`                 | `debug.js` (exported) | ✅ Fixed | Single export, imported in app.js, fallback-revert-debug.html, console-errors-live.html, wake-word-tracker.js |
 | Duplicate      | Debug n8n fetch + reply      | `app.js` - `JARVIS_DEBUG_SEND_TEST()` | ✅ Fixed | Now uses `getLLMReply()` |
 | Duplicate      | `float32ToInt16` / floatTo16BitPCM | `public/js/audio-utils.js` | ✅ Fixed | `float32ToInt16` calls `floatTo16BitPCM` |
-| Duplicate      | Default webhook URL          | Multiple files | ✅ Fixed | Removed `PRODUCTION_WEBHOOK_URL` duplicate |
-| Old            | Cartesia API version         | All files | ✅ Fixed | `2025-04-16` everywhere, comments added |
+| Duplicate      | Default webhook URL          | Multiple files | ✅ Acceptable | Canonical in src/config.ts |
+| Old            | Cartesia API version         | config.ts, bridge, vite | ✅ Fixed | `2025-04-16` everywhere |
 | Orphaned       | (none critical)              | —      | ✅ Verified | audio-utils float* used only in tests — keep as public API |
 
 ---
 
-## 5. Current Status (2026-02-02)
+## 5. Debug Tools Cleanup (2026-02-05)
+
+**Removed duplicate and obsolete debug CLI tools:**
+
+- **verify-wake-word-cli.mjs** — Meta-test that only verified `wake-word-activation-test-cli.js` exists; redundant.
+- **test-wake-word-cli.mjs** — Meta-test (syntax check) for the same script; redundant.
+- **check-wake-word-config.js** — Overlapped with **verify-wake-word-setup.js** (kept); single config verifier now.
+- **debug-wake-word-keywords.js** — Overlapped with **debug-wake-word-keyword-validation-live.js** (kept); single keyword debug tool.
+- **test-wake-word-detection.js** — Config validation overlapped with **verify-wake-word-setup.js**. `npm run test:wakeword` now runs `verify-wake-word-setup.js`.
+
+**Consolidated docs:** Removed **CONSOLE-ERROR-CHECKLIST.md** (content covered by **CONSOLE-ERROR-CHECK-GUIDE.md**).
+
+**Current debug tools:** See `debug/README.md` and `debug/DEBUG-TOOLS-SUMMARY.md`.
+
+---
+
+## 7. Orphaned Wake Word Test Page (2026-02-05)
+
+**Removed:** `public/wake-word-test.html` — Orphaned. Duplicated functionality of `public/debug/wake-word-activation-test.html` (the canonical test). Not referenced in any docs, tools, or scripts.
+
+---
+
+## 6. Current Status (2026-02-02)
 
 **All critical duplicates have been fixed.** The codebase is in excellent condition:
 
@@ -126,8 +129,8 @@ So the **browser path** (bridge + Vite) and one debug tool use an **older** vers
 - ✅ `JARVIS_DEBUG_SEND_TEST` - Uses `getLLMReply`
 - ✅ Cartesia API version - `2025-04-16` everywhere
 - ✅ Webhook URL - No duplicate constants
-- ⚠️ `escapeHtml` - Minor duplicate (optional cleanup, debug page intentionally self-contained)
+- ✅ `escapeHtml` - Consolidated in debug.js, imported where needed
 
 **No orphaned code or unused imports found.**
 
-See `CODE-AUDIT-REPORT.md` for detailed verification.
+See `docs/archive/CODE-AUDIT-REPORT.md` for detailed verification.

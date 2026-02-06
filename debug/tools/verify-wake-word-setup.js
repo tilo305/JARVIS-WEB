@@ -7,10 +7,12 @@
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { getFirstEnvPath, getProjectRoot } from '../../scripts/load-env-everywhere.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const projectRoot = join(__dirname, '../..');
+const projectRoot = getProjectRoot(__dirname);
+const envPathForCheck = getFirstEnvPath(projectRoot) ?? join(projectRoot, '.env');
 
 function log(message, type = 'info') {
   const colors = {
@@ -32,51 +34,55 @@ function log(message, type = 'info') {
 function checkEnvFile() {
   log('Checking .env file...', 'info');
   try {
-    const envPath = join(projectRoot, '.env');
-    const envContent = readFileSync(envPath, 'utf-8');
+    const envContent = readFileSync(envPathForCheck, 'utf-8');
     
+    // Either VITE_* or non-VITE_ form counts; both are read everywhere
     const requiredVars = {
-      'VITE_PICOVOICE_ACCESS_KEY': false,
-      'VITE_WAKE_WORD_ENABLED': false,
-      'VITE_CARTESIA_API_KEY': false
+      openWakeWord: false, // VITE_USE_OPENWAKEWORD + VITE_OPENWAKEWORD_WS_URL
+      wakeWord: false,     // VITE_WAKE_WORD_ENABLED or WAKE_WORD_ENABLED
+      cartesia: false,     // VITE_CARTESIA_API_KEY or CARTESIA_API_KEY
     };
-    
-    // Also track non-VITE variants for compatibility
-    let wakeWordEnabledFound = false;
-    
+    const keyToGroup = {
+      VITE_USE_OPENWAKEWORD: 'openWakeWord',
+      USE_OPENWAKEWORD: 'openWakeWord',
+      VITE_OPENWAKEWORD_WS_URL: 'openWakeWord',
+      OPENWAKEWORD_WS_URL: 'openWakeWord',
+      VITE_WAKE_WORD_ENABLED: 'wakeWord',
+      WAKE_WORD_ENABLED: 'wakeWord',
+      VITE_CARTESIA_API_KEY: 'cartesia',
+      CARTESIA_API_KEY: 'cartesia',
+    };
+
     const lines = envContent.split('\n');
     for (const line of lines) {
       const trimmed = line.trim();
       if (trimmed.startsWith('#') || !trimmed) continue;
-      
+
       const [key] = trimmed.split('=');
       const value = trimmed.substring(key.length + 1).trim();
-      
-      if (key in requiredVars) {
-        if (value && !value.includes('your_') && !value.includes('here')) {
-          requiredVars[key] = true;
-          if (key === 'VITE_PICOVOICE_ACCESS_KEY') {
-            log(`  ${key}: Found (${value.length} chars)`, 'success');
-          } else {
-            log(`  ${key}: Found`, 'success');
-          }
+      const group = keyToGroup[key];
+      if (group && !requiredVars[group]) {
+        if (value && !value.includes('your_') && !value.includes('here') && value.toLowerCase() !== 'false') {
+          requiredVars[group] = true;
+          log(`  ${key}: Found`, 'success');
         } else {
           log(`  ${key}: Found but appears to be placeholder`, 'warning');
         }
-      } else if (key === 'WAKE_WORD_ENABLED' && value && !value.includes('your_') && !value.includes('here')) {
-        // Found WAKE_WORD_ENABLED without VITE_ prefix - mark both as found
-        wakeWordEnabledFound = true;
-        requiredVars['VITE_WAKE_WORD_ENABLED'] = true;
-        log(`  ${key}: Found (will use as VITE_WAKE_WORD_ENABLED)`, 'success');
       }
     }
-    
+
     let allValid = true;
-    for (const [key, found] of Object.entries(requiredVars)) {
-      if (!found) {
-        log(`  ${key}: MISSING`, 'error');
-        allValid = false;
-      }
+    if (!requiredVars.openWakeWord) {
+      log('  VITE_USE_OPENWAKEWORD=true and VITE_OPENWAKEWORD_WS_URL: required', 'error');
+      allValid = false;
+    }
+    if (!requiredVars.wakeWord) {
+      log('  VITE_WAKE_WORD_ENABLED or WAKE_WORD_ENABLED: MISSING', 'error');
+      allValid = false;
+    }
+    if (!requiredVars.cartesia) {
+      log('  VITE_CARTESIA_API_KEY or CARTESIA_API_KEY: MISSING', 'error');
+      allValid = false;
     }
     
     return allValid;
@@ -93,7 +99,7 @@ function checkViteConfig() {
     const viteContent = readFileSync(vitePath, 'utf-8');
     
     const checks = {
-      'VITE_PICOVOICE_ACCESS_KEY': viteContent.includes('VITE_PICOVOICE_ACCESS_KEY'),
+      'VITE_OPENWAKEWORD_WS_URL': viteContent.includes('VITE_OPENWAKEWORD_WS_URL'),
       'loadEnv': viteContent.includes('loadEnv'),
       'define': viteContent.includes('define:')
     };
@@ -123,8 +129,8 @@ function checkBridgeCode() {
     
     const checks = {
       'initWakeWord method': bridgeContent.includes('async initWakeWord()'),
-      'picovoiceAccessKey check': bridgeContent.includes('picovoiceAccessKey'),
-      'WakeWordManager': bridgeContent.includes('WakeWordManager'),
+      'OpenWakeWordManager': bridgeContent.includes('OpenWakeWordManager'),
+      'openWakeWordWsUrl': bridgeContent.includes('openWakeWordWsUrl'),
       'error handling': bridgeContent.includes('onError')
     };
     
@@ -145,17 +151,17 @@ function checkBridgeCode() {
   }
 }
 
-function checkWakeWordManager() {
-  log('Checking wake-word-manager.js...', 'info');
+function checkOpenWakeWordManager() {
+  log('Checking openwakeword-manager.js...', 'info');
   try {
-    const managerPath = join(projectRoot, 'public/js/wake-word-manager.js');
+    const managerPath = join(projectRoot, 'public/js/openwakeword-manager.js');
     const managerContent = readFileSync(managerPath, 'utf-8');
     
     const checks = {
-      'Porcupine import': managerContent.includes('@picovoice/porcupine-web'),
+      'OpenWakeWordClient': managerContent.includes('OpenWakeWordClient'),
       'initialize method': managerContent.includes('async initialize('),
-      'AccessKey validation': managerContent.includes('accessKey'),
-      'built-in keywords': managerContent.includes('Jarvis') || managerContent.includes('BUILT_IN_KEYWORDS')
+      'wsUrl': managerContent.includes('wsUrl'),
+      'hey jarvis': managerContent.includes('hey jarvis') || managerContent.includes('OPENWAKEWORD_FRAME_SAMPLES')
     };
     
     let allValid = true;
@@ -170,7 +176,7 @@ function checkWakeWordManager() {
     
     return allValid;
   } catch (err) {
-    log(`  wake-word-manager.js error: ${err.message}`, 'error');
+    log(`  openwakeword-manager.js error: ${err.message}`, 'error');
     return false;
   }
 }
@@ -183,9 +189,8 @@ function checkTestPage() {
     
     const checks = {
       'initWakeWord call': testContent.includes('initWakeWord()'),
-      'picovoiceAccessKey check': testContent.includes('picovoiceAccessKey'),
-      'error handling': testContent.includes('catch'),
-      'diagnostics': testContent.includes('Environment Variable Diagnostics')
+      'openWakeWord': testContent.includes('openWakeWord') || testContent.includes('OpenWakeWord'),
+      'error handling': testContent.includes('catch')
     };
     
     let allValid = true;
@@ -213,7 +218,7 @@ async function main() {
     envFile: checkEnvFile(),
     viteConfig: checkViteConfig(),
     bridgeCode: checkBridgeCode(),
-    wakeWordManager: checkWakeWordManager(),
+    openWakeWordManager: checkOpenWakeWordManager(),
     testPage: checkTestPage()
   };
   

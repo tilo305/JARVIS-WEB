@@ -13,6 +13,13 @@ import { CartesiaAudioBridge } from './cartesia-audio-bridge.js';
 import { buildN8nPayload, extractReplyFromJson, extractFilesFromJson, getNaturalFallback } from './n8n-payload.js';
 import { addOcrToAttachments } from './ocr-tool.js';
 import {
+  ConversationHistory,
+  classifyIntent,
+  validateInput,
+  runWithRetry,
+  getContextEnrichment,
+} from './agentic-patterns.js';
+import {
   createPdfBlob,
   createImageBlobFromBase64,
   createTextBlob,
@@ -23,6 +30,7 @@ import {
 import { DEBUG, escapeHtml } from './debug.js';
 import { WakeWordTracker } from './wake-word-tracker.js';
 import { WakeWordErrorMonitor } from './wake-word-error-monitor.js';
+import { onWakeWordError, getLastError, logWakeWordError } from './wake-word-console.js';
 
 const chatContainer = document.getElementById('chatContainer');
 const textInput = document.getElementById('textInput');
@@ -65,67 +73,25 @@ function getConfig() {
   const win = typeof window !== 'undefined' ? window : {};
   const cfg = win.JARVIS_CONFIG || {};
   
-  // Wake word config
-  const picovoiceAccessKey = env.VITE_PICOVOICE_ACCESS_KEY || cfg.picovoiceAccessKey || '';
-  // Default to "Jarvis" built-in keyword if wake word is enabled but no keyword specified
-  const wakeWordEnabled = (env.VITE_WAKE_WORD_ENABLED || cfg.wakeWordEnabled || 'false').toLowerCase() === 'true';
-  // Get keyword and trim whitespace - if empty after trim, use default
-  const rawKeyword = env.VITE_PORCUPINE_KEYWORD || cfg.porcupineKeyword || '';
-  const trimmedKeyword = rawKeyword.trim();
-  const porcupineKeyword = trimmedKeyword || (wakeWordEnabled && picovoiceAccessKey ? 'Jarvis' : '');
-  const porcupineSensitivity = parseFloat(env.VITE_PORCUPINE_SENSITIVITY || cfg.porcupineSensitivity || '0.5');
-  const debugWakeWord = (env.VITE_DEBUG_WAKE_WORD || cfg.debugWakeWord || 'false').toLowerCase() === 'true';
-  
-  // Construct keyword path - supports both built-in keywords and custom .ppn files
-  // Built-in keywords: "Jarvis", "Computer", "Alexa", "Hey Google", "Hey Siri", etc.
-  // Custom keywords: Path to .ppn file (e.g., "keywords/jarvis_en_wasm_v3_0_0.ppn")
-  // Default: Uses built-in "Jarvis" keyword for fastest initialization (no file download needed)
-  let keywordPaths = [];
-  if (porcupineKeyword && picovoiceAccessKey) {
-    const builtInKeywords = ['Alexa', 'Americano', 'Blueberry', 'Bumblebee', 'Computer', 'Grapefruit', 'Grasshopper', 'Hey Google', 'Hey Siri', 'Jarvis', 'Okay Google', 'Picovoice', 'Porcupine', 'Terminator'];
-    
-    // Check if it's a built-in keyword (case-insensitive)
-    const keywordMatch = builtInKeywords.find(k => k.toLowerCase() === porcupineKeyword.toLowerCase());
-    if (keywordMatch) {
-      // Use built-in keyword directly
-      keywordPaths = [keywordMatch];
-      DEBUG.trace('Using built-in Porcupine keyword', { keyword: keywordMatch });
-    } else {
-      // Assume it's a custom keyword - try multiple possible paths
-      const keywordName = porcupineKeyword.toLowerCase().replace(/\s+/g, '-');
-      const possiblePaths = [
-        `keywords/${keywordName}_en_wasm_v3_0_0.ppn`, // Default Picovoice naming
-        `keywords/${keywordName}.ppn`, // Simple naming
-        `./keywords/${keywordName}_en_wasm_v3_0_0.ppn`,
-        `./keywords/${keywordName}.ppn`,
-      ];
-      // Use first path as default (user can override via config)
-      keywordPaths = [possiblePaths[0]];
-      DEBUG.trace('Using custom keyword file path', { path: keywordPaths[0] });
-    }
-  }
-  
+  // Wake word config — openWakeWord only
+  const wakeWordEnabled = (env.VITE_WAKE_WORD_ENABLED || env.WAKE_WORD_ENABLED || cfg.wakeWordEnabled || 'false').toLowerCase() === 'true';
+  const debugWakeWord = (env.VITE_DEBUG_WAKE_WORD || env.DEBUG_WAKE_WORD || cfg.debugWakeWord || 'false').toLowerCase() === 'true';
+  const useOpenWakeWord = (env.VITE_USE_OPENWAKEWORD || env.USE_OPENWAKEWORD || cfg.useOpenWakeWord || 'false').toLowerCase() === 'true';
+  const openWakeWordWsUrl = (env.VITE_OPENWAKEWORD_WS_URL || env.OPENWAKEWORD_WS_URL || cfg.openWakeWordWsUrl || 'ws://localhost:8765/ws').trim();
+
   return {
-    apiKey: env.VITE_CARTESIA_API_KEY || cfg.apiKey || '',
-    voiceId: env.VITE_CARTESIA_VOICE_ID || cfg.voiceId || '',
-    n8nWebhookUrl: env.VITE_N8N_WEBHOOK_URL || cfg.n8nWebhookUrl || 'https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4',
-    picovoiceAccessKey,
-    porcupineKeyword,
-    porcupineSensitivity: isNaN(porcupineSensitivity) ? 0.5 : Math.max(0, Math.min(1, porcupineSensitivity)),
+    apiKey: env.VITE_CARTESIA_API_KEY || env.CARTESIA_API_KEY || cfg.apiKey || '',
+    voiceId: env.VITE_CARTESIA_VOICE_ID || env.CARTESIA_VOICE_ID || cfg.voiceId || '',
+    n8nWebhookUrl: env.VITE_N8N_WEBHOOK_URL || env.N8N_WEBHOOK_URL || cfg.n8nWebhookUrl || 'https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4',
     wakeWordEnabled,
     debugWakeWord,
-    keywordPaths: (() => {
-      // Allow override via window.JARVIS_CONFIG, but validate the entries
-      if (cfg.keywordPaths && Array.isArray(cfg.keywordPaths) && cfg.keywordPaths.length > 0) {
-        const filtered = cfg.keywordPaths.filter(p => p && typeof p === 'string' && p.trim().length > 0);
-        // If filtered config paths are valid, use them; otherwise fall back to computed paths
-        return filtered.length > 0 ? filtered : keywordPaths;
-      }
-      return keywordPaths;
-    })(), // Allow override via window.JARVIS_CONFIG
+    useOpenWakeWord,
+    openWakeWordWsUrl,
   };
 }
-const { apiKey, voiceId, n8nWebhookUrl, picovoiceAccessKey, porcupineSensitivity, wakeWordEnabled, debugWakeWord, keywordPaths } = getConfig();
+const { apiKey, voiceId, n8nWebhookUrl, wakeWordEnabled, debugWakeWord, useOpenWakeWord, openWakeWordWsUrl } = getConfig();
+/** True when wake word is enabled and openWakeWord is configured */
+const wakeWordConfigured = wakeWordEnabled && useOpenWakeWord && openWakeWordWsUrl;
 
 // Log button initialization status (always visible, not just in debug mode)
 /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
@@ -140,6 +106,9 @@ console.log('[JARVIS] Button initialization complete', {
 
 /** Session ID for n8n workflow continuity (persists for page lifetime) */
 const sessionId = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+
+/** Conversation history for Memory pattern — sends recent turns to n8n for context */
+const conversationHistory = new ConversationHistory(20);
 
 /** Initialize wake word tracker - always show for testing */
 let wakeWordTracker = null;
@@ -156,8 +125,8 @@ try {
   const updateStatusDirectly = () => {
     const statusTextEl = document.getElementById('trackerStatusText');
     if (statusTextEl) {
-      if (!wakeWordEnabled || !picovoiceAccessKey || keywordPaths.length === 0) {
-        statusTextEl.textContent = 'Wake word not configured';
+      if (!wakeWordConfigured) {
+        statusTextEl.textContent = 'Wake word failed';
         DEBUG.trace('Wake word not configured - set status directly');
       }
     }
@@ -169,12 +138,12 @@ try {
   // Try after short delay
   setTimeout(updateStatusDirectly, 50);
   
-  if (!wakeWordEnabled || !picovoiceAccessKey || keywordPaths.length === 0) {
+      if (!wakeWordConfigured) {
     DEBUG.trace('Wake word not configured - setting tracker status immediately');
     // Use setTimeout to ensure DOM is ready
     setTimeout(() => {
       if (wakeWordTracker) {
-        wakeWordTracker.setStatus('error', 'Wake word not configured');
+        wakeWordTracker.setStatus('error', 'Wake word failed');
       } else {
         updateStatusDirectly();
       }
@@ -182,15 +151,12 @@ try {
   } else {
     // Wake word is enabled - status will be updated after initialization
     DEBUG.trace('Wake word configured - will initialize and update status');
-    // Still update to show we're initializing
     setTimeout(() => {
       if (wakeWordTracker) {
         wakeWordTracker.setStatus('waiting', 'Initializing...');
       } else {
         const statusTextEl = document.getElementById('trackerStatusText');
-        if (statusTextEl) {
-          statusTextEl.textContent = 'Initializing...';
-        }
+        if (statusTextEl) statusTextEl.textContent = 'Initializing...';
       }
     }, 100);
   }
@@ -204,13 +170,40 @@ try {
   // Still try to update status text directly
   const statusTextEl = document.getElementById('trackerStatusText');
   if (statusTextEl) {
-    statusTextEl.textContent = 'Initialization failed';
+    statusTextEl.textContent = 'Wake word failed';
   }
 }
 
-/** Build payload with app's session ID */
-function buildPayload(message, options) {
-  return buildN8nPayload(message, { ...options, sessionId });
+/** Show wake word errors in UI and ensure they appear in console (filter: JARVIS Wake Word Error) */
+function updateWakeWordLastError(entry) {
+  const el = document.getElementById('wakeWordLastError');
+  if (!el) return;
+  if (!entry) {
+    el.textContent = 'Console: filter "JARVIS Wake Word Error"';
+    el.classList.remove('has-error');
+    return;
+  }
+  el.textContent = entry.message || 'Error';
+  el.classList.add('has-error');
+}
+if (wakeWordConfigured) {
+  onWakeWordError(updateWakeWordLastError);
+  updateWakeWordLastError(getLastError());
+}
+
+/**
+ * Build payload with app's session ID and agentic patterns (Memory, Routing, Context Engineering).
+ * Same structure for mic button and wake word — both use source: 'voice' and optional attachments.
+ */
+function buildPayload(message, options = {}) {
+  const agenticOptions = {
+    ...options,
+    sessionId,
+    conversationHistory: conversationHistory.getRecent(10),
+    intent: classifyIntent(message),
+    contextEnrichment: getContextEnrichment(),
+  };
+  return buildN8nPayload(message, agenticOptions);
 }
 
 function setStatus(text, className = '') {
@@ -322,12 +315,22 @@ async function filesToAttachmentPayload(files) {
  * @returns {{ reply: string, data: Object }} - reply text and raw response for files
  */
 async function getLLMReply(userText, options = {}) {
-  const payload = buildPayload(userText, options);
+  const validation = validateInput(userText);
+  if (!validation.valid) {
+    /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+    console.warn('[JARVIS] getLLMReply: input validation failed', validation.error);
+    return { reply: validation.error || "I didn't catch that. Try again?", data: {} };
+  }
+  const payload = buildPayload(validation.sanitized, options);
   if (!payload.message) {
     /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
     console.warn('[JARVIS] getLLMReply: empty message in payload');
     return { reply: "I didn't catch that. Try again?", data: {} };
   }
+  const sourceLabel = payload.source === 'voice' ? 'voice' : 'text';
+  const attachmentCount = payload.attachments?.length ?? 0;
+  /* eslint-disable-next-line no-console -- payload verification: mic vs text */
+  console.log('[JARVIS] Payload SENT (source=' + sourceLabel + ') messageLength=' + (payload.message?.length ?? 0) + ' attachments=' + attachmentCount);
   // Always log payload sending (not just in debug mode) for troubleshooting
   /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
   console.log('[JARVIS] Sending payload to n8n', { 
@@ -377,8 +380,6 @@ async function getLLMReply(userText, options = {}) {
   }
   let timeoutId;
   try {
-    const controller = new AbortController();
-    timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
     const payloadJson = JSON.stringify(payload);
     /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
     console.log('[JARVIS] Making POST request to n8n webhook', { 
@@ -393,16 +394,26 @@ async function getLLMReply(userText, options = {}) {
       source: payload.source,
       payloadJson: payloadJson
     });
-    const res = await fetch(n8nWebhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: payloadJson,
-      signal: controller.signal,
+    const res = await runWithRetry(async () => {
+      const controller = new AbortController();
+      timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout per attempt
+      try {
+        const r = await fetch(n8nWebhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payloadJson,
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        return r;
+      } catch (e) {
+        clearTimeout(timeoutId);
+        throw e;
+      }
     });
     /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
-    console.log('[JARVIS] POST request completed', { status: res.status, statusText: res.statusText, ok: res.ok });
+    console.log('[JARVIS] Payload delivered to n8n', { status: res.status, source: payload.source, ok: res.ok });
     DEBUG.trace('n8n: POST request completed', { status: res.status, statusText: res.statusText });
-    clearTimeout(timeoutId);
     const contentType = res.headers.get('content-type') || '';
     let data = {};
     if (contentType.includes('application/json')) {
@@ -418,20 +429,28 @@ async function getLLMReply(userText, options = {}) {
       }
     }
     const reply = extractReplyFromJson(data);
+    /* eslint-disable-next-line no-console -- payload verification: mic vs text */
+    console.log('[JARVIS] Payload RECEIVED (source=' + sourceLabel + ') status=' + res.status + ' hasReply=' + !!reply + ' replyLength=' + (typeof reply === 'string' ? reply.length : 0));
     /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
     console.log('[JARVIS] n8n response parsed', { status: res.status, hasReply: !!reply, replyPreview: typeof reply === 'string' ? reply.slice(0, 50) : '', dataKeys: Object.keys(data) });
     DEBUG.trace('n8n: response', { status: res.status, hasReply: !!reply, replyPreview: typeof reply === 'string' ? reply.slice(0, 50) : '' });
     if (typeof reply === 'string') {
+      conversationHistory.addUser(payload.message);
+      conversationHistory.addAssistant(reply);
       /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
       console.log('[JARVIS] Successfully extracted reply from n8n response', { replyLength: reply.length });
       return { reply, data };
     }
-    // No reply extracted — log so we can diagnose fallback
-    const hasNatural = !!getNaturalFallback(payload.message);
-    if (!hasNatural) {
-      // eslint-disable-next-line no-console -- intentional: user needs to see why fallback was used
-      console.warn('[JARVIS] n8n fallback: no reply in response. Status:', res.status, 'Body:', JSON.stringify(data).slice(0, 300));
-    }
+    // No reply extracted — always log so user can see what n8n returned
+    const dataKeys = Object.keys(data || {});
+    const bodyPreview = JSON.stringify(data).slice(0, 400);
+    // eslint-disable-next-line no-console -- intentional: user needs to see why fallback was used
+    console.warn('[JARVIS] n8n fallback: no reply in response.', {
+      status: res.status,
+      dataKeys: dataKeys.length ? dataKeys : '(empty)',
+      bodyPreview: bodyPreview + (bodyPreview.length >= 400 ? '…' : ''),
+      hint: 'n8n must return JSON with one of: output, reply, result, text, message, response, answer, content. Use production URL (/webhook/ not /webhook-test/). See debug/N8N-RESPOND-TO-WEBHOOK-FIX.md',
+    });
     if (DEBUG.enabled && typeof reply !== 'string') {
       DEBUG.trace('n8n: response body (no reply extracted)', data);
     }
@@ -440,21 +459,25 @@ async function getLLMReply(userText, options = {}) {
     }
     const natural = getNaturalFallback(payload.message);
     const fallback = natural || "I heard you. I'm still getting set up — please try again in a moment.";
+    conversationHistory.addUser(payload.message);
+    conversationHistory.addAssistant(fallback);
     DEBUG.trace('n8n: using fallback (no reply in response)', { natural: !!natural, fallbackPreview: fallback.slice(0, 50) });
     return { reply: fallback, data };
   } catch (err) {
     if (timeoutId) clearTimeout(timeoutId);
+    const errMsg = err?.message ?? (typeof err === 'string' ? err : 'Unknown error');
+    const errName = err?.name;
     /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
-    console.error('[JARVIS] Error in getLLMReply', { err, name: err.name, message: err.message, url: n8nWebhookUrl });
-    if (err.name === 'AbortError') {
+    console.error('[JARVIS] Error in getLLMReply', { err, name: errName, message: errMsg, url: n8nWebhookUrl });
+    if (errName === 'AbortError') {
       /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
-      console.error('[JARVIS] n8n webhook timeout after 30s', { url: n8nWebhookUrl, message: payload.message.slice(0, 50) });
-      DEBUG.error('n8n webhook timeout after 30s', { url: n8nWebhookUrl, message: payload.message.slice(0, 50) });
+      console.error('[JARVIS] n8n webhook timeout after 30s', { url: n8nWebhookUrl, message: (payload?.message || '').slice(0, 50) });
+      DEBUG.error('n8n webhook timeout after 30s', { url: n8nWebhookUrl, message: (payload?.message || '').slice(0, 50) });
       return { reply: "Request timed out. The assistant is taking too long to respond. Please try again.", data: {} };
-    } else if (err.message && (err.message.includes('CORS') || err.message.includes('Failed to fetch'))) {
+    } else if (errMsg && (errMsg.includes('CORS') || errMsg.includes('Failed to fetch'))) {
       /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
-      console.error('[JARVIS] n8n webhook CORS or network error', { url: n8nWebhookUrl, err: err.message });
-      DEBUG.error('n8n webhook CORS or network error', { url: n8nWebhookUrl, err: err.message });
+      console.error('[JARVIS] n8n webhook CORS or network error', { url: n8nWebhookUrl, err: errMsg });
+      DEBUG.error('n8n webhook CORS or network error', { url: n8nWebhookUrl, err: errMsg });
       return { reply: "Network error: Could not reach the assistant. Check your connection and CORS settings.", data: {} };
     } else {
       /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
@@ -502,23 +525,21 @@ const bridge = new CartesiaAudioBridge({
   voiceId: voiceId || undefined,
   ttsModel: 'sonic-3', // Better quality, more emotive (90ms latency vs 40ms)
   audioWorkletBasePath: (() => {
-    // Use absolute path for AudioWorklet modules
-    // In browser, this resolves to /audio/ from the root
-    // @vite-ignore - URL is resolved at runtime, not build time
-    const url = new URL('../audio/', import.meta.url);
-    // Use href (full URL) and ensure trailing slash
-    let path = url.href;
-    if (!path.endsWith('/')) path += '/';
-    return path;
+    // Use origin-relative /audio/ so Vite does not warn (no import.meta.url); works in dev and prod
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      const path = new URL('/audio/', window.location.origin).href;
+      return path.endsWith('/') ? path : path + '/';
+    }
+    return '/audio/';
   })(),
-  // Wake word configuration
-  wakeWordEnabled: wakeWordEnabled && picovoiceAccessKey && keywordPaths.length > 0,
-  picovoiceAccessKey: picovoiceAccessKey || undefined,
-  wakeWordKeywordPaths: keywordPaths,
-  wakeWordSensitivities: [porcupineSensitivity],
+  // Wake word configuration (openWakeWord only)
+  wakeWordEnabled: wakeWordConfigured,
+  useOpenWakeWord: useOpenWakeWord || undefined,
+  openWakeWordWsUrl: (useOpenWakeWord && openWakeWordWsUrl) ? openWakeWordWsUrl : undefined,
   onPartialTranscript: (text, isFinal) => {
     if (!isFinal && text.trim()) setStatus(`Listening… "${text.slice(0, 40)}${text.length > 40 ? '…' : ''}"`, 'listening');
   },
+  /** Voice transcript handler — same path for mic button and wake word; both use identical n8n payload (source: 'voice', attachments). */
   onTranscript: async (text, isFinal) => {
     if (!isFinal) return;
     const trimmed = (text || '').trim();
@@ -529,7 +550,7 @@ const bridge = new CartesiaAudioBridge({
       return;
     }
     /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
-    console.log('[JARVIS] onTranscript: FINAL transcript received (mic button flow)', { 
+    console.log('[JARVIS] onTranscript: FINAL transcript received (voice — mic or wake word)', { 
       textLength: trimmed.length, 
       preview: trimmed.slice(0, 80),
       isFinal 
@@ -576,10 +597,10 @@ const bridge = new CartesiaAudioBridge({
       }] : [];
       DEBUG.trace('onTranscript: audio attachment', { hasAudio: !!audioBase64, size: audioAttachments[0]?.size || 0 });
       
-      // Build payload explicitly to log it before sending (for debugging)
+      // Build payload — same structure for mic and wake word (source: 'voice', full n8n fields)
       const voicePayload = buildPayload(trimmed, { source: 'voice', attachments: audioAttachments });
       /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
-      console.log('[JARVIS] Mic button payload (full structure):', {
+      console.log('[JARVIS] Voice payload (mic/wake word, full structure):', {
         message: voicePayload.message,
         source: voicePayload.source,
         session_id: voicePayload.session_id,
@@ -605,27 +626,31 @@ const bridge = new CartesiaAudioBridge({
       
       const { reply: replyText, data: replyData } = await getLLMReply(trimmed, { source: 'voice', attachments: audioAttachments });
       /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
-      console.log('[JARVIS] Mic button: received reply from n8n', { 
+      console.log('[JARVIS] Voice (mic/wake word): received reply from n8n', { 
         replyLength: replyText?.length || 0, 
         hasData: !!replyData,
         replyPreview: typeof replyText === 'string' ? replyText.slice(0, 100) : '',
         hasApiKey: !!apiKey
       });
-      appendMessage('assistant', replyText);
+      // Ensure we always have a string for chat and TTS (correct payload → text + audio in UI)
+      const displayText = typeof replyText === 'string' ? replyText : (replyText != null ? String(replyText) : 'No response received.');
+      appendMessage('assistant', displayText);
+      /* eslint-disable-next-line no-console -- mic response: text in chat + audio */
+      console.log('[JARVIS] Mic response: text shown in chat (length=' + displayText.length + '), TTS ' + (apiKey ? 'playing' : 'skipped (no API key)'));
       const files = extractFilesFromJson(replyData);
       if (apiKey) {
         setStatus('Speaking…', 'speaking');
         try {
           /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
-          console.log('[JARVIS] Mic button: starting TTS for voice response', { 
-            replyLength: replyText?.length || 0,
-            replyPreview: typeof replyText === 'string' ? replyText.slice(0, 100) : '',
+          console.log('[JARVIS] Voice: starting TTS for response', { 
+            replyLength: displayText.length,
+            replyPreview: displayText.slice(0, 100),
             hasApiKey: !!apiKey,
             hasVoiceId: !!voiceId
           });
-          await bridge.speakText(replyText);
+          await bridge.speakText(displayText);
           /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
-          console.log('[JARVIS] Mic button: TTS completed successfully');
+          console.log('[JARVIS] Voice: TTS completed successfully');
           setStatus('Connecting…', '');
           try {
             try {
@@ -635,16 +660,9 @@ const bridge = new CartesiaAudioBridge({
                 if (!Number.isNaN(v)) bridge.setInputGain(Math.max(0.5, Math.min(2, v)));
               }
             } catch { /* ignore */ }
-      await bridge.startSTT();
-      // Check if we're waiting for wake word - if so, show waiting status
-      // Otherwise, STT is active and we should show listening status
-      if (bridge.isWakeWordWaiting()) {
-        syncMicButton(false, false); // Not recording yet, waiting for wake word
-        setStatus('Waiting for wake word…', 'listening');
-      } else {
-        syncMicButton(true, false);
-        setStatus('Listening…', 'listening');
-      }
+            await bridge.startSTT({ skipWakeWordWait: true });
+            syncMicButton(true, false);
+            setStatus('Listening…', 'listening');
             bridge.startAgentSilenceTimer();
           } catch (sttErr) {
             /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
@@ -678,8 +696,20 @@ const bridge = new CartesiaAudioBridge({
   },
   onTTSChunk: () => {},
   onError: (err) => {
-    // eslint-disable-next-line no-console -- intentional error reporting
-    console.error('[JARVIS]', err);
+    const msg = typeof err === 'string' ? err : (err?.message || String(err));
+    const isWakeWordError = msg.includes('wake word') ||
+      msg.includes('OpenWakeWord') || msg.includes('openWakeWord') || msg.includes('OPENWAKEWORD_WS_URL') ||
+      msg.includes('WebSocket');
+    if (wakeWordEnabled && isWakeWordError) {
+      logWakeWordError(msg, err);
+    }
+    try {
+      // eslint-disable-next-line no-console -- intentional error reporting
+      console.error('[JARVIS]', err);
+    } catch {
+      // eslint-disable-next-line no-console -- fallback when err is not serializable
+      console.error('[JARVIS] Unknown error');
+    }
     setStatus('Error', 'error');
     // Ensure mic button is synced if STT was active
     if (bridge.isSTTActive()) {
@@ -698,9 +728,10 @@ const bridge = new CartesiaAudioBridge({
     DEBUG.trace('onSTTStopped: mic reverting to idle (syncMicButton false)');
     syncMicButton(false, false);
     bridge.stopLevelMeter();
-    // If wake word is enabled, show that we're waiting for wake word
-    if (wakeWordEnabled && picovoiceAccessKey && keywordPaths.length > 0) {
+    // If wake word is enabled, show that we're waiting for wake word and refresh tracker
+    if (wakeWordConfigured) {
       setStatus('Ready (waiting for wake word)');
+      setTimeout(() => updateTrackerStatus(), 150);
     } else {
       setStatus('Ready');
     }
@@ -712,7 +743,7 @@ const bridge = new CartesiaAudioBridge({
     DEBUG.trace('VAD misfire - speech too short');
     setStatus('Try again — speak a bit longer', 'status-misfire');
     setTimeout(() => {
-      if (statusEl.textContent.includes('Try again')) setStatus('Listening…', 'listening');
+      if (statusEl?.textContent?.includes('Try again')) setStatus('Listening…', 'listening');
     }, 2500);
   },
   onWakeWordDetected: async (keywordIndex) => {
@@ -725,15 +756,8 @@ const bridge = new CartesiaAudioBridge({
     if (wakeWordTracker) {
       const metrics = bridge.getWakeWordMetrics();
       const latency = metrics?.avgDetectionLatency || 0;
-      // Extract keyword name from path (e.g., "keywords/jarvis_en_wasm_v3_0_0.ppn" -> "jarvis")
       let keywordName = `Keyword ${keywordIndex}`;
-      if (keywordPaths && keywordPaths[keywordIndex]) {
-        const path = keywordPaths[keywordIndex];
-        const match = path.match(/([^/\\]+)\.ppn$/);
-        if (match) {
-          keywordName = match[1].replace(/[-_]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-        }
-      }
+      keywordName = 'Hey Jarvis';
       wakeWordTracker.recordDetection({
         keywordIndex,
         keywordName,
@@ -768,20 +792,37 @@ const bridge = new CartesiaAudioBridge({
     setStatus('Standing by…', '');
     appendMessage('assistant', text);
     bridge.speakText(text).then(() => {
-      setStatus('Ready');
-      // If wake word is enabled, re-initialize it for always-listening after TTS
-      if (wakeWordEnabled && picovoiceAccessKey && keywordPaths.length > 0) {
-        bridge.initWakeWord().catch(err => {
+      // Reset wake word to listening after 10s silence response (conversation ended)
+      if (wakeWordConfigured) {
+        bridge.initWakeWord().then((result) => {
+          if (result?.success) {
+            setStatus('Say "Hey Jarvis" to start', '');
+            setTimeout(() => updateTrackerStatus(), 200);
+          } else {
+            setStatus('Ready');
+          }
+        }).catch(err => {
           DEBUG.error('Failed to re-initialize wake word after silence', err);
+          setStatus('Ready');
         });
+      } else {
+        setStatus('Ready');
       }
     }).catch(() => setStatus('Ready'));
   },
 });
 
+// Initial Cartesia/UI state: status and mic reflect API key so voice is clearly connected or not
+if (!apiKey) {
+  setStatus('Ready (add CARTESIA_API_KEY for voice)', '');
+  syncMicButton(false, true);
+} else {
+  setStatus('Ready', '');
+}
+
 // Initialize wake word error monitor
 let wakeWordErrorMonitor = null;
-if (wakeWordEnabled && picovoiceAccessKey && keywordPaths.length > 0) {
+if (wakeWordConfigured) {
   try {
     wakeWordErrorMonitor = new WakeWordErrorMonitor({
       bridge: bridge,
@@ -834,7 +875,7 @@ const updateTrackerStatus = () => {
   if (!bridge) {
     DEBUG.error('updateTrackerStatus: bridge is null');
     if (wakeWordTracker) {
-      wakeWordTracker.setStatus('error', 'Bridge not initialized');
+      wakeWordTracker.setStatus('error', 'Wake word failed');
     }
     return;
   }
@@ -850,7 +891,8 @@ const updateTrackerStatus = () => {
     
     if (metrics !== null) {
       // Wake word successfully initialized
-      wakeWordTracker.setStatus('waiting', 'Wake word active — waiting...');
+      const activeLabel = 'Wake word active (Hey Jarvis)';
+      wakeWordTracker.setStatus('waiting', activeLabel);
       DEBUG.trace('Wake word tracker status updated to: waiting');
       
       // Start periodic metrics update
@@ -865,63 +907,145 @@ const updateTrackerStatus = () => {
       }, 1000);
     } else {
       // Wake word manager not initialized (likely mic permission not granted)
-      wakeWordTracker.setStatus('error', 'Microphone permission needed — click mic button');
-      DEBUG.trace('Wake word tracker status updated to: error (no mic permission)');
+      wakeWordTracker.setStatus('error', 'Wake word failed');
+      DEBUG.trace('Wake word tracker status updated to: waiting for permission');
     }
   } catch (err) {
     DEBUG.error('updateTrackerStatus: Error checking wake word status', err);
     if (wakeWordTracker) {
-      wakeWordTracker.setStatus('error', 'Error checking wake word status');
+      wakeWordTracker.setStatus('error', 'Wake word failed');
     }
   }
 };
 
-// Initialize wake word for always-listening mode if enabled
-if (wakeWordEnabled && picovoiceAccessKey && keywordPaths.length > 0) {
-  // Initialize wake word after a short delay to ensure bridge is ready
-  setTimeout(() => {
-    DEBUG.trace('Starting wake word initialization...');
-    
-    // Ensure tracker status is visible before starting
-    if (wakeWordTracker) {
-      wakeWordTracker.setStatus('waiting', 'Initializing wake word...');
+// Initialize wake word automatically on load — no button. Retry on permission so it starts when user allows.
+let wakeWordRetryIntervalId = null;
+/** Set when Picovoice activation is refused (invalid key/quota/domain) — do not retry. */
+let wakeWordNonRetryable = false;
+/** Only one wake word init at a time to avoid parallel timeouts and duplicate errors. */
+let wakeWordInitInProgress = false;
+
+function stopWakeWordRetries() {
+  if (wakeWordRetryIntervalId) {
+    clearInterval(wakeWordRetryIntervalId);
+    wakeWordRetryIntervalId = null;
+  }
+}
+
+function tryWakeWordInit() {
+  if (wakeWordNonRetryable) return Promise.resolve(false);
+  if (wakeWordInitInProgress) return Promise.resolve(false);
+  wakeWordInitInProgress = true;
+  return bridge.initWakeWord()
+    .finally(() => { wakeWordInitInProgress = false; })
+    .then(result => {
+    if (result.success) {
+      stopWakeWordRetries();
+      setStatus('Say "Hey Jarvis" to start', '');
+      setTimeout(() => updateTrackerStatus(), 200);
+      return true;
     }
-    
-    // initWakeWord now always returns a promise with {success, reason}
-    // Timeout is handled internally in cartesia-audio-bridge.js (15 seconds, increased for slow networks)
-    bridge.initWakeWord().then(result => {
-      DEBUG.trace('Wake word initialization completed', result);
-      
-      if (result.success) {
-        DEBUG.trace('Wake word initialized successfully', { reason: result.reason });
-      } else {
-        DEBUG.warn('Wake word initialization failed', { reason: result.reason });
-        if (wakeWordTracker) {
-          wakeWordTracker.setStatus('error', `Wake word initialization failed: ${result.reason || 'Unknown error'}`);
-        }
-      }
-      
-      // Small delay to ensure bridge state is updated
-      setTimeout(() => {
-        updateTrackerStatus();
-      }, 200);
-    }).catch(err => {
-      DEBUG.error('Failed to initialize wake word for always-listening', err);
+    if (result.nonRetryable) {
+      wakeWordNonRetryable = true;
+      stopWakeWordRetries();
       if (wakeWordTracker) {
-        const errorMsg = err?.message || String(err) || 'Unknown error';
-        wakeWordTracker.setStatus('error', `Wake word initialization failed: ${errorMsg}`);
+        const msg = 'Wake word unavailable. Is the OpenWakeWord server running? Use mic button to talk.';
+        wakeWordTracker.setStatus('error', msg);
+      }
+      return false;
+    }
+    const reason = result.reason || '';
+    const isPermission = /permission|microphone|denied/i.test(reason);
+    if (wakeWordTracker) {
+      wakeWordTracker.setStatus(isPermission ? 'waiting' : 'error', isPermission
+        ? 'Allow microphone — wake word will start automatically'
+        : (reason ? `Wake word: ${reason}` : 'Wake word failed'));
+    }
+    return false;
+  }).catch(err => {
+    if (!wakeWordNonRetryable) {
+      DEBUG.error('Wake word init failed', err);
+    }
+    const msg = err?.message || String(err);
+    const isPermission = /permission|microphone|denied/i.test(msg);
+    if (wakeWordTracker) {
+      wakeWordTracker.setStatus(isPermission ? 'waiting' : 'error', isPermission
+        ? 'Allow microphone — wake word will start automatically'
+        : `Wake word failed: ${msg}`);
+    }
+    return false;
+  });
+}
+
+function startWakeWordRetries() {
+  if (wakeWordRetryIntervalId || wakeWordNonRetryable) return;
+  // Do NOT call tryWakeWordInit() on a timer — it would create/resume AudioContext without a user gesture and trigger the browser warning.
+  // Instead, re-bind the gesture listener so the next click will retry. Show "Click to try again".
+  wakeWordGestureHandled = false;
+  bindFirstGesture();
+  if (wakeWordTracker) wakeWordTracker.setStatus('waiting', 'Click or tap anywhere to try again');
+}
+
+if (wakeWordConfigured) {
+  // Try once on load (works when site already has mic permission from a previous visit).
+  // Browsers block getUserMedia without a user gesture, so we init on first interaction.
+  let wakeWordGestureHandled = false;
+  function onFirstUserGesture() {
+    if (wakeWordGestureHandled || bridge.getWakeWordMetrics()) return;
+    wakeWordGestureHandled = true;
+    if (wakeWordTracker) wakeWordTracker.setStatus('waiting', 'Starting wake word...');
+    bridge.ensureWakeWordListening().then((result) => {
+      if (result?.success) {
+        stopWakeWordRetries();
+        setStatus('Say "Hey Jarvis" to start', '');
+        setTimeout(() => updateTrackerStatus(), 200);
+      } else {
+        if (wakeWordTracker) {
+          const reason = result?.reason || '';
+          const isPermission = /permission|microphone|denied/i.test(reason);
+          wakeWordTracker.setStatus(isPermission ? 'waiting' : 'error', isPermission
+            ? 'Allow microphone — wake word will start automatically'
+            : (reason || 'Wake word failed'));
+        }
+        startWakeWordRetries(); // Retry periodically when first gesture failed (e.g. permission pending)
+      }
+    }).catch((err) => {
+      DEBUG.error('Wake word init failed', err);
+      if (wakeWordTracker) wakeWordTracker.setStatus('error', `Wake word failed: ${err?.message || err}`);
+      startWakeWordRetries();
+    });
+  }
+  function bindFirstGesture() {
+    if (wakeWordGestureHandled || bridge.getWakeWordMetrics()) return;
+    ['click', 'keydown', 'touchstart'].forEach((ev) => {
+      document.addEventListener(ev, onFirstUserGesture, { once: true, capture: true });
+    });
+  }
+  // Defer wake word init to first user gesture so AudioContext is created after a click/tap/key.
+  // This avoids the browser warning: "The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture."
+  bindFirstGesture();
+  if (wakeWordTracker) wakeWordTracker.setStatus('waiting', 'Click or tap anywhere to start wake word');
+  // When user returns to tab: do NOT call tryWakeWordInit() — it would create/resume AudioContext without a user gesture and trigger the warning.
+  // Re-bind the gesture listener so the next click will init wake word.
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && !wakeWordNonRetryable && !bridge.getWakeWordMetrics()) {
+        wakeWordGestureHandled = false;
+        bindFirstGesture();
+        if (wakeWordTracker) wakeWordTracker.setStatus('waiting', 'Click or tap anywhere to start wake word');
       }
     });
-  }, 500);
+  }
 } else if (wakeWordTracker) {
   // Wake word not enabled but tracker exists (shouldn't happen, but handle gracefully)
   DEBUG.trace('Wake word not configured - setting tracker to error state');
-  wakeWordTracker.setStatus('error', 'Wake word not configured');
+  wakeWordTracker.setStatus('error', 'Wake word failed');
 }
 
 // Clean up intervals when page unloads
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', () => {
+    stopWakeWordRetries();
     if (metricsInterval) {
       clearInterval(metricsInterval);
       metricsInterval = null;
@@ -960,16 +1084,18 @@ if (typeof window !== 'undefined' && (DEBUG.enabled || (window.location && windo
       console.log('[JARVIS DEBUG] Fix: 1. Use production URL (webhook/ not webhook-test/). 2. Ensure n8n workflow is active. 3. Check CORS if cross-origin. See debug/N8N-RESPOND-TO-WEBHOOK-FIX.md');
       return { ok: false, data };
     } catch (err) {
-      console.error('[JARVIS DEBUG] Error:', err.message);
+      const msg = err?.message ?? (typeof err === 'string' ? err : 'Unknown error');
+      console.error('[JARVIS DEBUG] Error:', msg);
       console.log('[JARVIS DEBUG] Fix: Check network, CORS, and webhook URL. See debug/N8N-RESPOND-TO-WEBHOOK-FIX.md');
-      return { ok: false, error: err.message };
+      return { ok: false, error: msg };
     }
   };
   console.log('[JARVIS DEBUG] Run JARVIS_DEBUG_SEND_TEST() in the console to send a test message and check the n8n response.');
   
+  window.JARVIS_CONVERSATION_HISTORY = conversationHistory;
   window.JARVIS_DEBUG_CHECK_CONFIG = function () {
     console.log('[JARVIS DEBUG] Configuration check:');
-    console.log('  apiKey:', apiKey ? `Set (${apiKey.slice(0, 10)}...)` : 'NOT SET');
+    console.log('  apiKey:', (apiKey && typeof apiKey === 'string') ? `Set (${String(apiKey).slice(0, 10)}...)` : 'NOT SET');
     console.log('  voiceId:', voiceId || 'NOT SET');
     console.log('  n8nWebhookUrl:', n8nWebhookUrl);
     console.log('  Mic support:', CartesiaAudioBridge.checkRecordingSupport());
@@ -1165,7 +1291,7 @@ if (textInput) {
   textInput.addEventListener('input', autoResizeTextarea);
   textInput.addEventListener('keydown', (e) => {
     // Never block DevTools shortcuts (F12, Ctrl+Shift+I, etc.)
-    if (e.key === 'F12' || e.keyCode === 123 ||
+    if (e.key === 'F12' ||
         (e.key === 'I' && (e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey) ||
         (e.key === 'J' && (e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey) ||
         (e.key === 'C' && (e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey)) {
@@ -1193,8 +1319,7 @@ if (textInput) {
 // Ensure DevTools shortcuts always work at document level (regardless of focus)
 // This prevents any code from accidentally blocking F12 or other DevTools shortcuts
 document.addEventListener('keydown', (e) => {
-  // F12 key (keyCode 123 for compatibility with older browsers)
-  if (e.key === 'F12' || e.keyCode === 123) {
+  if (e.key === 'F12') {
     // Explicitly allow F12 - never prevent default
     return;
   }
@@ -1253,19 +1378,13 @@ if (btnMic) {
           if (!Number.isNaN(v)) bridge.setInputGain(Math.max(0.5, Math.min(2, v)));
         }
       } catch { /* ignore */ }
-      await bridge.startSTT();
-      // Check if we're waiting for wake word - if so, show waiting status
-      // Otherwise, STT is active and we should show listening status
-      if (bridge.isWakeWordWaiting()) {
-        syncMicButton(false, false); // Not recording yet, waiting for wake word
-        setStatus('Waiting for wake word…', 'listening');
-      } else {
-        syncMicButton(true, false);
-        setStatus('Listening…', 'listening');
-      }
+      // Mic button = listen immediately; don't wait for wake word
+      await bridge.startSTT({ skipWakeWordWait: true });
+      syncMicButton(true, false);
+      setStatus('Listening…', 'listening');
       // Update wake word tracker status after mic permission is granted and STT starts
       // This ensures the tracker shows the correct status after user grants permission
-      if (wakeWordEnabled && picovoiceAccessKey && keywordPaths.length > 0) {
+      if (wakeWordConfigured) {
         setTimeout(() => {
           updateTrackerStatus();
         }, 500); // Small delay to ensure wake word is initialized
@@ -1328,4 +1447,11 @@ if (fileInput && textInput) {
   DEBUG.error('fileInput or textInput not found - cannot attach file change handler', { fileInput: !!fileInput, textInput: !!textInput });
 }
 
+// Full teardown when tab/window is closing
 window.addEventListener('beforeunload', () => bridge.destroy());
+
+// MDN bfcache: close WebSockets on pagehide so the page can be added to back/forward cache
+// @see https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API/Writing_WebSocket_client_applications#working_with_the_bfcache
+window.addEventListener('pagehide', () => {
+  bridge.closeAllWebSocketsForBfcache();
+});

@@ -3,6 +3,8 @@
 **Date:** 2026-02-02  
 **Status:** ✅ **ALL SYSTEMS OPERATIONAL - 0 ERRORS**
 
+> **Note (2026-02-05):** Some tools in "All Debug Tools Status" have been removed or consolidated. See `debug/DEBUG-TOOLS-SUMMARY.md` for current tools.
+
 ---
 
 ## Verification Results
@@ -124,27 +126,20 @@ npm run debug
 ## All Debug Tools Status
 
 ### Node.js CLI Tools
-- ✅ `check-n8n-webhook.js` - Working
-- ✅ `check-stt-sample-rate.js` - Working
 - ✅ `check-porcupine-import.js` - Working
-- ✅ `check-wake-word-config.js` - Working
+- ✅ `verify-wake-word-setup.js` - Working
 - ✅ `debug-wake-word-initialization.js` - Working
-- ✅ `validate-config.js` - Working
-- ✅ `check-env.js` - Working
-- ✅ `open-app-debug-send.mjs` - Working
-- ✅ `debug-audiocontext-autoplay.js` - **NEW** - Working
-- ✅ `debug-vad-silence-timers.js` - **NEW** - Working
-- ✅ `debug-tts-playback.js` - **NEW** - Working
-- ✅ `debug-barge-in.js` - **NEW** - Working
+- ✅ `debug-wake-word-keyword-validation-live.js` - Working
+- ✅ `test-wake-word-activation-flow.js` - Working
+- ✅ `wake-word-activation-test-cli.js` - Working
+- ✅ `check-console-errors.js` - Working
 
 ### Browser Debug Pages
 - ✅ `debug-audioworklet.html` - Working
 - ✅ `voice-pipeline-debug.html` - Working
 - ✅ `fallback-revert-debug.html` - Working
-- ✅ `audiocontext-autoplay-debug.html` - **NEW** - Working
-- ✅ `vad-silence-timers-debug.html` - **NEW** - Working
-- ✅ `tts-playback-debug.html` - **NEW** - Working
-- ✅ `barge-in-debug.html` - **NEW** - Working
+- ✅ `wake-word-activation-test.html` - Working
+- ✅ `console-errors-live.html` - Working
 
 ---
 

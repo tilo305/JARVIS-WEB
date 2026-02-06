@@ -72,6 +72,24 @@ describe('n8n-payload', () => {
       expect(payload.attachments).toHaveLength(1);
       expect(payload.attachments[0]).toHaveProperty('ocrText', '');
     });
+
+    it('should include agentic fields when provided (Memory, Routing, Context Engineering)', () => {
+      const payload = buildN8nPayload('Hello', {
+        conversationHistory: [{ role: 'user', content: 'Hi' }, { role: 'assistant', content: 'Hey!' }],
+        intent: 'greeting',
+        contextEnrichment: { viewportWidth: 1920 },
+      });
+      expect(payload.conversationHistory).toHaveLength(2);
+      expect(payload.intent).toBe('greeting');
+      expect(payload.contextEnrichment).toEqual({ viewportWidth: 1920 });
+    });
+
+    it('should not include agentic fields when empty', () => {
+      const payload = buildN8nPayload('Hello');
+      expect(payload.conversationHistory).toBeUndefined();
+      expect(payload.intent).toBeUndefined();
+      expect(payload.contextEnrichment).toBeUndefined();
+    });
   });
 
   describe('getClientLocation', () => {
@@ -116,6 +134,11 @@ describe('n8n-payload', () => {
 
     it('should handle n8n item format with json wrapper', () => {
       expect(extractReplyFromJson([{ json: { output: 'From json wrapper' } }])).toBe('From json wrapper');
+    });
+
+    it('should extract reply from object with array value (wrapped response)', () => {
+      expect(extractReplyFromJson({ data: [{ output: 'From wrapped array' }] })).toBe('From wrapped array');
+      expect(extractReplyFromJson({ result: [{ reply: 'Nested' }] })).toBe('Nested');
     });
 
     it('should return null for empty or non-object', () => {

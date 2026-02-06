@@ -1,4 +1,5 @@
-Do comprehensive research on https://picovoice.ai/docs/porcupine/ for any issues or fixes for picovoice wake word detection.
+Do comprehensive research on https://picovoice.ai/docs
+/ for any issues or fixes for picovoice wake word detection.
 
 # wAkE wOrD dOcS
 

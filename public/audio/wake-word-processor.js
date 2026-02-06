@@ -1,17 +1,14 @@
 /**
  * Wake Word AudioWorklet Processor
- * Detects wake words using Porcupine, runs in parallel with STT capture.
- * Processes audio at 16kHz Int16 PCM (matches Cartesia STT pipeline).
- * 
- * Compatibility: Aligned with cArTeSiA dOcS.md STT specs:
- * - Sample rate: 16kHz (matches Cartesia STT: sample_rate: "16000")
- * - Encoding: pcm_s16le (matches Cartesia STT: encoding: "pcm_s16le")
- * - Format: Int16 PCM (binary format compatible with Cartesia STT WebSocket)
- * 
- * @see aUdiO dOcS.md, wAkE wOrD dOcS.md, cArTeSiA dOcS.md
+ * Shared by: (1) Porcupine on main thread (512-sample frames), (2) openWakeWord (1280-sample / 80ms frames).
+ * Processes mic at 16kHz Int16 PCM; frame length is set via postMessage({ type: 'config', frameLength }).
+ * Runs in parallel with STT capture; same MediaStream feeds both via separate AudioWorklet nodes.
+ *
+ * Compatibility: Aligned with cArTeSiA dOcS.md STT specs (16kHz, pcm_s16le).
+ * @see aUdiO dOcS.md, wAkE wOrD dOcS.md, docs/OPENWAKEWORD.md
  */
 const SAMPLE_RATE = 16000; // Match Cartesia STT pipeline (cArTeSiA dOcS.md: sample_rate: "16000")
-const FRAME_LENGTH = 512;  // 32ms @ 16kHz (typical Porcupine frame, will be updated from main thread)
+const FRAME_LENGTH = 512;  // Default 32ms @ 16kHz; openWakeWord uses 1280 (80ms) via config from main thread
 
 class WakeWordProcessor extends AudioWorkletProcessor {
   constructor() {
@@ -31,6 +28,8 @@ class WakeWordProcessor extends AudioWorkletProcessor {
       if (e.data.type === 'config') {
         this.frameLength = e.data.frameLength || FRAME_LENGTH;
         this.enabled = e.data.enabled !== false;
+        // Acknowledge so main thread can verify payloads are received
+        this.port.postMessage({ type: 'configAck', frameLength: this.frameLength, enabled: this.enabled });
       } else if (e.data.type === 'enable') {
         this.enabled = e.data.enabled !== false;
       } else if (e.data.type === 'frame') {

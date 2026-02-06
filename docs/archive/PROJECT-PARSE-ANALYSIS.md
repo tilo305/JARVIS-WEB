@@ -404,10 +404,7 @@
 ### Debug Tools (`debug/`)
 
 #### Tools (`debug/tools/`)
-- `check-n8n-webhook.js`: Test n8n webhook connectivity
-- `check-stt-sample-rate.js`: Verify STT audio format
-- `open-app-debug-send.mjs`: Debug message sending
-- `validate-config.js`: Configuration validation
+- See `debug/DEBUG-TOOLS-SUMMARY.md` for current tools
 
 #### Documentation (`debug/`)
 - Extensive debug guides and fix summaries

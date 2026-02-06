@@ -3,6 +3,64 @@
 **Date:** 2026-02-04  
 **Purpose:** Guide to check and diagnose console errors in the wake word test page
 
+**Important:** The script `node debug/tools/check-console-errors.js` is a **static** checker: it looks for bad patterns in source code (e.g. empty keywords, undefined refs). It does **not** run the app. So "0 errors" from that script means *no bad patterns in code* — it does **not** mean there are no runtime errors in the browser. Always check the browser DevTools Console (F12) and/or the LIVE capture tool for real runtime errors (e.g. Picovoice 403, wake word init failures).
+
+## LIVE Console Error Capture Tool
+
+**URL:** http://localhost:3000/debug/console-errors-live.html
+
+1. Open the LIVE tool in one tab
+2. Open the main app with `?capture_errors=1` in another tab: http://localhost:3000/?capture_errors=1
+3. Use the app — errors appear in the LIVE tool in real time
+
+## Wake Word Errors – Quick Checklist
+
+**In the browser console (F12 → Console), look for these wake word messages:**
+
+| Message | Meaning |
+|--------|--------|
+| `[JARVIS] Wake word error: ...` | Wake word init or runtime error (from `onError`) |
+| `[JARVIS] [ERROR] WakeWordManager: Initialization failed` | Porcupine or keyword setup failed |
+| `The keywords argument is undefined / empty` | Old bug (fixed): was wrong `Porcupine.create()` API |
+| `Wake word initialization timeout after 30000ms` | Init took >30s (network/CDN or first-time load) |
+| `Porcupine AccessKey is required` | Missing or empty `VITE_PICOVOICE_ACCESS_KEY` in `.env` |
+| `No valid wake word keywords provided` | Keyword config empty or invalid |
+| `Wake word unavailable: ... You can still use the microphone button` | Graceful fallback; mic button still works |
+
+**Good signs:** `WakeWordManager: Porcupine initialized`, `Wake word active`, no red `[JARVIS]` errors.
+
+### Error 7: startSTT failed
+
+**Symptom:**
+```
+[JARVIS] [ERROR] startSTT failed {}
+```
+or (after fix) with details:
+```
+[JARVIS] [ERROR] startSTT failed { message: "...", name: "...", code: ... }
+```
+
+**Why `{}` appears:** Error/DOMException objects stringify to `{}` when captured. The bridge now logs `message`, `name`, `code`, and a stack snippet so the actual error is visible in Copy log and LIVE capture.
+
+**Common causes and fixes:**
+
+| Cause | Error message / code | Fix |
+|-------|----------------------|-----|
+| CARTESIA_API_KEY missing | `CARTESIA_API_KEY is required` | Add `VITE_CARTESIA_API_KEY` to `.env`, restart dev server |
+| Recording not supported | `checkRecordingSupport` message | Use HTTPS or localhost; check browser permissions |
+| `init()` fails | Load/connect error | Check AudioWorklet paths, network, CORS |
+| STT WebSocket fails | `connectSTTWebSocket` error | Verify Cartesia API key, network, firewall |
+| `getUserMedia` denied | `NotAllowedError`, `Permission denied` | Grant mic permission; use user gesture (click mic) |
+| AudioWorklet processor not loaded | `Failed to create STT AudioWorkletNode` | Ensure `stt-capture-processor.js` loads; check console for 404 |
+| VAD initialization fails | `VAD initialization failed` | Check VAD model/WASM paths; MicVAD dependencies |
+
+**Debug steps:**
+1. Open main app with `?debug=1` — enables `startSTT:` trace logs to see where it fails
+2. Check DevTools Console (F12) — full Error object is shown; Copy log shows serializable details
+3. Run `node debug/tools/verify-wake-word-setup.js` — verifies env and keys
+
+**Run static check:** `node debug/tools/check-console-errors.js`
+
 ## How to Check Console
 
 1. **Open Browser:**
@@ -72,6 +130,46 @@ PICOVOICE_ACCESS_KEY is missing or invalid!
 **Cause:** Environment variable not loaded
 
 **Fix:** Check `.env` file has `VITE_PICOVOICE_ACCESS_KEY=...` and restart dev server
+
+### Error 6: Picovoice 10011 (activation refused)
+
+**Symptom (exact sequence you may see):**
+```
+[JARVIS] Wake word error: Wake word unavailable (Picovoice status 10011). On the Free plan, Porcupine is limited to 1 monthly active user...
+[JARVIS] Wake word start failed: Initialization failed: ...
+```
+
+**Cause:** Picovoice refused activation (status 10011). **Picovoice Console has no allowlist.** On the Free plan, Porcupine is limited to **1 monthly active user**. Or env was not loaded (e.g. server not restarted after changing `.env`).
+
+**Fix:**
+
+1. **Porcupine 1/1 Users**  
+   Close all other tabs or apps using Porcupine with this AccessKey. Usage resets every 30 days. Check [Picovoice Console](https://console.picovoice.ai/) -> Home (Porcupine: X/1 Users).
+
+2. **Config loaded**  
+   Ensure `VITE_PICOVOICE_ACCESS_KEY` is in project root `.env` and **restart the dev server** (Vite reads `.env` only at startup).
+
+3. **Optional:** To disable wake word, set `VITE_WAKE_WORD_ENABLED=false` in `.env`; the mic button still works.
+
+**Reference:** `docs/WAKE-WORD-TROUBLESHOOTING.md` — Picovoice status 10011.
+
+## Env location and verification
+
+**Single source of truth:** The app loads `.env` only from the **project root** (the folder that contains `vite.config.js` and `server.js`). Nothing in `public/` overrides it.
+
+| Loader | File | Reads |
+|--------|------|--------|
+| Vite | `vite.config.js` | `loadEnvEverywhere(__dirname)` then `loadEnv(mode, envDir, '')` — root only |
+| Dev server | `server.js` | `loadEnvEverywhere(getProjectRoot(__dirname))` — root only |
+| Vite script | `scripts/kill-port-then-vite.mjs` | `loadEnvEverywhere(rootDir)` — root only |
+
+**.env** lives only at project root; nothing in `public/` or `scripts/` is loaded.
+
+**Verify .env and key presence (safe, does not print secrets):**
+```bash
+node debug/tools/verify-wake-word-setup.js
+```
+This checks that the root `.env` exists and that `VITE_PICOVOICE_ACCESS_KEY` (or `PICOVOICE_ACCESS_KEY`) is set (reports length only). If you see the key found but still get 10011, check code, config, and integration (per project rule: do not suggest replacing the AccessKey).
 
 ## Step-by-Step Console Check
 

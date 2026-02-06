@@ -6,7 +6,7 @@
 'use strict';
 
 /** Keys checked (in order) for reply text in n8n webhook JSON response */
-export const N8N_REPLY_KEYS = ['output', 'reply', 'result', 'text', 'message', 'response', 'answer', 'content'];
+export const N8N_REPLY_KEYS = ['output', 'reply', 'result', 'text', 'message', 'response', 'answer', 'content', 'body', 'responseText'];
 
 /**
  * Extract reply string from n8n webhook JSON response.
@@ -35,9 +35,14 @@ export function extractReplyFromJson(data) {
   }
   for (const v of Object.values(data)) {
     if (typeof v === 'string') return v;
-    if (v && typeof v === 'object' && !Array.isArray(v)) {
-      const nested = extractReplyFromJson(v);
-      if (nested) return nested;
+    if (v && typeof v === 'object') {
+      if (Array.isArray(v) && v.length) {
+        const fromArr = extractReplyFromJson(v);
+        if (fromArr) return fromArr;
+      } else {
+        const nested = extractReplyFromJson(v);
+        if (nested) return nested;
+      }
     }
   }
   return null;
@@ -118,11 +123,21 @@ export function getNaturalFallback(userMessage) {
  * - attachments: array of { name, type, size, data? } — data is base64 file content when present
  * - locale, language: browser locale/language
  *
+ * Agentic Design Patterns (optional, for n8n workflow branching):
+ * - conversationHistory: recent user/assistant turns (Memory pattern)
+ * - intent: classified intent for routing (Routing pattern)
+ * - agenticHints: { planMode, refineMode } for n8n workflow selection
+ * - contextEnrichment: viewport, userAgent hints (Context Engineering)
+ *
  * @param {string} message - User message text
  * @param {Object} [options] - Optional overrides
- * @param {string} [options.source='text'] - 'voice' | 'text'
+ * @param {string} [options.source='text'] - 'voice' | 'text' — voice is used for both mic button and wake word (same payload)
  * @param {string} [options.sessionId] - Override session ID (auto-generated if omitted)
  * @param {Array} [options.attachments] - File attachments
+ * @param {Array<{role: string, content: string}>} [options.conversationHistory] - Recent turns (Memory)
+ * @param {string} [options.intent] - Classified intent (Routing)
+ * @param {Object} [options.agenticHints] - planMode, refineMode, etc.
+ * @param {Object} [options.contextEnrichment] - Extra context (Context Engineering)
  * @returns {Object} Full payload object
  */
 export function buildN8nPayload(message, options = {}) {
@@ -145,7 +160,7 @@ export function buildN8nPayload(message, options = {}) {
   const messageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
   const { timezone, locale, language } = getClientLocation();
 
-  return {
+  const payload = {
     message: (message || '').trim(),
     session_id: sessionId,
     sessionId,
@@ -159,4 +174,20 @@ export function buildN8nPayload(message, options = {}) {
     locale: locale || undefined,
     language: language || undefined,
   };
+
+  // Agentic Design Patterns — optional fields for n8n
+  if (Array.isArray(options.conversationHistory) && options.conversationHistory.length > 0) {
+    payload.conversationHistory = options.conversationHistory;
+  }
+  if (options.intent) {
+    payload.intent = options.intent;
+  }
+  if (options.agenticHints && typeof options.agenticHints === 'object') {
+    payload.agenticHints = options.agenticHints;
+  }
+  if (options.contextEnrichment && typeof options.contextEnrichment === 'object') {
+    payload.contextEnrichment = options.contextEnrichment;
+  }
+
+  return payload;
 }

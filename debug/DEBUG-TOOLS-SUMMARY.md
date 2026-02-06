@@ -5,237 +5,86 @@
 
 ---
 
+## Run the app and watch the console
+
+1. **Start the dev server** (if not already running):
+   ```bash
+   npm run vite
+   ```
+2. **Open the app:** [http://localhost:3000/](http://localhost:3000/)
+3. **Watch the console** — choose one:
+   - **In-page:** Press **F12** → **Console** tab. All `console.log` / `console.error` / `console.warn` and unhandled errors appear there.
+   - **Copy log button:** Use the **"Copy log"** button (bottom-right) to copy captured errors to the clipboard.
+   - **Live errors page:** Open [http://localhost:3000/debug/console-errors-live.html](http://localhost:3000/debug/console-errors-live.html) in a **second tab**. Keep it open while using the main app; errors from the main tab are shown there in real time (BroadcastChannel).
+4. **Debug mode:** Add `?debug=1` to the main app URL for extra logging: [http://localhost:3000/?debug=1](http://localhost:3000/?debug=1)
+
+---
+
 ## Overview
 
 Per **zEn DeBuGgEr.md**, comprehensive research was conducted across all JSON, NPM, TS, JS, .md, .txt files in the project to identify all issues, errors, and fixes. New LIVE debugging tools were created for specific issues that lacked dedicated debugging tools.
 
 ---
 
-## Existing Debugging Tools (Verified)
+## Debugging Tools (Current)
 
-### Node.js CLI Tools
-- ✅ **check-n8n-webhook.js** - Tests n8n webhook connectivity
-- ✅ **check-stt-sample-rate.js** - Validates STT sample rate configuration
-- ✅ **check-porcupine-import.js** - Verifies Porcupine wake word import
-- ✅ **check-wake-word-config.js** - Validates wake word configuration
-- ✅ **debug-wake-word-initialization.js** - Comprehensive wake word initialization debugging
-- ✅ **validate-config.js** - Validates Cartesia + n8n configuration
-- ✅ **check-env.js** - Validates .env file setup
-- ✅ **open-app-debug-send.mjs** - Opens app with debug mode and test message
+### Node.js CLI Tools (`debug/tools/`)
+- **check-console-errors.js** - Static check for bad patterns in source (empty keywords, undefined refs). Run: `node debug/tools/check-console-errors.js`
+- **check-porcupine-import.js** - Verifies @picovoice/porcupine-web import resolution
+- **verify-wake-word-setup.js** - Full wake word setup verification (.env, keywords, paths). Run: `npm run test:wakeword`
+- **debug-wake-word-initialization.js** - Wake word initialization debugging
+- **debug-wake-word-keyword-validation-live.js** - Live keyword validation (built-in vs custom paths)
+- **test-wake-word-activation-flow.js** - Activation flow test (detection → STT). Run: `npm run test:wakeword:activation`
+- **wake-word-activation-test-cli.js** - Interactive CLI wake word test. Run: `npm run test:wakeword:cli`
 
-### Browser-Based Debug Pages
-- ✅ **debug-audioworklet.html** - AudioWorklet validation
-- ✅ **voice-pipeline-debug.html** - Complete voice pipeline checks
-- ✅ **fallback-revert-debug.html** - Tests mic button and text message fallbacks
+### Browser-Based Debug Pages (`public/debug/`)
+- **debug-audioworklet.html** - AudioWorklet validation
+- **voice-pipeline-debug.html** - Voice pipeline checks
+- **fallback-revert-debug.html** - Mic button and text message fallbacks
+- **console-errors-live.html** - Live console error capture (main app with `?capture_errors=1`)
+- **wake-word-activation-test.html** - Wake word activation test in browser
 
-### Jest Tests
-- ✅ **format-boundary-live.test.js** - Audio Float32↔Int16 conversion tests
-- ✅ **cartesia-websocket-live.test.ts** - Live Cartesia WebSocket tests
-- ✅ **n8n-webhook.test.js** - n8n webhook LIVE test
-- ✅ **wake-word-initialization-live.test.js** - Wake word initialization test
-- ✅ **porcupine-import.test.js** - Porcupine import resolution test
-- ✅ **example-run.test.js** - Bidirectional example execution
-
----
-
-## New Debugging Tools Created
-
-### 1. AudioContext Autoplay Policy Debug Tool ✅
-
-**File:** `debug/tools/debug-audiocontext-autoplay.js`  
-**Output:** `public/debug/audiocontext-autoplay-debug.html`  
-**Issue:** AudioContext autoplay policy warning (from browser console image)
-
-**Purpose:**
-- Tests AudioContext creation without user gesture (should be suspended)
-- Tests AudioContext resume after user gesture
-- Validates AudioContext state transitions
-- Tests AudioWorklet module loading
-- Tests microphone access and audio processing
-
-**Usage:**
-```bash
-npm run debug:audiocontext
-# Then open: http://localhost:3000/debug/audiocontext-autoplay-debug.html
-```
-
-**Features:**
-- Real-time AudioContext state monitoring
-- User gesture detection and resume testing
-- AudioWorklet module loading validation
-- Microphone access testing
-- Comprehensive logging and status display
-
----
-
-### 2. VAD & Silence Timers Debug Tool ✅
-
-**File:** `debug/tools/debug-vad-silence-timers.js`  
-**Output:** `public/debug/vad-silence-timers-debug.html`  
-**Issue:** VAD speech detection and silence timer behavior
-
-**Purpose:**
-- Tests VAD speech start/end detection
-- Monitors post-speech silence timer (3.5s)
-- Monitors agent silence timer (3.5s delay + 10s = 13.5s total)
-- Validates timer configuration from `vad-config.js`
-- Real-time event logging
-
-**Usage:**
-```bash
-npm run debug:vad
-# Then open: http://localhost:3000/debug/vad-silence-timers-debug.html
-```
-
-**Features:**
-- Real-time VAD event monitoring
-- Timer countdown displays
-- Configuration display
-- Event timeline
-- Speech duration tracking
-- Manual agent speech simulation
-
-**Related Issues:**
-- `debug/SILENCE-AND-CONVERSATION-TIMER-FIXES.md` - Timer fixes documentation
-- `debug/errors-and-fixes.md` - 10s silence timer and conversation stopping fixes
-
----
-
-### 3. TTS Playback Debug Tool ✅
-
-**File:** `debug/tools/debug-tts-playback.js`  
-**Output:** `public/debug/tts-playback-debug.html`  
-**Issue:** TTS audio playback through AudioWorklet
-
-**Purpose:**
-- Tests TTS AudioWorklet processor loading
-- Tests PCM audio playback
-- Validates audio format conversion (Int16 → Float32)
-- Tests chunk streaming
-- Monitors playback statistics
-
-**Usage:**
-```bash
-npm run debug:tts
-# Then open: http://localhost:3000/debug/tts-playback-debug.html
-```
-
-**Features:**
-- AudioContext initialization
-- TTS processor loading
-- PCM data generation and playback
-- Chunk-by-chunk streaming simulation
-- Playback statistics (chunks, bytes, time)
-- Text-to-speech integration ready
-
-**Related Documentation:**
-- `aUdiO dOcS.md` - AudioWorklet and TTS implementation guide
-- `cArTeSiA dOcS.md` - Cartesia TTS WebSocket specs
-
----
-
-### 4. Barge-In Detection Debug Tool ✅
-
-**File:** `debug/tools/debug-barge-in.js`  
-**Output:** `public/debug/barge-in-debug.html`  
-**Issue:** User speaking during TTS playback (barge-in)
-
-**Purpose:**
-- Tests barge-in detection (user speech during TTS)
-- Validates TTS interruption on user speech
-- Measures barge-in latency
-- Tests natural conversational flow
-
-**Usage:**
-```bash
-npm run debug:bargein
-# Then open: http://localhost:3000/debug/barge-in-debug.html
-```
-
-**Features:**
-- Simultaneous VAD monitoring and TTS playback
-- Real-time barge-in detection
-- TTS interruption on user speech
-- Latency measurement
-- Event timeline
-- Statistics tracking
-
-**Related Documentation:**
-- `aUdiO dOcS.md` - Barge-in implementation
-- `bOoK oN vOiCe BoT dEsIgN.md` - Conversational flow design
+### Jest / Live Tests
+- **debug/live/** - Porcupine import, wake word init live tests
+- **debug/tests/** - STT, TTS, integration, audio format tests
+- **debug/tests/openwakeword-live.test.js** - openWakeWord client/manager API, bridge integration, and VAD getStream regression (run with full suite: `npm test`)
 
 ---
 
 ## All Issues Documented
 
-### AudioContext Autoplay Policy
-- **Issue:** AudioContext suspended without user gesture
-- **Fix:** `audioContext.resume()` after user interaction
-- **Tool:** `debug-audiocontext-autoplay.js` ✅
-
-### VAD & Silence Timers
-- **Issue:** 10s silence timer starts too early; conversation stops too early
-- **Fix:** `silenceClosingDelayAfterTtsMs: 3500`, `silenceAfterSpeechToStopMicMs: 3500`
-- **Tool:** `debug-vad-silence-timers.js` ✅
-- **Documentation:** `debug/SILENCE-AND-CONVERSATION-TIMER-FIXES.md`
-
-### STT Sample Rate
-- **Issue:** Invalid sample rate error from Cartesia STT
-- **Fix:** Config in URL query params, not first message
-- **Tool:** `check-stt-sample-rate.js` ✅ (existing)
-- **Documentation:** `debug/SAMPLE-RATE-RESEARCH.md`
-
 ### Wake Word Initialization
 - **Issue:** Wake word initialization timeout
 - **Fix:** Always return promise with timeout handling
-- **Tool:** `debug-wake-word-initialization.js` ✅ (existing)
+- **Tool:** `debug-wake-word-initialization.js`
 - **Documentation:** `debug/WAKE-WORD-INITIALIZATION-TIMEOUT-FIX.md`
 
-### TTS Playback
-- **Issue:** TTS audio playback issues
-- **Tool:** `debug-tts-playback.js` ✅ (new)
-
-### Barge-In Detection
-- **Issue:** User speech during TTS not interrupting playback
-- **Tool:** `debug-barge-in.js` ✅ (new)
+### Wake Word Setup & Keywords
+- **Tool:** `verify-wake-word-setup.js` (`npm run test:wakeword`) — .env, keywords, paths
+- **Tool:** `debug-wake-word-keyword-validation-live.js` — live keyword validation
 
 ### Fallback Reverts
 - **Issue:** Mic button and text messages reverting to fallbacks
-- **Tool:** `fallback-revert-debug.html` ✅ (existing)
+- **Tool:** `fallback-revert-debug.html`
 - **Documentation:** `debug/FALLBACK-REVERT-RESEARCH.md`
 
-### N8N Webhook
-- **Issue:** n8n webhook connectivity and payload issues
-- **Tool:** `check-n8n-webhook.js` ✅ (existing)
-- **Documentation:** `debug/MIC-N8N-PAYLOAD-RESEARCH.md`
+### Console Errors
+- **Static check:** `check-console-errors.js` — bad patterns in code
+- **Live capture:** `public/debug/console-errors-live.html` + main app `?capture_errors=1`
+- **Guide:** `debug/CONSOLE-ERROR-CHECK-GUIDE.md`
 
 ---
 
-## NPM Scripts Added
+## NPM Scripts (Debug / Wake Word)
 
-```json
-{
-  "debug:audiocontext": "node debug/tools/debug-audiocontext-autoplay.js",
-  "debug:vad": "node debug/tools/debug-vad-silence-timers.js",
-  "debug:tts": "node debug/tools/debug-tts-playback.js",
-  "debug:bargein": "node debug/tools/debug-barge-in.js"
-}
+```bash
+npm run debug              # Full suite: lint → test → build → vite build
+npm run debug:live         # Live Jest tests (debug/live)
+npm run test:wakeword      # Verify wake word setup (verify-wake-word-setup.js)
+npm run test:wakeword:activation  # Activation flow (test-wake-word-activation-flow.js)
+npm run test:wakeword:cli  # Interactive CLI wake word test
+npm test                   # All Jest tests
 ```
-
----
-
-## Verification Checklist
-
-- ✅ All existing tools verified and documented
-- ✅ AudioContext autoplay tool created
-- ✅ VAD & Silence timers tool created
-- ✅ TTS playback tool created
-- ✅ Barge-in detection tool created
-- ✅ All tools generate HTML debug pages in `public/debug/`
-- ✅ All tools follow existing patterns and structure
-- ✅ NPM scripts added for easy access
-- ✅ No redundant tools created (checked against existing tools)
-- ✅ All fixes documented in `debug/errors-and-fixes.md`
 
 ---
 
@@ -243,42 +92,16 @@ npm run debug:bargein
 
 ### Quick Start
 ```bash
-# Generate all debug HTML pages
-npm run debug:audiocontext
-npm run debug:vad
-npm run debug:tts
-npm run debug:bargein
+# Verify wake word config (no server needed)
+npm run test:wakeword
 
-# Then open in browser (after starting server)
-# http://localhost:3000/debug/audiocontext-autoplay-debug.html
-# http://localhost:3000/debug/vad-silence-timers-debug.html
-# http://localhost:3000/debug/tts-playback-debug.html
-# http://localhost:3000/debug/barge-in-debug.html
-```
+# Run full debug suite
+npm run debug
 
-### Running Server
-```bash
-npm run serve  # or npm run vite
-```
-
-### All Debug Tools
-```bash
-# Node.js CLI tools
-npm run debug:n8n          # n8n webhook
-npm run debug:stt          # STT sample rate
-npm run debug:config       # Configuration validation
-npm run debug:env          # Environment variables
-npm run debug:app          # App debug mode
-
-# Generate browser debug pages
-npm run debug:audiocontext # AudioContext autoplay
-npm run debug:vad          # VAD & silence timers
-npm run debug:tts          # TTS playback
-npm run debug:bargein      # Barge-in detection
-
-# Jest tests
-npm run debug:live        # Live Jest tests
-npm test                   # All tests
+# Start server and use browser debug pages
+npm run vite
+# Then open: http://localhost:3000/debug/console-errors-live.html
+# Or: http://localhost:3000/debug/wake-word-activation-test.html
 ```
 
 ---
@@ -297,12 +120,4 @@ npm test                   # All tests
 
 ## Conclusion
 
-✅ **All debugging tools created and verified**
-
-- **4 new browser-based debug tools** created for specific issues
-- **All existing tools** verified and documented
-- **No redundant tools** created (checked against existing suite)
-- **All fixes** documented and tools created for verification
-- **100% working** - All tools generate functional HTML debug pages
-
-The debugging suite is now comprehensive and covers all identified issues with dedicated LIVE testing tools.
+The debug suite includes CLI tools for wake word setup and console checks, browser debug pages for live testing, and Jest/live tests. Duplicate and obsolete tools have been removed; see `debug/ORPHANED-DUPLICATE-OLD-CODE.md` for the audit.

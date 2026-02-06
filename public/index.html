@@ -470,6 +470,18 @@
       text-overflow: ellipsis;
       max-width: 100px;
     }
+    .wake-word-tracker-inline .wake-word-last-error {
+      font-size: 0.5625rem;
+      color: var(--text-muted);
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      line-height: 1.2;
+    }
+    .wake-word-tracker-inline .wake-word-last-error.has-error {
+      color: var(--red);
+    }
     .wake-word-tracker-inline .tracker-metrics {
       display: flex;
       gap: 0.375rem;
@@ -798,7 +810,7 @@
       inset: 0;
       border-radius: var(--radius);
       padding: 1px;
-          background: linear-gradient(135deg, rgba(196, 30, 58, 0.3), rgba(255, 184, 0, 0.3));
+      background: linear-gradient(135deg, rgba(196, 30, 58, 0.3), rgba(255, 184, 0, 0.3));
       -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
       -webkit-mask-composite: xor;
       mask-composite: exclude;
@@ -1158,8 +1170,9 @@
     <div class="wake-word-tracker-inline" id="wakeWordTracker">
       <div class="tracker-status" id="trackerStatus">
         <div class="tracker-status-indicator" id="trackerStatusIndicator"></div>
-        <span id="trackerStatusText">Initializing...</span>
+        <span id="trackerStatusText">Wake word failed</span>
       </div>
+      <div class="wake-word-last-error" id="wakeWordLastError" aria-live="polite" title="Last wake word error — filter console by: JARVIS Wake Word Error"></div>
       <div class="tracker-metrics">
         <div class="metric-item">
           <span class="metric-label">Detections</span>
@@ -1232,10 +1245,118 @@
 
 
   <script>
+    // Console error + warning capture: always capture and show Copy log button so you can copy all console errors and warnings
+    (function() {
+      const maxEntries = 200;
+      const captured = [];
+      window.__JARVIS_CAPTURED_ERRORS = captured; // legacy name; array holds both errors and warnings
+      function addEntry(type, message, stack) {
+        var d = new Date();
+        var time = d.toLocaleTimeString() + '.' + String(d.getMilliseconds()).padStart(3, '0');
+        captured.push({ time: time, type: type, message: message, stack: stack || '' });
+        if (captured.length > maxEntries) captured.shift();
+      }
+      function argsToMessageAndStack(args) {
+        var msgParts = [];
+        var stack = '';
+        for (var i = 0; i < args.length; i++) {
+          var a = args[i];
+          if (a != null && typeof a === 'object' && typeof a.stack === 'string') stack = a.stack;
+          if (a == null) msgParts.push(String(a));
+          else if (typeof a === 'object') { try { msgParts.push(JSON.stringify(a)); } catch (_) { msgParts.push(String(a)); } }
+          else msgParts.push(String(a));
+        }
+        return { message: msgParts.join(' '), stack: stack };
+      }
+      try {
+        const bc = new BroadcastChannel('jarvis-console-errors');
+        function send(type, message, stack) {
+          if (type === 'warn' && typeof message === 'string' && message.includes('Multi-threading is not supported')) return;
+          addEntry(type, message, stack);
+          try { bc.postMessage({ type: type, message: message, stack: stack || '' }); } catch (_) {}
+        }
+        const origError = console.error;
+        const origWarn = console.warn;
+        console.error = function() {
+          origError.apply(console, arguments);
+          var o = argsToMessageAndStack(Array.from(arguments));
+          send('error', o.message, o.stack);
+        };
+        console.warn = function() {
+          origWarn.apply(console, arguments);
+          var o = argsToMessageAndStack(Array.from(arguments));
+          send('warn', o.message, o.stack);
+        };
+        window.onerror = function(msg, src, line, col, err) {
+          var m = (msg != null ? String(msg) : 'Unknown error') + ' at ' + (src || '') + ':' + (line ?? '') + ':' + (col ?? '');
+          send('error', m, err && typeof err.stack === 'string' ? err.stack : '');
+        };
+        window.onunhandledrejection = function(ev) {
+          var r = ev && ev.reason;
+          var msg = (r != null && (typeof r.message === 'string' ? r.message : String(r))) || 'Unhandled rejection';
+          send('error', msg, r && typeof r.stack === 'string' ? r.stack : '');
+        };
+      } catch (_) {}
+      // Copy log button — always visible; shows captured count (errors + warnings)
+      (function addCopyLogButton() {
+        function updateLabel() {
+          var n = captured.length;
+          btn.textContent = n === 0 ? 'Copy log (0)' : 'Copy log (' + n + ')';
+          btn.setAttribute('aria-label', 'Copy captured console errors and warnings to clipboard. ' + n + ' captured.');
+          btn.title = 'Copy captured errors and warnings (' + n + ') to clipboard';
+        }
+        var style = document.createElement('style');
+        style.textContent = '.jarvis-copy-log-btn{position:fixed;bottom:16px;right:16px;z-index:9999;padding:8px 14px;font-size:13px;background:rgba(196,30,58,0.9);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:8px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.3);}.jarvis-copy-log-btn:hover{background:rgba(196,30,58,1);}';
+        document.head.appendChild(style);
+        var btn = document.createElement('button');
+        btn.className = 'jarvis-copy-log-btn';
+        btn.type = 'button';
+        updateLabel();
+        btn.onclick = function() {
+          var header = 'JARVIS captured errors/warnings from this page.\n' +
+            'Note: Browser-generated messages (e.g. AudioContext) and extension errors appear in DevTools but are not captured here.\n' +
+            '---\n';
+          if (captured.length === 0) {
+            var text = header + 'No errors or warnings captured yet. Use the page (e.g. click mic, start wake word) to generate logs.';
+            navigator.clipboard.writeText(text).then(function() {
+              btn.textContent = 'Copied (0)';
+              setTimeout(updateLabel, 2000);
+            }, function() {
+              btn.textContent = 'Copy failed';
+              setTimeout(updateLabel, 1500);
+            });
+            return;
+          }
+          var text = header + captured.map(function(e) {
+            return '[' + e.time + '] ' + e.type.toUpperCase() + '\n' + e.message + (e.stack ? '\n' + e.stack : '');
+          }).join('\n---\n');
+          navigator.clipboard.writeText(text).then(function() {
+            btn.textContent = 'Copied ' + captured.length;
+            setTimeout(updateLabel, 2000);
+          }, function() {
+            btn.textContent = 'Copy failed';
+            setTimeout(updateLabel, 1500);
+          });
+        };
+        document.body.appendChild(btn);
+        // Keep button label in sync with captured count
+        captured.push = function() {
+          var r = Array.prototype.push.apply(captured, arguments);
+          if (typeof updateLabel === 'function') updateLabel();
+          return r;
+        };
+        captured.shift = function() {
+          var r = Array.prototype.shift.apply(captured);
+          if (typeof updateLabel === 'function') updateLabel();
+          return r;
+        };
+      })();
+    })();
+    // Front-end / back-end integration: config comes from Vite env (VITE_*) when using npm run vite,
+    // or from window.JARVIS_CONFIG when using static server (npm run serve). Set .env or override below.
     window.JARVIS_CONFIG = window.JARVIS_CONFIG || {};
-    // Cartesia API Configuration
-    window.JARVIS_CONFIG.apiKey = 'sk_car_GYAnGSmHkAFGYbr52wL9HG';
-    window.JARVIS_CONFIG.voiceId = '95131c95-525c-463b-893d-803bafdf93c4';
+    window.JARVIS_CONFIG.apiKey = window.JARVIS_CONFIG.apiKey || '';
+    window.JARVIS_CONFIG.voiceId = window.JARVIS_CONFIG.voiceId || '95131c95-525c-463b-893d-803bafdf93c4';
     
     // Enable debug: ?debug=1 in URL, or set window.JARVIS_DEBUG = true
     const isDebugMode = /[?&]debug=1/.test(location.search) || /[?&]debug=true/.test(location.search);
@@ -1259,26 +1380,7 @@
       }
     }
     
-    // Fallback: Ensure status text updates even if main script fails
-    // This runs after DOM is ready to update the status
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', function() {
-        setTimeout(function() {
-          const statusEl = document.getElementById('trackerStatusText');
-          if (statusEl && statusEl.textContent === 'Initializing...') {
-            // If still initializing after 2 seconds, update to show we're checking
-            statusEl.textContent = 'Checking status...';
-          }
-        }, 2000);
-      });
-    } else {
-      setTimeout(function() {
-        const statusEl = document.getElementById('trackerStatusText');
-        if (statusEl && statusEl.textContent === 'Initializing...') {
-          statusEl.textContent = 'Checking status...';
-        }
-      }, 2000);
-    }
+    // Status text is managed by app.js wake word tracker
   </script>
   <script type="module" src="./js/app.js"></script>
 </body>

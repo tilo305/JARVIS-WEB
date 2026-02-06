@@ -3,6 +3,7 @@ import { viteStaticCopy } from 'vite-plugin-static-copy';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadEnvEverywhere } from './scripts/load-env-everywhere.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -32,13 +33,35 @@ function preserveIndexHtmlPlugin() {
   };
 }
 
+/** Vite plugin: block serving .env / .env.* in dev (secrets must not be exposed). */
+function blockEnvFilesPlugin() {
+  return {
+    name: 'block-env-files',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const path = (req.url || '').split('?')[0];
+        const base = path.replace(/\/$/, '').split('/').pop() || '';
+        if (base === '.env' || base.startsWith('.env.')) {
+          res.statusCode = 404;
+          res.end('Not Found');
+          return;
+        }
+        next();
+      });
+    },
+  };
+}
+
 /** Vite plugin: log Cartesia STT/TTS WebSocket reachability at startup and on an interval. */
 function cartesiaWebSocketStatusPlugin() {
   return {
     name: 'cartesia-websocket-status',
     apply: 'serve',
-    configureServer() {
-      const env = loadEnv('development', process.cwd(), '');
+    configureServer(server) {
+      // Use same envDir as main config so we read root .env, not cwd (which may differ)
+      const envDir = server?.config?.envDir || __dirname;
+      const env = loadEnv('development', envDir, '');
       const apiKey = env.VITE_CARTESIA_API_KEY || env.CARTESIA_API_KEY || process.env.CARTESIA_API_KEY || '';
 
       async function checkEndpoint(baseUrl) {
@@ -89,12 +112,18 @@ function cartesiaWebSocketStatusPlugin() {
 }
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '');
+  // Load .env from project root only
+  loadEnvEverywhere(__dirname);
+  const envDir = __dirname;
+  const env = loadEnv(mode, envDir, ''); // '' = load all keys; frontend only gets VITE_* via define below
+  Object.assign(process.env, env);
   return {
     root: 'public',
     publicDir: false,
+    envDir, // Ensures dev/build both read root .env
     plugins: [
       preserveIndexHtmlPlugin(),
+      blockEnvFilesPlugin(),
       viteStaticCopy({
         targets: [
           { src: 'audio/*', dest: 'audio' },
@@ -108,6 +137,7 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: join(__dirname, 'dist-public'), // absolute path to project root
       emptyOutDir: true,
+      chunkSizeWarningLimit: 4096, // main bundle includes Porcupine/TTS deps; suppress size warning
     },
     optimizeDeps: {
       include: ['@picovoice/porcupine-web'],
@@ -124,17 +154,32 @@ export default defineConfig(({ mode }) => {
       port: Number(process.env.PORT) || 3000,
       open: true,
     },
-    define: {
-      'import.meta.env.VITE_CARTESIA_API_KEY': JSON.stringify(env.VITE_CARTESIA_API_KEY || ''),
-      'import.meta.env.VITE_CARTESIA_VOICE_ID': JSON.stringify(env.VITE_CARTESIA_VOICE_ID || ''),
-      'import.meta.env.VITE_N8N_WEBHOOK_URL': JSON.stringify(
-        env.VITE_N8N_WEBHOOK_URL || 'https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4'
-      ),
-      'import.meta.env.VITE_PICOVOICE_ACCESS_KEY': JSON.stringify(env.VITE_PICOVOICE_ACCESS_KEY || env.PICOVOICE_ACCESS_KEY || ''),
-      'import.meta.env.VITE_PORCUPINE_KEYWORD': JSON.stringify(env.VITE_PORCUPINE_KEYWORD || env.PORCUPINE_KEYWORD || ''),
-      'import.meta.env.VITE_PORCUPINE_SENSITIVITY': JSON.stringify(env.VITE_PORCUPINE_SENSITIVITY || env.PORCUPINE_SENSITIVITY || '0.5'),
-      'import.meta.env.VITE_WAKE_WORD_ENABLED': JSON.stringify(env.VITE_WAKE_WORD_ENABLED || env.WAKE_WORD_ENABLED || 'false'),
-      'import.meta.env.VITE_DEBUG_WAKE_WORD': JSON.stringify(env.VITE_DEBUG_WAKE_WORD || env.DEBUG_WAKE_WORD || 'false'),
-    },
+    // Expose env to frontend (from root .env). Use both VITE_* and non-VITE_ names so the same value shows up no matter what is looking for it.
+    define: (() => {
+      const defaultN8n = 'https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4';
+      const cartesiaApiKey = env.VITE_CARTESIA_API_KEY || env.CARTESIA_API_KEY || '';
+      const cartesiaVoiceId = env.VITE_CARTESIA_VOICE_ID || env.CARTESIA_VOICE_ID || '95131c95-525c-463b-893d-803bafdf93c4';
+      const n8nWebhookUrl = env.VITE_N8N_WEBHOOK_URL || env.N8N_WEBHOOK_URL || defaultN8n;
+      const wakeWordEnabled = env.VITE_WAKE_WORD_ENABLED || env.WAKE_WORD_ENABLED || 'false';
+      const debugWakeWord = env.VITE_DEBUG_WAKE_WORD || env.DEBUG_WAKE_WORD || 'false';
+      const useOpenWakeWord = env.VITE_USE_OPENWAKEWORD || env.USE_OPENWAKEWORD || 'false';
+      const openWakeWordWsUrl = env.VITE_OPENWAKEWORD_WS_URL || env.OPENWAKEWORD_WS_URL || 'ws://localhost:8765/ws';
+      return {
+        'import.meta.env.VITE_CARTESIA_API_KEY': JSON.stringify(cartesiaApiKey),
+        'import.meta.env.CARTESIA_API_KEY': JSON.stringify(cartesiaApiKey),
+        'import.meta.env.VITE_CARTESIA_VOICE_ID': JSON.stringify(cartesiaVoiceId),
+        'import.meta.env.CARTESIA_VOICE_ID': JSON.stringify(cartesiaVoiceId),
+        'import.meta.env.VITE_N8N_WEBHOOK_URL': JSON.stringify(n8nWebhookUrl),
+        'import.meta.env.N8N_WEBHOOK_URL': JSON.stringify(n8nWebhookUrl),
+        'import.meta.env.VITE_WAKE_WORD_ENABLED': JSON.stringify(wakeWordEnabled),
+        'import.meta.env.WAKE_WORD_ENABLED': JSON.stringify(wakeWordEnabled),
+        'import.meta.env.VITE_DEBUG_WAKE_WORD': JSON.stringify(debugWakeWord),
+        'import.meta.env.DEBUG_WAKE_WORD': JSON.stringify(debugWakeWord),
+        'import.meta.env.VITE_USE_OPENWAKEWORD': JSON.stringify(useOpenWakeWord),
+        'import.meta.env.USE_OPENWAKEWORD': JSON.stringify(useOpenWakeWord),
+        'import.meta.env.VITE_OPENWAKEWORD_WS_URL': JSON.stringify(openWakeWordWsUrl),
+        'import.meta.env.OPENWAKEWORD_WS_URL': JSON.stringify(openWakeWordWsUrl),
+      };
+    })(),
   };
 });

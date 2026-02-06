@@ -181,7 +181,7 @@ The pre-speech buffer captures audio during wake word detection:
 
 - `WAKE-WORD-PIPELINE-FLOW.md` - Complete pipeline flow documentation
 - `wAkE wOrD dOcS.md` - Wake word documentation
-- `debug/tools/test-wake-word-detection.js` - Basic wake word detection test
+- `debug/tools/verify-wake-word-setup.js` - Wake word setup verification (`npm run test:wakeword`)
 
 ## Support
 

@@ -95,7 +95,7 @@ bridge.wakeWordManager?.porcupine
 
 ## Debug Tools Created
 
-- `debug/tools/debug-wake-word-keywords.js` - Static analysis
+- `debug/tools/debug-wake-word-keyword-validation-live.js` - Live keyword validation
 - `debug/tools/debug-wake-word-keyword-validation-live.js` - LIVE testing
 - `debug/WAKE-WORD-KEYWORD-VALIDATION-FIX.md` - Fix documentation
 

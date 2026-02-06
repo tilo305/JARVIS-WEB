@@ -98,7 +98,7 @@ After the terminal test passes:
 
 ## Files
 
-- **Test Script:** `debug/tools/test-wake-word-detection.js`
+- **Test Script:** `debug/tools/verify-wake-word-setup.js` (run: `npm run test:wakeword`)
 - **Wake Word Manager:** `public/js/wake-word-manager.js`
 
 ## Summary

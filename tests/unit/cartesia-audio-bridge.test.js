@@ -66,4 +66,29 @@ describe('CartesiaAudioBridge', () => {
     expect(source).toMatch(/silenceClosingDelayAfterTtsMs/);
     expect(source).toMatch(/delayMs\s*=\s*VAD_CONFIG\.silenceClosingDelayAfterTtsMs/);
   });
+
+  it('destroy() should release WakeWordManager and stop media stream (integration cleanup)', () => {
+    const { readFileSync } = require('fs');
+    const { join } = require('path');
+    const source = readFileSync(join(__dirname, '../../public/js/cartesia-audio-bridge.js'), 'utf8');
+    expect(source).toMatch(/wakeWordManager\.release\(\)/);
+    expect(source).toMatch(/mediaStream\.getTracks\(\)/);
+    expect(source).toMatch(/\.forEach\(.*t\.stop\(\)/);
+  });
+
+  it('should support openWakeWord backend via _hasWakeWordConfig and _initOpenWakeWord', () => {
+    const { readFileSync } = require('fs');
+    const { join } = require('path');
+    const source = readFileSync(join(__dirname, '../../public/js/cartesia-audio-bridge.js'), 'utf8');
+    expect(source).toMatch(/_hasWakeWordConfig|openWakeWordWsUrl/);
+    expect(source).toMatch(/_initOpenWakeWord|OpenWakeWordManager/);
+  });
+
+  it('startSTT must reuse existing STT AudioWorklet graph when wake word pre-set (no duplicate nodes)', () => {
+    const { readFileSync } = require('fs');
+    const { join } = require('path');
+    const source = readFileSync(join(__dirname, '../../public/js/cartesia-audio-bridge.js'), 'utf8');
+    expect(source).toMatch(/sttGraphExists|reusing existing STT audio graph/);
+    expect(source).toMatch(/this\.sttNode && this\.sttGainNode && this\.sttAnalyserNode/);
+  });
 });

@@ -3,6 +3,8 @@
 **Date:** 2026-02-02  
 **Status:** ✅ **ALL TOOLS CREATED AND VERIFIED**
 
+> **Note (2026-02-05):** Some tools listed below have been removed or consolidated. For current tools, see `debug/DEBUG-TOOLS-SUMMARY.md`.
+
 ---
 
 ## Summary
@@ -41,14 +43,10 @@ Per **zEn DeBuGgEr.md**, comprehensive research was conducted across all project
 
 ### ✅ All Existing Tools Verified
 
-- ✅ `check-n8n-webhook.js` - n8n webhook connectivity
-- ✅ `check-stt-sample-rate.js` - STT sample rate validation
 - ✅ `check-porcupine-import.js` - Porcupine import verification
-- ✅ `check-wake-word-config.js` - Wake word configuration
+- ✅ `verify-wake-word-setup.js` - Wake word setup verification
 - ✅ `debug-wake-word-initialization.js` - Wake word initialization
-- ✅ `validate-config.js` - Configuration validation
-- ✅ `check-env.js` - Environment variables
-- ✅ `open-app-debug-send.mjs` - App debug mode
+- ✅ `check-console-errors.js` - Static check for bad patterns
 - ✅ Browser debug pages (existing)
 - ✅ Jest tests (existing)
 

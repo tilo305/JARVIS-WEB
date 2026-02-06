@@ -18,7 +18,7 @@ module.exports = {
 
   collectCoverage: true,
   coverageDirectory: 'coverage',
-  coverageReporters: ['text', 'lcov', 'html'],
+  coverageReporters: ['text', 'lcov', 'html', 'json'],
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/examples/**',
@@ -41,6 +41,8 @@ module.exports = {
   setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
 
   testTimeout: 30000,
+
+  maxWorkers: '50%',
 
   verbose: true,
 

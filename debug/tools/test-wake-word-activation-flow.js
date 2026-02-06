@@ -17,10 +17,11 @@
 import { readFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { getFirstEnvPath, getProjectRoot } from '../../scripts/load-env-everywhere.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const root = join(__dirname, '../..');
-const envPath = join(root, '.env');
+const root = getProjectRoot(__dirname);
+const envPath = getFirstEnvPath(root) ?? join(root, '.env');
 const bridgePath = join(root, 'public/js/cartesia-audio-bridge.js');
 
 // Colors for terminal output

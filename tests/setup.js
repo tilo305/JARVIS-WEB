@@ -1,12 +1,22 @@
 /**
- * Jest global setup for JARVIS-WEB tests
+ * Jest global setup for JARVIS-WEB tests.
+ * @see jEsT dOcS.md — Project-Specific Setup, Test Setup File
  */
 process.env.NODE_ENV = 'test';
 
 const originalConsole = console;
 
+// Optional: suppress log/info/warn for cleaner output (errors still shown). Use JEST_SILENT=1
+const silent = process.env.JEST_SILENT === '1' || process.env.JEST_SILENT === 'true';
 global.console = {
   ...originalConsole,
+  ...(silent
+    ? {
+        log: jest.fn(),
+        info: jest.fn(),
+        warn: jest.fn(),
+      }
+    : {}),
 };
 
 global.testUtils = {

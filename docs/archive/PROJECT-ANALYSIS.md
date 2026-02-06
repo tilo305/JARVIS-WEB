@@ -212,11 +212,7 @@
 
 ### Debug Tools (`debug/`)
 
-- **`tools/`**: Utility scripts for debugging
-  - `check-n8n-webhook.js`: Test n8n webhook connectivity
-  - `check-stt-sample-rate.js`: Verify STT audio format
-  - `open-app-debug-send.mjs`: Debug message sending
-  - `validate-config.js`: Configuration validation
+- **`tools/`**: Utility scripts for debugging (see `debug/DEBUG-TOOLS-SUMMARY.md` for current tools)
 - **`logs/`**: Debug log storage
 - **`results/`**: Test run results
 - **Documentation**: Extensive debug guides and fix summaries

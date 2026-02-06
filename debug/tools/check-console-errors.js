@@ -51,16 +51,6 @@ function checkFile(filePath, description) {
       type: 'warning'
     },
     {
-      pattern: /validKeywords\s*=\s*\[\]/,
-      message: 'validKeywords being set to empty array',
-      type: 'error'
-    },
-    {
-      pattern: /Porcupine\.create\(\s*\{[^}]*keywords:\s*\[\s*\]/,
-      message: 'Porcupine.create() called with empty keywords array',
-      type: 'error'
-    },
-    {
       pattern: /await\s+[^{]*\{[^}]*keywords[^}]*\}/,
       message: 'Async operation with keywords (check for race conditions)',
       type: 'warning'
@@ -102,7 +92,7 @@ function checkFile(filePath, description) {
         });
       }
     }
-  } catch (e) {
+  } catch {
     // Ignore parse errors for now
   }
   
@@ -133,9 +123,10 @@ function main() {
   console.log('══════════════════════════════════════════════════════════════════════\n');
   
   const files = [
+    { path: join(root, 'public/js/app.js'), desc: 'App (main)' },
     {
-      path: join(root, 'public/js/wake-word-manager.js'),
-      desc: 'Wake Word Manager'
+      path: join(root, 'public/js/openwakeword-manager.js'),
+      desc: 'OpenWakeWord Manager'
     },
     {
       path: join(root, 'public/js/cartesia-audio-bridge.js'),

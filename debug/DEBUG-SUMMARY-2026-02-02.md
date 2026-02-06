@@ -121,7 +121,7 @@ See **`debug/TEXT-AND-MIC-DEBUG-CHECKLIST.md`** for step-by-step testing instruc
   - Removed apiKey gate from text send path
   - Added error handling to onTranscript (voice path)
   - Added JARVIS_DEBUG_CHECK_CONFIG() helper
-- `debug/tools/open-app-debug-send.mjs` (new)
+- `debug/tools/` (see DEBUG-TOOLS-SUMMARY.md for current tools)
   - Opens app with ?debug=1
   - Runs Node fetch test to n8n
   - Prints instructions for browser console test

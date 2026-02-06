@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JARVIS — Console Errors LIVE</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0a0a0f;
+      color: #F5F5F5;
+      margin: 0;
+      padding: 1rem;
+      min-height: 100vh;
+    }
+    h1 {
+      color: #FFB800;
+      margin: 0 0 1rem 0;
+      font-size: 1.25rem;
+    }
+    .instructions {
+      background: rgba(42, 52, 65, 0.6);
+      border: 1px solid rgba(196, 30, 58, 0.3);
+      border-radius: 12px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+    }
+    .instructions ol { margin: 0.5rem 0 0 1.25rem; padding: 0; }
+    .instructions a {
+      color: #FFB800;
+      text-decoration: none;
+    }
+    .instructions a:hover { text-decoration: underline; }
+    .panel {
+      background: rgba(15, 15, 21, 0.9);
+      border: 1px solid rgba(196, 30, 58, 0.3);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 1rem;
+    }
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem 1rem;
+      background: rgba(196, 30, 58, 0.15);
+      border-bottom: 1px solid rgba(196, 30, 58, 0.3);
+      font-weight: 600;
+      color: #FFB800;
+    }
+    .panel-header .count { font-size: 0.85rem; color: #B0B0B0; }
+    .panel-header button {
+      background: rgba(196, 30, 58, 0.4);
+      border: 1px solid rgba(196, 30, 58, 0.5);
+      color: #F5F5F5;
+      padding: 0.35rem 0.75rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    .panel-header button:hover { background: rgba(196, 30, 58, 0.6); }
+    .error-list {
+      max-height: 400px;
+      overflow-y: auto;
+      padding: 0.5rem;
+    }
+    .error-item {
+      background: rgba(230, 57, 70, 0.1);
+      border: 1px solid rgba(230, 57, 70, 0.3);
+      border-radius: 8px;
+      padding: 0.75rem;
+      margin-bottom: 0.5rem;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 0.8rem;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .error-item.warn {
+      background: rgba(255, 184, 0, 0.08);
+      border-color: rgba(255, 184, 0, 0.3);
+    }
+    .error-item .time { color: #B0B0B0; font-size: 0.7rem; margin-bottom: 0.25rem; }
+    .error-item .type { color: #FFB800; font-weight: 600; font-size: 0.7rem; }
+    .empty { color: #B0B0B0; text-align: center; padding: 2rem; font-size: 0.9rem; }
+    .status { padding: 0.5rem 1rem; font-size: 0.85rem; color: #B0B0B0; }
+  </style>
+</head>
+<body>
+  <h1>🔍 JARVIS Console Errors — LIVE</h1>
+  <div class="instructions">
+    <strong>How to capture errors:</strong>
+    <ol>
+      <li>Open the main app in another tab with error capture enabled:<br>
+        <a href="/?capture_errors=1&debug=1" target="_blank" rel="noopener">http://localhost:3000/?capture_errors=1&amp;debug=1</a>
+      </li>
+      <li>Use the app (click mic, send message, etc.) — errors will appear here in real time.</li>
+      <li>Keep this tab open while using the main app.</li>
+      <li><strong>Copy</strong> copies all captured errors to the clipboard so you can paste them elsewhere.</li>
+    </ol>
+  </div>
+  <div class="panel">
+    <div class="panel-header">
+      <span>Captured errors <span class="count" id="errorCount">(0)</span></span>
+      <span>
+        <button type="button" id="btnCopy">Copy</button>
+        <button type="button" id="btnClear">Clear</button>
+      </span>
+    </div>
+    <div class="error-list" id="errorList">
+      <div class="empty">No errors captured yet. Open the main app with ?capture_errors=1 in another tab.</div>
+    </div>
+  </div>
+  <div class="status" id="status">Listening for errors from main app...</div>
+
+  <script type="module">
+    import { escapeHtml } from '../js/debug.js';
+
+    const CHANNEL = 'jarvis-console-errors';
+    const STORAGE_KEY = 'jarvis-console-errors-log';
+    const errors = [];
+    const maxErrors = 200;
+
+    const errorList = document.getElementById('errorList');
+    const errorCount = document.getElementById('errorCount');
+    const statusEl = document.getElementById('status');
+    const btnClear = document.getElementById('btnClear');
+    const btnCopy = document.getElementById('btnCopy');
+
+    function formatTime() {
+      const d = new Date();
+      return d.toLocaleTimeString() + '.' + String(d.getMilliseconds()).padStart(3, '0');
+    }
+
+    function saveToStorage() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(errors));
+      } catch (_) {}
+    }
+
+    function loadFromStorage() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            errors.length = 0;
+            errors.push(...parsed.slice(-maxErrors));
+            renderErrors();
+          }
+        }
+      } catch (_) {}
+    }
+
+    function renderErrors() {
+      if (errors.length === 0) {
+        errorList.innerHTML = '<div class="empty">No errors captured yet. Open the main app with ?capture_errors=1 in another tab.</div>';
+      } else {
+        errorList.innerHTML = errors.slice().reverse().map((e) => {
+          const cls = e.type === 'warn' ? 'error-item warn' : 'error-item';
+          const text = typeof e.message === 'string' ? e.message : JSON.stringify(e.message, null, 2);
+          return `<div class="${cls}">
+            <div class="time">${e.time}</div>
+            <div class="type">${e.type.toUpperCase()}</div>
+            <div>${escapeHtml(text)}</div>
+            ${e.stack ? `<div style="margin-top:0.5rem;color:#B0B0B0;font-size:0.75rem">${escapeHtml(e.stack)}</div>` : ''}
+          </div>`;
+        }).join('');
+      }
+      errorCount.textContent = `(${errors.length})`;
+      saveToStorage();
+    }
+
+    try {
+      const bc = new BroadcastChannel(CHANNEL);
+      bc.onmessage = (ev) => {
+        const data = ev.data;
+        if (data && typeof data === 'object' && (data.type === 'error' || data.type === 'warn' || data.type === 'unhandled')) {
+          errors.push({
+            time: formatTime(),
+            type: data.type === 'warn' ? 'warn' : 'error',
+            message: data.message || data.msg || String(data),
+            stack: data.stack || ''
+          });
+          if (errors.length > maxErrors) errors.shift();
+          renderErrors();
+        }
+      };
+    } catch (e) {
+      statusEl.textContent = 'BroadcastChannel not supported: ' + e.message;
+    }
+
+    loadFromStorage();
+
+    btnCopy.addEventListener('click', async () => {
+      if (errors.length === 0) {
+        statusEl.textContent = 'No errors to copy.';
+        return;
+      }
+      const text = errors.map(e => `[${e.time}] ${e.type.toUpperCase()}\n${e.message}${e.stack ? '\n' + e.stack : ''}`).join('\n---\n');
+      try {
+        await navigator.clipboard.writeText(text);
+        statusEl.textContent = 'Copied ' + errors.length + ' error(s) to clipboard.';
+      } catch (err) {
+        statusEl.textContent = 'Copy failed: ' + (err.message || 'clipboard not available');
+      }
+    });
+
+    btnClear.addEventListener('click', () => {
+      errors.length = 0;
+      saveToStorage();
+      renderErrors();
+      statusEl.textContent = 'Cleared. Listening for errors...';
+    });
+  </script>
+</body>
+</html>

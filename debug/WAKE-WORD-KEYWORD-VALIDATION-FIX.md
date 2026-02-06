@@ -33,7 +33,7 @@ The error "The keywords argument is undefined / empty" was occurring even though
 - Ensure sensitivities array matches keywords array length
 
 ### 4. Debug Tools Created
-- `debug/tools/debug-wake-word-keywords.js` - Static analysis tool
+- `debug/tools/debug-wake-word-keyword-validation-live.js` - Live keyword validation (replaces debug-wake-word-keywords.js)
 - `debug/tools/debug-wake-word-keyword-validation-live.js` - LIVE validation testing
 
 ## Code Changes
@@ -122,7 +122,7 @@ bridge.wakeWordManager?.porcupine
 node debug/tools/debug-wake-word-keyword-validation-live.js
 
 # Analyze wake-word-manager.js
-node debug/tools/debug-wake-word-keywords.js
+node debug/tools/debug-wake-word-keyword-validation-live.js
 ```
 
 ## Next Steps
@@ -139,4 +139,4 @@ node debug/tools/debug-wake-word-keywords.js
 - `public/js/cartesia-audio-bridge.js` - Bridge initialization
 - `public/debug/wake-word-activation-test.html` - Test page
 - `debug/tools/debug-wake-word-keyword-validation-live.js` - LIVE test tool
-- `debug/tools/debug-wake-word-keywords.js` - Static analysis tool
+- `debug/tools/debug-wake-word-keyword-validation-live.js` - Live keyword validation (replaces debug-wake-word-keywords.js)
