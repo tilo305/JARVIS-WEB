@@ -20,6 +20,23 @@ npm install
 npm run build
 ```
 
+### Wake Word Support (OpenWakeWord)
+
+The wake word feature requires Python 3.8+ and will automatically:
+- Detect Python installation
+- Install required dependencies (`openwakeword`, `aiohttp`, `numpy`, `resampy`)
+- Start the OpenWakeWord server when you run `npm run vite`
+
+**If Python is not installed:**
+- **Windows**: Install from [python.org](https://www.python.org/downloads/) or Microsoft Store
+- **macOS**: `brew install python3` or download from python.org
+- **Linux**: `sudo apt-get install python3 python3-pip` (or your distro's equivalent)
+
+The OpenWakeWord server will start automatically with the Vite dev server. You can also start it manually:
+```bash
+npm run openwakeword
+```
+
 ### Chat UI (Vite)
 
 Create a `.env` file in the project root with your Cartesia credentials (required for voice in the chat UI):
@@ -41,13 +58,22 @@ VITE_N8N_WEBHOOK_URL=https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-
 
 The UI also has **Export chat to PDF** (header) for one-click export.
 
-Then run the Vite dev server:
+Then run the Vite dev server (this will also start the OpenWakeWord server automatically):
 
 ```bash
 npm run vite
 ```
 
 Opens at `http://localhost:3000` with the Iron Man–themed chat: chat history, mic (STT), send (text + TTS), and paperclip (multimodal attachments). Uses AudioWorklet + Cartesia STT/TTS per `aUdiO dOcS.md` and `cArTeSiA dOcS.md`.
+
+**Wake Word**: To enable wake word detection, add to your `.env`:
+```
+VITE_USE_OPENWAKEWORD=true
+VITE_OPENWAKEWORD_WS_URL=ws://localhost:8765/ws
+VITE_WAKE_WORD_ENABLED=true
+```
+
+The OpenWakeWord server starts automatically with `npm run vite`. Say "Hey Jarvis" to activate voice input!
 
 ## Configuration
 

@@ -9,12 +9,12 @@
 
 **Name:** `jarvis-web-cartesia`  
 **Type:** Bidirectional voice + chat web app (Iron Man–themed “JARVIS”)  
-**Stack:** TypeScript (Node/backend), JavaScript (browser), Vite (frontend build), Cartesia STT/TTS WebSockets, Picovoice Porcupine (wake word), n8n (LLM webhook).
+**Stack:** TypeScript (Node/backend), JavaScript (browser), Vite (frontend build), Cartesia STT/TTS WebSockets, OpenWakeWord (wake word), n8n (LLM webhook).
 
 - **Live real-time STT:** VAD-gated streaming, 100ms chunks, 16 kHz PCM, partial + final transcripts.
 - **TTS:** Cartesia sonic-3 (or sonic-turbo), gapless playback via AudioWorklet.
 - **Barge-in:** User speech cancels TTS and processes new input.
-- **Wake word (optional):** Porcupine “Jarvis” (or custom) to start listening.
+- **Wake word (optional):** OpenWakeWord "hey jarvis" to start listening.
 - **Chat UI:** Text input, mic, paperclip (attachments), n8n webhook for LLM; optional PDF/image/text file creation from reply.
 
 ---
@@ -23,14 +23,14 @@
 
 ```
 JARVIS-WEB/
-├── .cursor/rules/          # Cursor rules (e.g. Picovoice AccessKey)
-├── .env.example            # Env template (VITE_*, CARTESIA_*, N8N_*, PICOVOICE_*, etc.)
+├── .cursor/rules/          # Cursor rules (e.g. Wake word AccessKey)
+├── .env.example            # Env template (VITE_*, CARTESIA_*, N8N_*, WAKE_WORD_*, etc.)
 ├── public/                 # Vite root — static assets and browser app
 │   ├── index.html          # Single-page chat UI (Iron Man theme)
 │   ├── js/
 │   │   ├── app.js          # Main UI: bridge, n8n, wake word, chat, file handling
 │   │   ├── cartesia-audio-bridge.js   # STT/TTS/VAD/wake word orchestration
-│   │   ├── wake-word-manager.js       # Porcupine init & detection
+│   │   ├── openwakeword-manager.js    # OpenWakeWord init & detection
 │   │   ├── wake-word-tracker.js       # UI tracker (status, metrics, events)
 │   │   ├── wake-word-error-monitor.js # Error monitoring
 │   │   ├── wake-word-console.js       # Wake word error logging
@@ -43,9 +43,9 @@ JARVIS-WEB/
 │   ├── audio/              # AudioWorklet processors
 │   │   ├── stt-capture-processor.js   # Mic → 16kHz, 100ms chunks → STT
 │   │   ├── tts-playback-processor.js  # TTS PCM playback
-│   │   └── wake-word-processor.js     # 16kHz frames for Porcupine (main-thread processing)
+│   │   └── wake-word-processor.js     # 16kHz frames for OpenWakeWord
 │   ├── debug/              # Debug HTML pages (wake word test, console errors, etc.)
-│   └── keywords/           # Porcupine .ppn keyword files (optional; built-in "Jarvis" used by default)
+│   └── keywords/           # (deprecated) Previously used for Porcupine .ppn files; now using OpenWakeWord
 ├── src/                    # TypeScript (Node / backend / examples)
 │   ├── config.ts           # N8N_WEBHOOK_URL, CARTESIA_CONFIG (TTS/STT/WS)
 │   ├── index.ts            # Re-exports (STT, TTS, BidirectionalConversation, config, types)
@@ -105,7 +105,7 @@ JARVIS-WEB/
 - **Key env vars (see `.env.example`):**
   - Cartesia: `CARTESIA_API_KEY`, `CARTESIA_VOICE_ID` (or `VITE_*`)
   - n8n: `N8N_WEBHOOK_URL` (or `VITE_N8N_WEBHOOK_URL`)
-  - Wake word: `WAKE_WORD_ENABLED`, `PICOVOICE_ACCESS_KEY`, `PORCUPINE_KEYWORD`, `PORCUPINE_SENSITIVITY`, `DEBUG_WAKE_WORD` (and `VITE_*` forms)
+  - Wake word: `WAKE_WORD_ENABLED`, `WAKE_WORD_ACCESS_KEY`, `PORCUPINE_KEYWORD`, `PORCUPINE_SENSITIVITY`, `DEBUG_WAKE_WORD` (and `VITE_*` forms)
   - Server: `PORT`
 
 **Code config:**
@@ -120,7 +120,7 @@ JARVIS-WEB/
 2. **Voice pipeline:**
    - User clicks mic (or wake word fires if enabled) → bridge starts STT.
    - Mic → AudioWorklet `stt-capture-processor.js` → 48kHz→16kHz, 100ms chunks → bridge → Cartesia STT WebSocket.
-   - Optional: `wake-word-processor.js` feeds 16kHz frames; Porcupine runs on main thread (WakeWordManager); on detection, bridge turns on STT (with cooldown).
+   - Optional: `wake-word-processor.js` feeds 16kHz frames; OpenWakeWord runs via WebSocket to Python server; on detection, bridge turns on STT (with cooldown).
    - STT partial/final → bridge callbacks → `onTranscript` / `onPartialTranscript` → UI (status, input line).
    - Final transcript (or timeout) → app builds n8n payload (`n8n-payload.js`: `buildN8nPayload`, session, timezone, attachments) → POST to n8n webhook.
    - n8n response → `extractReplyFromJson` / `extractFilesFromJson` → reply text + optional file specs → TTS (bridge sends text to Cartesia TTS WS) + file creation (file-creator.js) + chat bubbles.
@@ -136,7 +136,7 @@ JARVIS-WEB/
 |--------|------|
 | **app.js** | Chat UI, bridge lifecycle, n8n send, wake word tracker wiring, status/mic state, export PDF, file handling. |
 | **cartesia-audio-bridge.js** | One bridge for STT + TTS: AudioContext, VAD (MicVAD), WakeWordManager, STT/TTS WebSockets, pre-speech buffer, silence timers, barge-in, level meter, optional recorded audio. |
-| **wake-word-manager.js** | Porcupine init (built-in or custom .ppn), AudioWorklet wake-word-processor, frame queue, cooldown, retry logic; never retries 10011. |
+| **openwakeword-manager.js** | OpenWakeWord init, AudioWorklet wake-word-processor, WebSocket to Python server, frame queue, cooldown, retry logic. |
 | **wake-word-tracker.js** | UI: status text, indicator, last error, metrics (detections, latency, uptime), events list. |
 | **n8n-payload.js** | `buildN8nPayload`, `extractReplyFromJson`, `extractFilesFromJson`, `getClientLocation`, `getNaturalFallback`. |
 | **file-creator.js** | `createPdfBlob`, `createImageBlobFromBase64`, `createTextBlob`, `downloadBlob`, `isAudioFile`, `safeFilename`; WAV from uploads for internal use. |
@@ -150,7 +150,7 @@ JARVIS-WEB/
 - **STT input:** PCM s16le, 16 kHz, 100ms chunks (1600 samples).  
   Captured by `stt-capture-processor.js` (resample from context sample rate, then chunk).
 - **TTS output:** PCM s16le, 44.1 kHz (config in `config.ts`), base64 in WebSocket messages; played by `tts-playback-processor.js`.
-- **Wake word:** 16 kHz, frame length 512 (or from Porcupine); `wake-word-processor.js` resamples and buffers; frames sent to main thread for Porcupine.
+- **Wake word:** 16 kHz, frame length 512; `wake-word-processor.js` resamples and buffers; frames sent via WebSocket to OpenWakeWord Python server.
 
 ---
 
@@ -174,14 +174,14 @@ JARVIS-WEB/
 
 - **README.md:** Features, install, Chat UI (Vite), config, usage (bidirectional, TTS, STT), audio formats, performance targets, architecture diagram, browser demo, VAD.
 - **Root .md files:** Various specs (e.g. `aUdiO dOcS.md`, `cArTeSiA dOcS.md`, `wAkE wOrD dOcS.md`, `viTe DoCs.md`, etc.).
-- **docs/:** INTEGRATION.md, WAKE-WORD-TROUBLESHOOTING.md, N8N-POSTGRESQL-SETUP-GUIDE.md, PICOVOICE/WAKE-WORD research, archive.
+- **docs/:** INTEGRATION.md, WAKE-WORD-TROUBLESHOOTING.md, N8N-POSTGRESQL-SETUP-GUIDE.md, WAKE-WORD research, archive.
 - **debug/:** README, STATUS, wake word verification and activation test docs.
 
 ---
 
 ## 11. Cursor / Project Rules
 
-- **.cursor/rules/picovoice-accesskey.mdc:** Do not suggest changing or re-getting the Picovoice AccessKey for wake word issues; debug only code/config/env/integration.
+- **.cursor/rules/wake-word-accesskey.mdc:** Do not suggest changing or re-getting the AccessKey for wake word issues; debug only code/config/env/integration.
 
 ---
 
@@ -191,7 +191,7 @@ JARVIS-WEB/
 |----------|--------|
 | Change TTS/STT params or n8n URL | `src/config.ts`, `.env` |
 | Change UI or chat behavior | `public/js/app.js` |
-| Change STT/TTS/wake word pipeline | `public/js/cartesia-audio-bridge.js`, `wake-word-manager.js` |
+| Change STT/TTS/wake word pipeline | `public/js/cartesia-audio-bridge.js`, `openwakeword-manager.js` |
 | Change n8n request/response shape | `public/js/n8n-payload.js` |
 | Change VAD (turn-taking, pre-speech) | `public/js/vad-config.js` |
 | Add/modify file types from n8n | `public/js/file-creator.js`, `extractFilesFromJson` in n8n-payload.js |

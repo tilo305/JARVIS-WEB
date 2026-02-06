@@ -18,7 +18,7 @@
 
 ### Imports & Exports
 - [x] `cartesia-audio-bridge.js` imports `WakeWordManager` - ✅ CORRECT
-- [x] `wake-word-manager.js` imports `Porcupine` from `@picovoice/porcupine-web` - ✅ CORRECT
+- [x] `wake-word-manager.js` imports `Porcupine` from wake word package - ✅ CORRECT
 - [x] `wake-word-manager.js` imports `DEBUG` - ✅ CORRECT
 - [x] All exports are properly defined - ✅ CORRECT
 
@@ -57,7 +57,7 @@
 ## ✅ Configuration
 
 ### Environment Variables (vite.config.js)
-- [x] `VITE_PICOVOICE_ACCESS_KEY` - ✅ DEFINED
+- [x] `VITE_WAKE_WORD_ACCESS_KEY` - ✅ DEFINED
 - [x] `VITE_PORCUPINE_KEYWORD` - ✅ DEFINED
 - [x] `VITE_PORCUPINE_SENSITIVITY` - ✅ DEFINED
 - [x] `VITE_WAKE_WORD_ENABLED` - ✅ DEFINED
@@ -133,7 +133,7 @@ The following require actual runtime testing with browser and Porcupine credenti
 Before testing in browser:
 
 1. [ ] Place `.ppn` keyword file in `public/keywords/`
-2. [ ] Set `PICOVOICE_ACCESS_KEY` in `.env`
+2. [ ] Set `WAKE_WORD_ACCESS_KEY` in `.env`
 3. [ ] Set `PORCUPINE_KEYWORD` in `.env` (matches filename)
 4. [ ] Set `WAKE_WORD_ENABLED=true` in `.env`
 5. [ ] Run `npm run vite` to start dev server

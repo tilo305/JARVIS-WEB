@@ -1,6 +1,6 @@
 # Wake Word Fixes Applied - Implementation Summary
 
-**Date:** Based on comprehensive research from `PICOVOICE-WAKE-WORD-COMPREHENSIVE-RESEARCH.md`
+**Date:** Based on comprehensive research from `WAKE-WORD-COMPREHENSIVE-RESEARCH.md`
 
 This document summarizes all the fixes implemented to resolve wake word issues in the JARVIS-WEB project.
 
@@ -249,7 +249,7 @@ After applying these fixes, test the following scenarios:
 
 ## 📚 References
 
-- `PICOVOICE-WAKE-WORD-COMPREHENSIVE-RESEARCH.md` - Comprehensive research document
+- `WAKE-WORD-COMPREHENSIVE-RESEARCH.md` - Comprehensive research document
 - `wAkE wOrD dOcS.md` - Original integration guide
 - `WAKE-WORD-TROUBLESHOOTING.md` - Troubleshooting guide
 - `WAKE-WORD-ERROR-EXPLANATION.md` - Error explanations
@@ -258,7 +258,7 @@ After applying these fixes, test the following scenarios:
 
 ## ✅ Status: All Fixes Applied
 
-All identified wake word issues have been fixed and tested. The implementation follows best practices from the comprehensive research document and Picovoice official documentation.
+All identified wake word issues have been fixed and tested. The implementation follows best practices from the comprehensive research document and official documentation.
 
 **Next Steps:**
 1. Test in real-world scenarios (slow networks, missing files, etc.)

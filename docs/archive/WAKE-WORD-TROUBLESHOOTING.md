@@ -11,7 +11,7 @@ This guide helps diagnose and fix wake word detection issues.
 Verify these environment variables are set in `.env`:
 
 ```env
-PICOVOICE_ACCESS_KEY=your_access_key_here
+WAKE_WORD_ACCESS_KEY=your_access_key_here
 PORCUPINE_KEYWORD=jarvis
 PORCUPINE_SENSITIVITY=0.5
 WAKE_WORD_ENABLED=true
@@ -37,7 +37,7 @@ For example, if `PORCUPINE_KEYWORD=jarvis`, the file should be:
 3. Check browser console for 404 errors when loading the file
 
 **To get a keyword file:**
-1. Go to https://console.picovoice.ai/
+1. Get AccessKey from your service provider
 2. Navigate to **Porcupine** page
 3. Create or select your wake word
 4. Train for **Web** platform
@@ -54,8 +54,8 @@ Open browser DevTools (F12) and check the Console tab for:
    - **Fix:** Ensure `.ppn` file exists in `public/keywords/` directory
    - Check the file path matches the expected pattern
 
-2. **"Invalid Picovoice AccessKey"**
-   - **Fix:** Verify your AccessKey from https://console.picovoice.ai/
+2. **"Invalid AccessKey"**
+   - **Fix:** Verify your AccessKey from your service provider
    - Ensure AccessKey is correct and not expired
 
 3. **"Wake word processor disabled"**
@@ -145,11 +145,11 @@ The wake word tracker panel should show:
 
 ```bash
 # In project root, check .env file
-cat .env | grep -E "PICOVOICE|PORCUPINE|WAKE_WORD"
+cat .env | grep -E "WAKE_WORD|PORCUPINE"
 ```
 
 Should show:
-- `PICOVOICE_ACCESS_KEY=...`
+- `WAKE_WORD_ACCESS_KEY=...`
 - `PORCUPINE_KEYWORD=...`
 - `WAKE_WORD_ENABLED=true`
 
@@ -187,7 +187,7 @@ Should show at least one `.ppn` file.
 
 **Solution:**
 1. Set `WAKE_WORD_ENABLED=true` in `.env`
-2. Set `PICOVOICE_ACCESS_KEY` in `.env`
+2. Set `WAKE_WORD_ACCESS_KEY` in `.env`
 3. Set `PORCUPINE_KEYWORD` in `.env`
 4. Place `.ppn` file in `public/keywords/`
 
@@ -196,7 +196,7 @@ Should show at least one `.ppn` file.
 **Cause:** `.ppn` file missing or wrong path
 
 **Solution:**
-1. Download `.ppn` file from Picovoice Console
+1. Download `.ppn` file from your service provider
 2. Place in `public/keywords/` directory
 3. Verify filename matches expected pattern
 4. Restart dev server
@@ -206,7 +206,7 @@ Should show at least one `.ppn` file.
 **Cause:** Wrong or expired AccessKey
 
 **Solution:**
-1. Get new AccessKey from https://console.picovoice.ai/
+1. Get new AccessKey from your service provider
 2. Update `.env` file
 3. Restart dev server
 
@@ -285,7 +285,7 @@ bridge.getWakeWordMetrics(); // Should return metrics object
    ```
 
 3. **Check Porcupine version:**
-   - Ensure using latest `@picovoice/porcupine-web` package
+   - Ensure using latest wake word package
    - Check package.json for version
 
 4. **Review documentation:**
@@ -299,8 +299,8 @@ bridge.getWakeWordMetrics(); // Should return metrics object
 ## Summary
 
 Most common issues:
-1. **Missing keyword file** - Download `.ppn` from Picovoice Console
-2. **Missing AccessKey** - Get from https://console.picovoice.ai/
+1. **Missing keyword file** - Download `.ppn` from your service provider
+2. **Missing AccessKey** - Get from your service provider
 3. **Microphone permission** - Grant permission via mic button
 4. **Wrong configuration** - Check `.env` file settings
 

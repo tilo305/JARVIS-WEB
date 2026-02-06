@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenWakeWord WebSocket Connection Debug</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #1a1a1a;
+      color: #e0e0e0;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    h1 {
+      color: #4a9eff;
+      margin-bottom: 10px;
+    }
+    .subtitle {
+      color: #888;
+      margin-bottom: 30px;
+    }
+    .section {
+      background: #2a2a2a;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border: 1px solid #3a3a3a;
+    }
+    .section h2 {
+      color: #4a9eff;
+      margin-bottom: 15px;
+      font-size: 1.2em;
+    }
+    .status {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 0.9em;
+      font-weight: bold;
+      margin-left: 10px;
+    }
+    .status.success {
+      background: #2d5016;
+      color: #4ade80;
+    }
+    .status.error {
+      background: #7f1d1d;
+      color: #f87171;
+    }
+    .status.warning {
+      background: #78350f;
+      color: #fbbf24;
+    }
+    .status.info {
+      background: #1e3a8a;
+      color: #60a5fa;
+    }
+    button {
+      background: #4a9eff;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 1em;
+      margin: 5px;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #3a8eef;
+    }
+    button:disabled {
+      background: #555;
+      cursor: not-allowed;
+    }
+    button.danger {
+      background: #ef4444;
+    }
+    button.danger:hover {
+      background: #dc2626;
+    }
+    .log {
+      background: #1a1a1a;
+      border: 1px solid #3a3a3a;
+      border-radius: 6px;
+      padding: 15px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.9em;
+      max-height: 400px;
+      overflow-y: auto;
+      margin-top: 10px;
+    }
+    .log-entry {
+      margin-bottom: 8px;
+      padding: 4px 0;
+      border-bottom: 1px solid #2a2a2a;
+    }
+    .log-entry:last-child {
+      border-bottom: none;
+    }
+    .log-time {
+      color: #888;
+      margin-right: 10px;
+    }
+    .log-success {
+      color: #4ade80;
+    }
+    .log-error {
+      color: #f87171;
+    }
+    .log-warning {
+      color: #fbbf24;
+    }
+    .log-info {
+      color: #60a5fa;
+    }
+    .config-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #3a3a3a;
+    }
+    .config-item:last-child {
+      border-bottom: none;
+    }
+    .config-label {
+      color: #aaa;
+    }
+    .config-value {
+      color: #e0e0e0;
+      font-weight: bold;
+    }
+    .fix-list {
+      list-style: none;
+      padding-left: 0;
+    }
+    .fix-list li {
+      padding: 8px 0;
+      border-bottom: 1px solid #3a3a3a;
+    }
+    .fix-list li:last-child {
+      border-bottom: none;
+    }
+    .fix-list li::before {
+      content: "🔧 ";
+      margin-right: 8px;
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-top: 15px;
+    }
+    .metric {
+      background: #1a1a1a;
+      padding: 15px;
+      border-radius: 6px;
+      border: 1px solid #3a3a3a;
+    }
+    .metric-label {
+      color: #888;
+      font-size: 0.9em;
+      margin-bottom: 5px;
+    }
+    .metric-value {
+      color: #4a9eff;
+      font-size: 1.5em;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>OpenWakeWord WebSocket Connection Debug</h1>
+    <p class="subtitle">Live debugging tool for WebSocket connection issues</p>
+
+    <!-- Configuration Section -->
+    <div class="section">
+      <h2>Configuration <span id="config-status" class="status info">Checking...</span></h2>
+      <div id="config-details"></div>
+    </div>
+
+    <!-- Connection Test Section -->
+    <div class="section">
+      <h2>Connection Test <span id="connection-status" class="status info">Not Started</span></h2>
+      <div style="margin-bottom: 15px;">
+        <button id="test-connection-btn">Test WebSocket Connection</button>
+        <button id="stop-connection-btn" class="danger" disabled>Stop Connection</button>
+        <button id="clear-log-btn">Clear Log</button>
+      </div>
+      <div class="log" id="connection-log"></div>
+    </div>
+
+    <!-- Error Analysis Section -->
+    <div class="section">
+      <h2>Error Analysis</h2>
+      <div id="error-analysis"></div>
+    </div>
+
+    <!-- Fixes Section -->
+    <div class="section">
+      <h2>Suggested Fixes</h2>
+      <ul class="fix-list" id="fixes-list"></ul>
+    </div>
+
+    <!-- Metrics Section -->
+    <div class="section">
+      <h2>Connection Metrics</h2>
+      <div class="metrics">
+        <div class="metric">
+          <div class="metric-label">Connection State</div>
+          <div class="metric-value" id="metric-state">-</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Reconnect Attempts</div>
+          <div class="metric-value" id="metric-attempts">0</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Messages Sent</div>
+          <div class="metric-value" id="metric-sent">0</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Messages Received</div>
+          <div class="metric-value" id="metric-received">0</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    // Get configuration from environment
+    function getConfig() {
+      const env = typeof import.meta !== 'undefined' ? import.meta.env : {};
+      const win = typeof window !== 'undefined' ? window : {};
+      const cfg = win.JARVIS_CONFIG || {};
+      
+      const useOpenWakeWord = (env.VITE_USE_OPENWAKEWORD || env.USE_OPENWAKEWORD || cfg.useOpenWakeWord || 'false').toLowerCase() === 'true';
+      const openWakeWordWsUrl = (env.VITE_OPENWAKEWORD_WS_URL || env.OPENWAKEWORD_WS_URL || cfg.openWakeWordWsUrl || 'ws://localhost:8765/ws').trim();
+      
+      return {
+        useOpenWakeWord,
+        openWakeWordWsUrl,
+      };
+    }
+
+    // Logging functions
+    const log = {
+      success: (msg) => addLog('success', msg),
+      error: (msg) => addLog('error', msg),
+      warning: (msg) => addLog('warning', msg),
+      info: (msg) => addLog('info', msg),
+    };
+
+    function addLog(type, message) {
+      const logEl = document.getElementById('connection-log');
+      const entry = document.createElement('div');
+      entry.className = `log-entry log-${type}`;
+      const time = new Date().toLocaleTimeString();
+      entry.innerHTML = `<span class="log-time">[${time}]</span>${message}`;
+      logEl.appendChild(entry);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    // Configuration display
+    function displayConfig() {
+      const config = getConfig();
+      const configEl = document.getElementById('config-details');
+      const statusEl = document.getElementById('config-status');
+      
+      let html = '';
+      html += `<div class="config-item"><span class="config-label">Use OpenWakeWord:</span><span class="config-value">${config.useOpenWakeWord ? 'true' : 'false'}</span></div>`;
+      html += `<div class="config-item"><span class="config-label">WebSocket URL:</span><span class="config-value">${config.openWakeWordWsUrl}</span></div>`;
+      
+      configEl.innerHTML = html;
+      
+      if (!config.useOpenWakeWord) {
+        statusEl.textContent = 'Disabled';
+        statusEl.className = 'status warning';
+        log.warning('OpenWakeWord is disabled in configuration');
+      } else if (!config.openWakeWordWsUrl || !config.openWakeWordWsUrl.startsWith('ws')) {
+        statusEl.textContent = 'Invalid';
+        statusEl.className = 'status error';
+        log.error('Invalid WebSocket URL in configuration');
+      } else {
+        statusEl.textContent = 'Valid';
+        statusEl.className = 'status success';
+        log.success('Configuration is valid');
+      }
+    }
+
+    // WebSocket connection test
+    let ws = null;
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT_ATTEMPTS = 10;
+    let messagesSent = 0;
+    let messagesReceived = 0;
+
+    function updateMetrics() {
+      document.getElementById('metric-state').textContent = ws ? (ws.readyState === WebSocket.OPEN ? 'OPEN' : ws.readyState === WebSocket.CONNECTING ? 'CONNECTING' : 'CLOSED') : 'DISCONNECTED';
+      document.getElementById('metric-attempts').textContent = reconnectAttempts;
+      document.getElementById('metric-sent').textContent = messagesSent;
+      document.getElementById('metric-received').textContent = messagesReceived;
+    }
+
+    function testConnection() {
+      const config = getConfig();
+      const statusEl = document.getElementById('connection-status');
+      const testBtn = document.getElementById('test-connection-btn');
+      const stopBtn = document.getElementById('stop-connection-btn');
+      
+      if (!config.useOpenWakeWord) {
+        log.error('OpenWakeWord is disabled in configuration');
+        return;
+      }
+      
+      if (!config.openWakeWordWsUrl) {
+        log.error('WebSocket URL is not configured');
+        return;
+      }
+      
+      testBtn.disabled = true;
+      stopBtn.disabled = false;
+      statusEl.textContent = 'Connecting...';
+      statusEl.className = 'status info';
+      reconnectAttempts = 0;
+      messagesSent = 0;
+      messagesReceived = 0;
+      
+      log.info(`Attempting to connect to: ${config.openWakeWordWsUrl}`);
+      updateMetrics();
+      
+      connectWebSocket(config.openWakeWordWsUrl);
+    }
+
+    function connectWebSocket(url) {
+      const statusEl = document.getElementById('connection-status');
+      
+      try {
+        ws = new WebSocket(url);
+        ws.binaryType = 'arraybuffer';
+        
+        ws.onopen = () => {
+          reconnectAttempts = 0;
+          statusEl.textContent = 'Connected';
+          statusEl.className = 'status success';
+          log.success('WebSocket connection opened successfully!');
+          log.info('Sending sample rate: 16000');
+          
+          // Send sample rate
+          try {
+            ws.send('16000');
+            messagesSent++;
+            updateMetrics();
+          } catch (err) {
+            log.error(`Failed to send sample rate: ${err.message}`);
+          }
+        };
+        
+        ws.onmessage = (event) => {
+          messagesReceived++;
+          updateMetrics();
+          
+          if (typeof event.data === 'string') {
+            try {
+              const payload = JSON.parse(event.data);
+              log.success(`Received message: ${JSON.stringify(payload)}`);
+              
+              if (payload.loaded_models) {
+                log.info(`Server loaded models: ${payload.loaded_models.join(', ')}`);
+              }
+              if (payload.activations) {
+                log.success(`Wake word detected: ${payload.activations.join(', ')}`);
+              }
+            } catch (err) {
+              log.warning(`Received non-JSON message: ${event.data}`);
+            }
+          } else {
+            log.info(`Received binary message (${event.data.byteLength} bytes)`);
+          }
+        };
+        
+        ws.onerror = (event) => {
+          log.error('WebSocket error occurred');
+          analyzeError(event);
+        };
+        
+        ws.onclose = (event) => {
+          updateMetrics();
+          
+          if (event.code === 1000) {
+            log.info('WebSocket closed normally');
+            statusEl.textContent = 'Closed';
+            statusEl.className = 'status info';
+          } else {
+            log.error(`WebSocket closed abnormally (code: ${event.code}, reason: ${event.reason || 'none'})`);
+            statusEl.textContent = 'Failed';
+            statusEl.className = 'status error';
+            
+            // Analyze close code
+            analyzeCloseCode(event.code, event.reason);
+            
+            // Attempt reconnect if not manually closed
+            if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+              reconnectAttempts++;
+              log.warning(`Attempting reconnect ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}...`);
+              updateMetrics();
+              
+              setTimeout(() => {
+                if (ws && ws.readyState === WebSocket.CLOSED) {
+                  connectWebSocket(url);
+                }
+              }, 2000);
+            } else {
+              log.error(`Max reconnect attempts (${MAX_RECONNECT_ATTEMPTS}) reached. Stopping.`);
+              statusEl.textContent = 'Failed (Max Attempts)';
+              statusEl.className = 'status error';
+              document.getElementById('test-connection-btn').disabled = false;
+              document.getElementById('stop-connection-btn').disabled = true;
+            }
+          }
+        };
+        
+      } catch (err) {
+        log.error(`Failed to create WebSocket: ${err.message}`);
+        statusEl.textContent = 'Error';
+        statusEl.className = 'status error';
+        document.getElementById('test-connection-btn').disabled = false;
+        document.getElementById('stop-connection-btn').disabled = true;
+      }
+    }
+
+    function stopConnection() {
+      if (ws) {
+        ws.close(1000, 'User stopped');
+        ws = null;
+      }
+      document.getElementById('test-connection-btn').disabled = false;
+      document.getElementById('stop-connection-btn').disabled = true;
+      document.getElementById('connection-status').textContent = 'Stopped';
+      document.getElementById('connection-status').className = 'status info';
+      log.info('Connection stopped by user');
+      updateMetrics();
+    }
+
+    function analyzeError(event) {
+      const analysisEl = document.getElementById('error-analysis');
+      let html = '<div style="color: #f87171;">';
+      html += '<strong>Error Detected:</strong><br>';
+      html += 'WebSocket connection error occurred. This usually means:<br>';
+      html += '<ul style="margin-left: 20px; margin-top: 10px;">';
+      html += '<li>The server is not running</li>';
+      html += '<li>The URL is incorrect</li>';
+      html += '<li>Firewall or network issues</li>';
+      html += '</ul>';
+      html += '</div>';
+      analysisEl.innerHTML = html;
+      
+      updateFixes([
+        'Start OpenWakeWord server: python scripts/openwakeword-server.py',
+        'Verify WebSocket URL in .env: VITE_OPENWAKEWORD_WS_URL=ws://localhost:8765/ws',
+        'Check if port 8765 is available: netstat -an | grep 8765',
+        'Restart dev server after changing .env: npm run vite'
+      ]);
+    }
+
+    function analyzeCloseCode(code, reason) {
+      const analysisEl = document.getElementById('error-analysis');
+      let html = '<div style="color: #f87171;">';
+      html += `<strong>Close Code Analysis:</strong><br>`;
+      html += `Code: ${code}<br>`;
+      html += `Reason: ${reason || 'none'}<br><br>`;
+      
+      if (code === 1006) {
+        html += '<strong>Code 1006 (Abnormal Closure):</strong><br>';
+        html += 'This means the connection was closed abnormally, usually because:<br>';
+        html += '<ul style="margin-left: 20px; margin-top: 10px;">';
+        html += '<li>The server is not running</li>';
+        html += '<li>The connection was refused</li>';
+        html += '<li>Network issues</li>';
+        html += '</ul>';
+      } else if (code === 1001) {
+        html += '<strong>Code 1001 (Going Away):</strong><br>';
+        html += 'The server is going away (shutting down).';
+      } else if (code === 1002) {
+        html += '<strong>Code 1002 (Protocol Error):</strong><br>';
+        html += 'Protocol error - check server implementation.';
+      } else if (code === 1003) {
+        html += '<strong>Code 1003 (Unsupported Data):</strong><br>';
+        html += 'Unsupported data type sent.';
+      } else {
+        html += `Unknown close code: ${code}`;
+      }
+      
+      html += '</div>';
+      analysisEl.innerHTML = html;
+      
+      if (code === 1006) {
+        updateFixes([
+          'Start OpenWakeWord server: python scripts/openwakeword-server.py',
+          'Verify server is listening on port 8765',
+          'Check server logs for errors',
+          'Verify .env configuration and restart dev server'
+        ]);
+      }
+    }
+
+    function updateFixes(fixes) {
+      const fixesEl = document.getElementById('fixes-list');
+      fixesEl.innerHTML = fixes.map(fix => `<li>${fix}</li>`).join('');
+    }
+
+    function clearLog() {
+      document.getElementById('connection-log').innerHTML = '';
+    }
+
+    // Initialize
+    displayConfig();
+    updateMetrics();
+    
+    // Event listeners
+    document.getElementById('test-connection-btn').addEventListener('click', testConnection);
+    document.getElementById('stop-connection-btn').addEventListener('click', stopConnection);
+    document.getElementById('clear-log-btn').addEventListener('click', clearLog);
+  </script>
+</body>
+</html>

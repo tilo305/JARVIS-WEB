@@ -30,7 +30,7 @@ Per **zEn DeBuGgEr.md**, comprehensive research was conducted across all JSON, N
 
 ### Node.js CLI Tools (`debug/tools/`)
 - **check-console-errors.js** - Static check for bad patterns in source (empty keywords, undefined refs). Run: `node debug/tools/check-console-errors.js`
-- **check-porcupine-import.js** - Verifies @picovoice/porcupine-web import resolution
+- **check-porcupine-import.js** - Verifies wake word package import resolution
 - **verify-wake-word-setup.js** - Full wake word setup verification (.env, keywords, paths). Run: `npm run test:wakeword`
 - **debug-wake-word-initialization.js** - Wake word initialization debugging
 - **debug-wake-word-keyword-validation-live.js** - Live keyword validation (built-in vs custom paths)

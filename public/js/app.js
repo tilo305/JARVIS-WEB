@@ -12,6 +12,7 @@
 import { CartesiaAudioBridge } from './cartesia-audio-bridge.js';
 import { buildN8nPayload, extractReplyFromJson, extractFilesFromJson, getNaturalFallback } from './n8n-payload.js';
 import { addOcrToAttachments } from './ocr-tool.js';
+import { validatePayload, validateResponse, payloadMonitor, verifyPayloadFlow } from './payload-verification.js';
 import {
   ConversationHistory,
   classifyIntent,
@@ -30,7 +31,7 @@ import {
 import { DEBUG, escapeHtml } from './debug.js';
 import { WakeWordTracker } from './wake-word-tracker.js';
 import { WakeWordErrorMonitor } from './wake-word-error-monitor.js';
-import { onWakeWordError, getLastError, logWakeWordError } from './wake-word-console.js';
+import { onWakeWordError, getLastError } from './wake-word-console.js';
 
 const chatContainer = document.getElementById('chatContainer');
 const textInput = document.getElementById('textInput');
@@ -327,42 +328,95 @@ async function getLLMReply(userText, options = {}) {
     console.warn('[JARVIS] getLLMReply: empty message in payload');
     return { reply: "I didn't catch that. Try again?", data: {} };
   }
+  
+  // Validate payload structure before sending
+  const payloadValidation = validatePayload(payload);
+  if (!payloadValidation.valid) {
+    /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+    console.error('[JARVIS] PAYLOAD VALIDATION FAILED:', {
+      errors: payloadValidation.errors,
+      warnings: payloadValidation.warnings,
+      payload: payload
+    });
+  } else if (payloadValidation.warnings.length > 0) {
+    /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+    console.warn('[JARVIS] Payload validation warnings:', payloadValidation.warnings);
+  }
+  
   const sourceLabel = payload.source === 'voice' ? 'voice' : 'text';
   const attachmentCount = payload.attachments?.length ?? 0;
-  /* eslint-disable-next-line no-console -- payload verification: mic vs text */
-  console.log('[JARVIS] Payload SENT (source=' + sourceLabel + ') messageLength=' + (payload.message?.length ?? 0) + ' attachments=' + attachmentCount);
+  const isWakeWord = payload.wakeWordTriggered === true;
+  const sourceLabelWithWakeWord = isWakeWord ? 'voice (wake word)' : sourceLabel;
+  /* eslint-disable-next-line no-console -- payload verification: mic vs text vs wake word */
+  console.log('[JARVIS] Payload SENT (source=' + sourceLabelWithWakeWord + ') messageLength=' + (payload.message?.length ?? 0) + ' attachments=' + attachmentCount);
   // Always log payload sending (not just in debug mode) for troubleshooting
-  /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
-  console.log('[JARVIS] Sending payload to n8n', { 
-    message: payload.message.slice(0, 50), 
-    source: payload.source, 
-    url: n8nWebhookUrl,
-    messageId: payload.messageId,
-    sessionId: payload.sessionId,
-    hasAttachments: payload.attachments?.length > 0,
-    fullPayload: {
-      message: payload.message,
-      source: payload.source,
-      session_id: payload.session_id,
-      sessionId: payload.sessionId,
-      timestamp: payload.timestamp,
-      timezone: payload.timezone,
-      location: payload.location,
-      message_id: payload.message_id,
+  if (isWakeWord) {
+    /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+    console.log('[JARVIS] 🔔 WAKE WORD PAYLOAD: Sending to n8n', { 
+      message: payload.message.slice(0, 50), 
+      source: payload.source, 
+      wakeWordTriggered: true,
+      url: n8nWebhookUrl,
       messageId: payload.messageId,
-      attachments: payload.attachments?.map(a => ({ 
-        name: a.name, 
-        type: a.type, 
-        size: a.size, 
-        hasData: !!a.data,
-        dataLength: a.data?.length || 0
-      })) || [],
-      locale: payload.locale,
-      language: payload.language,
-      allKeys: Object.keys(payload),
-      payloadSize: JSON.stringify(payload).length
-    }
-  });
+      sessionId: payload.sessionId,
+      hasAttachments: payload.attachments?.length > 0,
+      fullPayload: {
+        message: payload.message,
+        source: payload.source,
+        wakeWordTriggered: true,
+        session_id: payload.session_id,
+        sessionId: payload.sessionId,
+        timestamp: payload.timestamp,
+        timezone: payload.timezone,
+        location: payload.location,
+        message_id: payload.message_id,
+        messageId: payload.messageId,
+        attachments: payload.attachments?.map(a => ({ 
+          name: a.name, 
+          type: a.type, 
+          size: a.size, 
+          hasData: !!a.data,
+          dataLength: a.data?.length || 0
+        })) || [],
+        locale: payload.locale,
+        language: payload.language,
+        allKeys: Object.keys(payload),
+        payloadSize: JSON.stringify(payload).length
+      }
+    });
+  } else {
+    /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+    console.log('[JARVIS] Sending payload to n8n', { 
+      message: payload.message.slice(0, 50), 
+      source: payload.source, 
+      url: n8nWebhookUrl,
+      messageId: payload.messageId,
+      sessionId: payload.sessionId,
+      hasAttachments: payload.attachments?.length > 0,
+      fullPayload: {
+        message: payload.message,
+        source: payload.source,
+        session_id: payload.session_id,
+        sessionId: payload.sessionId,
+        timestamp: payload.timestamp,
+        timezone: payload.timezone,
+        location: payload.location,
+        message_id: payload.message_id,
+        messageId: payload.messageId,
+        attachments: payload.attachments?.map(a => ({ 
+          name: a.name, 
+          type: a.type, 
+          size: a.size, 
+          hasData: !!a.data,
+          dataLength: a.data?.length || 0
+        })) || [],
+        locale: payload.locale,
+        language: payload.language,
+        allKeys: Object.keys(payload),
+        payloadSize: JSON.stringify(payload).length
+      }
+    });
+  }
   DEBUG.trace('n8n: sending payload', { 
     message: payload.message.slice(0, 50), 
     source: payload.source, 
@@ -381,23 +435,56 @@ async function getLLMReply(userText, options = {}) {
   let timeoutId;
   try {
     const payloadJson = JSON.stringify(payload);
+    
+    // Record payload send in monitor
+    const sendRecord = payloadMonitor.recordSend(payload, n8nWebhookUrl);
+    
+    /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+    console.log('[JARVIS] ✅ PAYLOAD READY TO SEND TO N8N', {
+      message: payload.message,
+      messageId: payload.messageId,
+      sessionId: payload.sessionId,
+      source: payload.source,
+      hasAttachments: Array.isArray(payload.attachments) && payload.attachments.length > 0,
+      payloadSize: payloadJson.length,
+      validation: sendRecord.validation,
+      timestamp: new Date().toISOString()
+    });
+    
     /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
     console.log('[JARVIS] Making POST request to n8n webhook', { 
       url: n8nWebhookUrl, 
       payloadSize: payloadJson.length,
       source: payload.source,
-      exactPayloadJson: payloadJson.length > 1000 ? payloadJson.slice(0, 1000) + '... [truncated]' : payloadJson
+      exactPayloadJson: payloadJson.length > 1000 ? payloadJson.slice(0, 1000) + '... [truncated]' : payloadJson,
+      validation: sendRecord.validation
     });
+    // Log full payload for verification (always visible)
+    /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+    console.log('[JARVIS] VERIFY: Full payload being sent:', payload);
     DEBUG.trace('n8n: POST request to webhook', { 
       url: n8nWebhookUrl, 
       payloadSize: payloadJson.length,
       source: payload.source,
       payloadJson: payloadJson
     });
+    /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+    console.log('[JARVIS] VERIFY: About to send fetch request to n8n', {
+      url: n8nWebhookUrl,
+      method: 'POST',
+      payloadSize: payloadJson.length,
+      source: payload.source,
+      timestamp: new Date().toISOString()
+    });
     const res = await runWithRetry(async () => {
       const controller = new AbortController();
       timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout per attempt
       try {
+        /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+        console.log('[JARVIS] VERIFY: Fetch request executing now...', {
+          url: n8nWebhookUrl,
+          timestamp: new Date().toISOString()
+        });
         const r = await fetch(n8nWebhookUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -405,32 +492,154 @@ async function getLLMReply(userText, options = {}) {
           signal: controller.signal,
         });
         clearTimeout(timeoutId);
+        /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+        console.log('[JARVIS] VERIFY: Fetch request completed', {
+          status: r.status,
+          statusText: r.statusText,
+          ok: r.ok,
+          headers: Object.fromEntries(r.headers.entries()),
+          timestamp: new Date().toISOString()
+        });
         return r;
       } catch (e) {
         clearTimeout(timeoutId);
+        /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+        console.error('[JARVIS] VERIFY: Fetch request failed', {
+          error: e,
+          errorName: e?.name,
+          errorMessage: e?.message,
+          timestamp: new Date().toISOString()
+        });
         throw e;
       }
     });
     /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
     console.log('[JARVIS] Payload delivered to n8n', { status: res.status, source: payload.source, ok: res.ok });
     DEBUG.trace('n8n: POST request completed', { status: res.status, statusText: res.statusText });
+    
+    // Always read the response body, regardless of status code
     const contentType = res.headers.get('content-type') || '';
+    const contentLength = res.headers.get('content-length');
+    /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+    console.log('[JARVIS] VERIFY: Parsing n8n response', {
+      contentType,
+      contentLength,
+      status: res.status,
+      ok: res.ok,
+      timestamp: new Date().toISOString()
+    });
+    
     let data = {};
-    if (contentType.includes('application/json')) {
-      data = await res.json().catch(() => ({}));
-    } else {
-      const text = await res.text().catch(() => '');
-      if (text.trim()) {
+    
+    // Always read the response body to ensure we receive the payload
+    // Clone the response so we can read it multiple times if needed
+    try {
+      // Read the response body as text first (can be converted to JSON later)
+      const responseText = await res.text();
+      /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+      console.log('[JARVIS] VERIFY: Response body read', {
+        textLength: responseText.length,
+        contentType,
+        hasContent: responseText.trim().length > 0,
+        timestamp: new Date().toISOString()
+      });
+      
+      if (responseText.trim()) {
+        // Try to parse as JSON
         try {
-          data = JSON.parse(text);
+          data = JSON.parse(responseText);
+          /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+          console.log('[JARVIS] VERIFY: Successfully parsed JSON response', {
+            hasData: !!data,
+            dataKeys: Object.keys(data),
+            timestamp: new Date().toISOString()
+          });
         } catch {
-          data = { output: text.trim() };
+          // If it's not valid JSON, treat the text as the reply
+          data = { output: responseText.trim() };
+          /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+          console.log('[JARVIS] VERIFY: Response is not JSON, treating as text reply', {
+            textLength: responseText.trim().length,
+            timestamp: new Date().toISOString()
+          });
         }
+      } else {
+        /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+        console.warn('[JARVIS] VERIFY: Response body is empty', {
+          status: res.status,
+          contentType,
+          timestamp: new Date().toISOString()
+        });
+        data = {};
       }
+    } catch (readErr) {
+      /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+      console.error('[JARVIS] VERIFY: Failed to read response body', {
+        error: readErr,
+        errorMessage: readErr?.message,
+        status: res.status,
+        contentType,
+        timestamp: new Date().toISOString()
+      });
+      // Even if reading fails, we still have an empty data object to work with
+      data = {};
     }
+    /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+    console.log('[JARVIS] VERIFY: Response data parsed', {
+      hasData: !!data,
+      dataKeys: Object.keys(data),
+      dataSize: JSON.stringify(data).length,
+      timestamp: new Date().toISOString()
+    });
+    // Log full response for verification (always visible)
+    /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+    console.log('[JARVIS] VERIFY: Full response received from n8n:', data);
+    
+    // Confirm payload was received from n8n
+    /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+    console.log('[JARVIS] ✅ PAYLOAD RECEIVED FROM N8N', {
+      status: res.status,
+      hasResponse: !!data,
+      responseKeys: Object.keys(data),
+      responseSize: JSON.stringify(data).length,
+      source: payload.source,
+      messageId: payload.messageId,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Validate response structure
+    const responseValidation = validateResponse(data);
+    const receiveRecord = payloadMonitor.recordReceive(data, res.status, n8nWebhookUrl);
+    
+    /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+    console.log('[JARVIS] VERIFY: Response validation', {
+      valid: responseValidation.valid,
+      hasReply: responseValidation.hasReply,
+      replyKey: responseValidation.replyKey,
+      errors: responseValidation.errors,
+      warnings: responseValidation.warnings
+    });
+    
     const reply = extractReplyFromJson(data);
-    /* eslint-disable-next-line no-console -- payload verification: mic vs text */
-    console.log('[JARVIS] Payload RECEIVED (source=' + sourceLabel + ') status=' + res.status + ' hasReply=' + !!reply + ' replyLength=' + (typeof reply === 'string' ? reply.length : 0));
+    /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+    console.log('[JARVIS] VERIFY: Reply extracted from response', {
+      hasReply: !!reply,
+      replyType: typeof reply,
+      replyLength: typeof reply === 'string' ? reply.length : 0,
+      timestamp: new Date().toISOString(),
+      validation: receiveRecord.validation
+    });
+    /* eslint-disable-next-line no-console -- payload verification: mic vs text vs wake word */
+    console.log('[JARVIS] Payload RECEIVED (source=' + sourceLabelWithWakeWord + ') status=' + res.status + ' hasReply=' + !!reply + ' replyLength=' + (typeof reply === 'string' ? reply.length : 0));
+    if (isWakeWord) {
+      /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+      console.log('[JARVIS] 🔔 WAKE WORD PAYLOAD: Received response from n8n', {
+        status: res.status,
+        hasReply: !!reply,
+        replyLength: typeof reply === 'string' ? reply.length : 0,
+        replyPreview: typeof reply === 'string' ? reply.slice(0, 100) : ''
+      });
+    }
     /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
     console.log('[JARVIS] n8n response parsed', { status: res.status, hasReply: !!reply, replyPreview: typeof reply === 'string' ? reply.slice(0, 50) : '', dataKeys: Object.keys(data) });
     DEBUG.trace('n8n: response', { status: res.status, hasReply: !!reply, replyPreview: typeof reply === 'string' ? reply.slice(0, 50) : '' });
@@ -439,23 +648,61 @@ async function getLLMReply(userText, options = {}) {
       conversationHistory.addAssistant(reply);
       /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
       console.log('[JARVIS] Successfully extracted reply from n8n response', { replyLength: reply.length });
+      /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+      console.log('[JARVIS] ✅ COMPLETE: Payload sent to n8n → Response received → Reply extracted', {
+        sent: true,
+        received: true,
+        replyExtracted: true,
+        replyLength: reply.length,
+        source: payload.source,
+        messageId: payload.messageId,
+        timestamp: new Date().toISOString()
+      });
       return { reply, data };
     }
-    // No reply extracted — always log so user can see what n8n returned
+    // No reply extracted — log so user can see what n8n returned
+    // Still confirm that we received a response from n8n, even if it doesn't contain a reply
+    /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+    console.log('[JARVIS] ⚠️ RESPONSE RECEIVED BUT NO REPLY EXTRACTED', {
+      status: res.status,
+      hasResponse: !!data,
+      responseKeys: Object.keys(data || {}),
+      source: payload.source,
+      messageId: payload.messageId,
+      timestamp: new Date().toISOString()
+    });
+    
     const dataKeys = Object.keys(data || {});
     const bodyPreview = JSON.stringify(data).slice(0, 400);
+    const isTestUrl = n8nWebhookUrl && n8nWebhookUrl.includes('/webhook-test/');
+    const isEmptyResponse = Object.keys(data || {}).length === 0;
+    
+    // Build a more specific error message
+    let issueDescription = '';
+    if (isEmptyResponse) {
+      issueDescription = 'n8n returned an empty response body ({}). This usually means the Respond to Webhook node is missing or not connected in your workflow.';
+    } else {
+      issueDescription = `n8n returned a response but no reply field was found. Response keys: ${dataKeys.length ? dataKeys.join(', ') : 'none'}.`;
+    }
+    
+    if (isTestUrl) {
+      issueDescription += ' Also, you are using a test webhook URL (/webhook-test/). Use the production URL (/webhook/) instead.';
+    }
+    
     // eslint-disable-next-line no-console -- intentional: user needs to see why fallback was used
-    console.warn('[JARVIS] n8n fallback: no reply in response.', {
+    console.warn('[JARVIS] n8n configuration issue: no reply in response. Using fallback.', {
       status: res.status,
       dataKeys: dataKeys.length ? dataKeys : '(empty)',
       bodyPreview: bodyPreview + (bodyPreview.length >= 400 ? '…' : ''),
+      issue: issueDescription,
       hint: 'n8n must return JSON with one of: output, reply, result, text, message, response, answer, content. Use production URL (/webhook/ not /webhook-test/). See debug/N8N-RESPOND-TO-WEBHOOK-FIX.md',
     });
     if (DEBUG.enabled && typeof reply !== 'string') {
       DEBUG.trace('n8n: response body (no reply extracted)', data);
     }
     if (res.ok && (Object.keys(data).length === 0 || !extractReplyFromJson(data))) {
-      DEBUG.error('n8n: empty or no reply in response body. In n8n, set Webhook node Respond to "Using Respond to Webhook Node". See debug/N8N-RESPOND-TO-WEBHOOK-FIX.md');
+      // Log as warning instead of error since app is still functional (using fallback)
+      DEBUG.warn('n8n: empty or no reply in response body. In n8n, set Webhook node Respond to "Using Respond to Webhook Node". See debug/N8N-RESPOND-TO-WEBHOOK-FIX.md');
     }
     const natural = getNaturalFallback(payload.message);
     const fallback = natural || "I heard you. I'm still getting set up — please try again in a moment.";
@@ -551,19 +798,31 @@ const bridge = new CartesiaAudioBridge({
     }
     /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
     console.log('[JARVIS] onTranscript: FINAL transcript received (voice — mic or wake word)', { 
+      originalTranscript: trimmed,
       textLength: trimmed.length, 
       preview: trimmed.slice(0, 80),
-      isFinal 
+      isFinal,
+      timestamp: new Date().toISOString()
     });
     const isWakeWordTriggered = bridge.isWakeWordWaiting() === false && bridge.isSTTActive();
     // Always log voice transcript sending (not just in debug mode) for troubleshooting
-    /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
-    console.log('[JARVIS] onTranscript: sending voice payload to n8n', { 
-      length: trimmed.length, 
-      preview: trimmed.slice(0, 80),
-      wakeWordTriggered: isWakeWordTriggered,
-      source: 'voice'
-    });
+    if (isWakeWordTriggered) {
+      /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+      console.log('[JARVIS] 🔔 WAKE WORD TRIGGERED: Sending payload to n8n', { 
+        length: trimmed.length, 
+        preview: trimmed.slice(0, 80),
+        wakeWordTriggered: true,
+        source: 'voice'
+      });
+    } else {
+      /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+      console.log('[JARVIS] onTranscript: sending voice payload to n8n (mic button)', { 
+        length: trimmed.length, 
+        preview: trimmed.slice(0, 80),
+        wakeWordTriggered: false,
+        source: 'voice'
+      });
+    }
     DEBUG.trace('onTranscript: sending voice payload to n8n', { 
       length: trimmed.length, 
       preview: trimmed.slice(0, 80),
@@ -586,8 +845,41 @@ const bridge = new CartesiaAudioBridge({
     // Clear recorded audio immediately after getting it (to free memory)
     bridge.clearRecordedAudio();
     
+    // Validate input BEFORE displaying to catch issues early
+    const validation = validateInput(trimmed);
+    if (!validation.valid) {
+      /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+      console.error('[JARVIS] onTranscript: input validation failed - message will not be sent', {
+        error: validation.error,
+        originalText: trimmed,
+        textLength: trimmed.length
+      });
+      DEBUG.error('onTranscript: input validation failed', { error: validation.error, text: trimmed });
+      setStatus('Error: Invalid input', 'error');
+      appendMessage('assistant', validation.error || "I didn't catch that. Please try speaking again.");
+      syncMicButton(false, false);
+      return;
+    }
+    
+    // Use validated and sanitized text
+    const validatedText = validation.sanitized;
+    
+    // Warn if validation modified the text (e.g., truncated due to length)
+    if (validatedText !== trimmed) {
+      /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+      console.warn('[JARVIS] onTranscript: transcript was modified during validation', {
+        original: trimmed,
+        validated: validatedText,
+        originalLength: trimmed.length,
+        validatedLength: validatedText.length,
+        difference: trimmed.length - validatedText.length
+      });
+      DEBUG.warn('Transcript modified during validation', { original: trimmed, validated: validatedText });
+    }
+    
     try {
-      appendMessage('user', trimmed);
+      // Only display message after validation passes
+      appendMessage('user', validatedText);
       setStatus('Processing…', 'listening');
       const audioAttachments = audioBase64 ? [{
         name: 'voice-recording.pcm',
@@ -598,11 +890,18 @@ const bridge = new CartesiaAudioBridge({
       DEBUG.trace('onTranscript: audio attachment', { hasAudio: !!audioBase64, size: audioAttachments[0]?.size || 0 });
       
       // Build payload — same structure for mic and wake word (source: 'voice', full n8n fields)
-      const voicePayload = buildPayload(trimmed, { source: 'voice', attachments: audioAttachments });
+      // Include wakeWordTriggered flag to distinguish wake word from mic button
+      // Use validated text instead of raw trimmed text
+      const voicePayload = buildPayload(validatedText, { 
+        source: 'voice', 
+        attachments: audioAttachments,
+        wakeWordTriggered: isWakeWordTriggered
+      });
       /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
       console.log('[JARVIS] Voice payload (mic/wake word, full structure):', {
         message: voicePayload.message,
         source: voicePayload.source,
+        wakeWordTriggered: voicePayload.wakeWordTriggered || false,
         session_id: voicePayload.session_id,
         sessionId: voicePayload.sessionId,
         message_id: voicePayload.message_id,
@@ -624,23 +923,97 @@ const bridge = new CartesiaAudioBridge({
       });
       DEBUG.trace('onTranscript: full voice payload structure', voicePayload);
       
-      const { reply: replyText, data: replyData } = await getLLMReply(trimmed, { source: 'voice', attachments: audioAttachments });
+      if (isWakeWordTriggered) {
+        /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+        console.log('[JARVIS] 🔔 WAKE WORD: About to send payload to n8n', {
+          url: n8nWebhookUrl,
+          originalTranscript: trimmed,
+          validatedText: validatedText,
+          messageLength: validatedText.length,
+          hasAttachments: audioAttachments.length > 0,
+          attachmentSize: audioAttachments[0]?.size || 0,
+          wakeWordTriggered: true,
+          validationPassed: true
+        });
+      } else {
+      /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+      console.log('[JARVIS] Voice: About to call getLLMReply - payload will be sent to n8n', {
+        url: n8nWebhookUrl,
+        originalTranscript: trimmed,
+        validatedText: validatedText,
+        messageLength: validatedText.length,
+        hasAttachments: audioAttachments.length > 0,
+        attachmentSize: audioAttachments[0]?.size || 0,
+        validationPassed: true
+      });
+      }
+      // Wrap getLLMReply in a timeout to prevent status from getting stuck
+      let replyText, replyData;
+      let timeoutId;
+      try {
+        const timeoutPromise = new Promise((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error('Request timeout after 35 seconds')), 35000);
+        });
+        // Use validated text instead of raw trimmed text
+        const result = await Promise.race([
+          getLLMReply(validatedText, { 
+            source: 'voice', 
+            attachments: audioAttachments,
+            wakeWordTriggered: isWakeWordTriggered
+          }),
+          timeoutPromise
+        ]);
+        replyText = result.reply;
+        replyData = result.data;
+      } catch (timeoutErr) {
+        /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+        console.error('[JARVIS] Voice: getLLMReply timeout or error', { 
+          error: timeoutErr,
+          errorMessage: timeoutErr?.message,
+          errorStack: timeoutErr?.stack,
+          originalTranscript: trimmed,
+          validatedText: validatedText,
+          textLength: validatedText.length
+        });
+        DEBUG.error('Voice: getLLMReply failed', timeoutErr);
+        // Use fallback reply if request times out or fails
+        replyText = timeoutErr?.message?.includes('timeout') 
+          ? "Request timed out. The assistant is taking too long to respond. Please try again."
+          : "Sorry, I couldn't reach the assistant. Please try again.";
+        replyData = {};
+        // Show error indicator on the user message that failed to send
+        setStatus('Error: Failed to send message', 'error');
+      } finally {
+        // Always clear timeout to prevent memory leaks
+        if (timeoutId) clearTimeout(timeoutId);
+      }
       /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
       console.log('[JARVIS] Voice (mic/wake word): received reply from n8n', { 
         replyLength: replyText?.length || 0, 
         hasData: !!replyData,
         replyPreview: typeof replyText === 'string' ? replyText.slice(0, 100) : '',
-        hasApiKey: !!apiKey
+        hasApiKey: !!apiKey,
+        dataKeys: replyData ? Object.keys(replyData) : [],
+        payloadReceived: true
       });
       // Ensure we always have a string for chat and TTS (correct payload → text + audio in UI)
       const displayText = typeof replyText === 'string' ? replyText : (replyText != null ? String(replyText) : 'No response received.');
       appendMessage('assistant', displayText);
-      /* eslint-disable-next-line no-console -- mic response: text in chat + audio */
-      console.log('[JARVIS] Mic response: text shown in chat (length=' + displayText.length + '), TTS ' + (apiKey ? 'playing' : 'skipped (no API key)'));
       const files = extractFilesFromJson(replyData);
-      if (apiKey) {
-        setStatus('Speaking…', 'speaking');
+      const hasTextToSpeak = displayText.trim().length > 0;
+      /* eslint-disable-next-line no-console -- mic response: text in chat + audio */
+      console.log('[JARVIS] Mic response: text shown in chat (length=' + displayText.length + '), TTS ' + (apiKey && hasTextToSpeak ? 'playing' : apiKey ? 'skipped (empty text)' : 'skipped (no API key)'));
+      if (apiKey && hasTextToSpeak) {
+        setStatus('Connecting TTS…', 'speaking');
         try {
+          /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+          console.log('[JARVIS] Voice: Connecting TTS WebSocket for voice response...');
+          // Pre-connect TTS WebSocket before speaking for better UX (consistent with send button flow)
+          await bridge.connectTTS().catch((connectErr) => {
+            /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+            console.warn('[JARVIS] Voice: TTS WebSocket pre-connect warning (will retry in speakText):', connectErr?.message || connectErr);
+          });
+          setStatus('Speaking…', 'speaking');
           /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
           console.log('[JARVIS] Voice: starting TTS for response', { 
             replyLength: displayText.length,
@@ -648,10 +1021,11 @@ const bridge = new CartesiaAudioBridge({
             hasApiKey: !!apiKey,
             hasVoiceId: !!voiceId
           });
+          // speakText() will call connectTTS() internally if not already connected, which ensures TTS node is initialized
           await bridge.speakText(displayText);
           /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
           console.log('[JARVIS] Voice: TTS completed successfully');
-          setStatus('Connecting…', '');
+          setStatus('Restarting mic…', 'listening');
           try {
             try {
               const saved = typeof localStorage !== 'undefined' && localStorage.getItem(MIC_BOOST_STORAGE_KEY);
@@ -674,24 +1048,38 @@ const bridge = new CartesiaAudioBridge({
           if (files.length) await processFileSpecs(files);
         } catch (err) {
           /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
-          console.error('[JARVIS] Mic button: TTS error in onTranscript', { 
+          console.error('[JARVIS] Voice: TTS error in onTranscript', { 
             error: err, 
             errorMessage: err?.message, 
             errorName: err?.name,
             stack: err?.stack 
           });
           DEBUG.error('TTS error in onTranscript', err);
-          setStatus('Ready (TTS error)', '');
-          appendMessage('assistant', 'Sorry, I could not speak that. ' + (err?.message || err));
+          const errorMsg = err?.message || String(err);
+          setStatus('Error', 'error');
+          // Provide more specific error message for WebSocket issues
+          if (errorMsg.includes('WebSocket') || errorMsg.includes('connection')) {
+            appendMessage('assistant', 'Sorry, I could not connect to the voice service. Please check your internet connection and API key.');
+          } else {
+            appendMessage('assistant', 'Sorry, I could not speak that. ' + errorMsg);
+          }
+          // Ensure mic button is synced on error
+          syncMicButton(false, false);
         }
       } else {
-        setStatus('Ready (no voice: add CARTESIA_API_KEY for TTS)', '');
+        if (apiKey && !hasTextToSpeak) {
+          setStatus('Ready (empty response)', '');
+        } else {
+          setStatus('Ready (no voice: add CARTESIA_API_KEY for TTS)', '');
+        }
         if (files.length) await processFileSpecs(files);
       }
     } catch (err) {
       DEBUG.error('onTranscript error', err);
       setStatus('Error', 'error');
       appendMessage('assistant', 'Sorry, something went wrong. ' + (err?.message || err));
+      // Ensure mic button is synced on error
+      syncMicButton(false, false);
     }
   },
   onTTSChunk: () => {},
@@ -701,14 +1089,18 @@ const bridge = new CartesiaAudioBridge({
       msg.includes('OpenWakeWord') || msg.includes('openWakeWord') || msg.includes('OPENWAKEWORD_WS_URL') ||
       msg.includes('WebSocket');
     if (wakeWordEnabled && isWakeWordError) {
-      logWakeWordError(msg, err);
-    }
-    try {
-      // eslint-disable-next-line no-console -- intentional error reporting
-      console.error('[JARVIS]', err);
-    } catch {
-      // eslint-disable-next-line no-console -- fallback when err is not serializable
-      console.error('[JARVIS] Unknown error');
+      // The manager already logs via logWakeWordError, so we don't log again here
+      // This prevents duplicate error messages in the console
+      // The UI will still be updated via onWakeWordError subscription (line 189)
+    } else {
+      // For non-wake-word errors, log normally
+      try {
+        // eslint-disable-next-line no-console -- intentional error reporting
+        console.error('[JARVIS]', err);
+      } catch {
+        // eslint-disable-next-line no-console -- fallback when err is not serializable
+        console.error('[JARVIS] Unknown error');
+      }
     }
     setStatus('Error', 'error');
     // Ensure mic button is synced if STT was active
@@ -785,14 +1177,7 @@ const bridge = new CartesiaAudioBridge({
   onSilenceClosingMessage: (phrase) => {
     DEBUG.trace('onSilenceClosingMessage received', { phrase });
     if (!phrase || typeof phrase !== 'string' || !phrase.trim()) {
-      setStatus('Ready');
-      return;
-    }
-    const text = phrase.trim();
-    setStatus('Standing by…', '');
-    appendMessage('assistant', text);
-    bridge.speakText(text).then(() => {
-      // Reset wake word to listening after 10s silence response (conversation ended)
+      // Still reactivate wake word even if phrase is invalid
       if (wakeWordConfigured) {
         bridge.initWakeWord().then((result) => {
           if (result?.success) {
@@ -808,7 +1193,39 @@ const bridge = new CartesiaAudioBridge({
       } else {
         setStatus('Ready');
       }
-    }).catch(() => setStatus('Ready'));
+      return;
+    }
+    const text = phrase.trim();
+    setStatus('Standing by…', '');
+    appendMessage('assistant', text);
+    
+    // Helper function to reactivate wake word (used in both success and error cases)
+    const reactivateWakeWord = () => {
+      if (wakeWordConfigured) {
+        bridge.initWakeWord().then((result) => {
+          if (result?.success) {
+            setStatus('Say "Hey Jarvis" to start', '');
+            setTimeout(() => updateTrackerStatus(), 200);
+          } else {
+            setStatus('Ready');
+          }
+        }).catch(err => {
+          DEBUG.error('Failed to re-initialize wake word after silence', err);
+          setStatus('Ready');
+        });
+      } else {
+        setStatus('Ready');
+      }
+    };
+    
+    bridge.speakText(text).then(() => {
+      // Reset wake word to listening after 10s silence response (conversation ended)
+      reactivateWakeWord();
+    }).catch((err) => {
+      DEBUG.error('TTS error in onSilenceClosingMessage', err);
+      // Still reactivate wake word even if TTS fails
+      reactivateWakeWord();
+    });
   },
 });
 
@@ -818,6 +1235,7 @@ if (!apiKey) {
   syncMicButton(false, true);
 } else {
   setStatus('Ready', '');
+  syncMicButton(false, false); // Explicitly set to idle (enabled, not recording)
 }
 
 // Initialize wake word error monitor
@@ -920,10 +1338,8 @@ const updateTrackerStatus = () => {
 
 // Initialize wake word automatically on load — no button. Retry on permission so it starts when user allows.
 let wakeWordRetryIntervalId = null;
-/** Set when Picovoice activation is refused (invalid key/quota/domain) — do not retry. */
+/** Set when wake word activation is refused (invalid key/quota/domain) — do not retry. */
 let wakeWordNonRetryable = false;
-/** Only one wake word init at a time to avoid parallel timeouts and duplicate errors. */
-let wakeWordInitInProgress = false;
 
 function stopWakeWordRetries() {
   if (wakeWordRetryIntervalId) {
@@ -932,64 +1348,24 @@ function stopWakeWordRetries() {
   }
 }
 
-function tryWakeWordInit() {
-  if (wakeWordNonRetryable) return Promise.resolve(false);
-  if (wakeWordInitInProgress) return Promise.resolve(false);
-  wakeWordInitInProgress = true;
-  return bridge.initWakeWord()
-    .finally(() => { wakeWordInitInProgress = false; })
-    .then(result => {
-    if (result.success) {
-      stopWakeWordRetries();
-      setStatus('Say "Hey Jarvis" to start', '');
-      setTimeout(() => updateTrackerStatus(), 200);
-      return true;
-    }
-    if (result.nonRetryable) {
-      wakeWordNonRetryable = true;
-      stopWakeWordRetries();
-      if (wakeWordTracker) {
-        const msg = 'Wake word unavailable. Is the OpenWakeWord server running? Use mic button to talk.';
-        wakeWordTracker.setStatus('error', msg);
-      }
-      return false;
-    }
-    const reason = result.reason || '';
-    const isPermission = /permission|microphone|denied/i.test(reason);
-    if (wakeWordTracker) {
-      wakeWordTracker.setStatus(isPermission ? 'waiting' : 'error', isPermission
-        ? 'Allow microphone — wake word will start automatically'
-        : (reason ? `Wake word: ${reason}` : 'Wake word failed'));
-    }
-    return false;
-  }).catch(err => {
-    if (!wakeWordNonRetryable) {
-      DEBUG.error('Wake word init failed', err);
-    }
-    const msg = err?.message || String(err);
-    const isPermission = /permission|microphone|denied/i.test(msg);
-    if (wakeWordTracker) {
-      wakeWordTracker.setStatus(isPermission ? 'waiting' : 'error', isPermission
-        ? 'Allow microphone — wake word will start automatically'
-        : `Wake word failed: ${msg}`);
-    }
-    return false;
-  });
-}
+// Wake word gesture handling variables (declared outside if block for scope access)
+let wakeWordGestureHandled = false;
+let bindFirstGesture = null;
 
 function startWakeWordRetries() {
   if (wakeWordRetryIntervalId || wakeWordNonRetryable) return;
   // Do NOT call tryWakeWordInit() on a timer — it would create/resume AudioContext without a user gesture and trigger the browser warning.
   // Instead, re-bind the gesture listener so the next click will retry. Show "Click to try again".
-  wakeWordGestureHandled = false;
-  bindFirstGesture();
-  if (wakeWordTracker) wakeWordTracker.setStatus('waiting', 'Click or tap anywhere to try again');
+  if (bindFirstGesture) {
+    wakeWordGestureHandled = false;
+    bindFirstGesture();
+    if (wakeWordTracker) wakeWordTracker.setStatus('waiting', 'Click or tap anywhere to try again');
+  }
 }
 
 if (wakeWordConfigured) {
   // Try once on load (works when site already has mic permission from a previous visit).
   // Browsers block getUserMedia without a user gesture, so we init on first interaction.
-  let wakeWordGestureHandled = false;
   function onFirstUserGesture() {
     if (wakeWordGestureHandled || bridge.getWakeWordMetrics()) return;
     wakeWordGestureHandled = true;
@@ -1015,12 +1391,12 @@ if (wakeWordConfigured) {
       startWakeWordRetries();
     });
   }
-  function bindFirstGesture() {
+  bindFirstGesture = function() {
     if (wakeWordGestureHandled || bridge.getWakeWordMetrics()) return;
     ['click', 'keydown', 'touchstart'].forEach((ev) => {
       document.addEventListener(ev, onFirstUserGesture, { once: true, capture: true });
     });
-  }
+  };
   // Defer wake word init to first user gesture so AudioContext is created after a click/tap/key.
   // This avoids the browser warning: "The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture."
   bindFirstGesture();
@@ -1108,13 +1484,149 @@ if (typeof window !== 'undefined' && (DEBUG.enabled || (window.location && windo
       sttActive: bridge.isSTTActive(),
     };
   };
+  
+  // Payload verification debug function
+  window.JARVIS_DEBUG_VERIFY_PAYLOADS = function () {
+    console.log('%c[JARVIS DEBUG] Payload Flow Verification', 'color: #FFB800; font-weight: bold; font-size: 14px;');
+    const verification = verifyPayloadFlow();
+    console.log('[JARVIS DEBUG] Verification Results:', verification);
+    console.log('[JARVIS DEBUG] Health Status:', verification.healthy ? '✓ HEALTHY' : '✗ ISSUES DETECTED');
+    if (verification.issues.length > 0) {
+      console.warn('[JARVIS DEBUG] Issues found:');
+      verification.issues.forEach(issue => {
+        const style = issue.severity === 'error' ? 'color: #FF0000' : 'color: #FFA500';
+        console.log(`%c  [${issue.severity.toUpperCase()}] ${issue.message}`, style);
+      });
+    }
+    return verification;
+  };
+  
+  // Payload monitor access
+  window.JARVIS_PAYLOAD_MONITOR = payloadMonitor;
+  console.log('[JARVIS DEBUG] Payload monitor available at window.JARVIS_PAYLOAD_MONITOR');
+  console.log('[JARVIS DEBUG] Run JARVIS_DEBUG_VERIFY_PAYLOADS() to check payload flow health');
   console.log('[JARVIS DEBUG] Run JARVIS_DEBUG_CHECK_CONFIG() to see current configuration and mic status.');
+  
+  // Debug function to test mic payload flow
+  window.JARVIS_DEBUG_TEST_MIC_PAYLOAD = async function (testMessage = 'Test mic payload') {
+    console.log('%c[JARVIS DEBUG] Testing Mic Payload Flow', 'color: #FFB800; font-weight: bold; font-size: 14px;');
+    console.log('[JARVIS DEBUG] Simulating mic button payload send/receive...');
+    
+    try {
+      // Simulate what happens when mic button sends a payload
+      const testText = testMessage.trim();
+      if (!testText) {
+        console.error('[JARVIS DEBUG] Test message is empty');
+        return { ok: false, error: 'Test message is empty' };
+      }
+      
+      console.log('[JARVIS DEBUG] Step 1: Building payload (simulating onTranscript)...');
+      const testPayload = buildPayload(testText, { source: 'voice', attachments: [] });
+      console.log('[JARVIS DEBUG] Payload built:', {
+        message: testPayload.message,
+        source: testPayload.source,
+        sessionId: testPayload.sessionId,
+        messageId: testPayload.messageId,
+        payloadSize: JSON.stringify(testPayload).length,
+        payloadKeys: Object.keys(testPayload)
+      });
+      
+      console.log('[JARVIS DEBUG] Step 2: Sending payload to n8n (simulating getLLMReply)...');
+      const { reply, data } = await getLLMReply(testText, { source: 'voice', attachments: [] });
+      
+      console.log('[JARVIS DEBUG] Step 3: Response received:', {
+        hasReply: !!reply,
+        replyType: typeof reply,
+        replyLength: typeof reply === 'string' ? reply.length : 0,
+        hasData: !!data,
+        dataKeys: data ? Object.keys(data) : [],
+        replyPreview: typeof reply === 'string' ? reply.slice(0, 100) : ''
+      });
+      
+      if (typeof reply === 'string' && reply.length > 0) {
+        console.log('%c[JARVIS DEBUG] ✓ Mic payload flow test PASSED', 'color: #00FF00; font-weight: bold;');
+        console.log('[JARVIS DEBUG] Reply:', reply.slice(0, 200) + (reply.length > 200 ? '...' : ''));
+        return { ok: true, reply, data, payload: testPayload };
+      } else {
+        console.warn('%c[JARVIS DEBUG] ⚠ Mic payload flow test PARTIAL - no reply in response', 'color: #FFA500; font-weight: bold;');
+        console.log('[JARVIS DEBUG] Response data:', data);
+        return { ok: false, data, payload: testPayload, error: 'No reply in response' };
+      }
+    } catch (err) {
+      console.error('%c[JARVIS DEBUG] ✗ Mic payload flow test FAILED', 'color: #FF0000; font-weight: bold;');
+      console.error('[JARVIS DEBUG] Error:', err);
+      return { ok: false, error: err?.message || String(err) };
+    }
+  };
+
+  // Debug function to test wake word payload flow
+  window.JARVIS_DEBUG_TEST_WAKE_WORD_PAYLOAD = async function (testMessage = 'Test wake word payload') {
+    console.log('%c[JARVIS DEBUG] 🔔 Testing Wake Word Payload Flow', 'color: #FFB800; font-weight: bold; font-size: 14px;');
+    console.log('[JARVIS DEBUG] Simulating wake word triggered payload send/receive...');
+    
+    try {
+      // Simulate what happens when wake word triggers a payload
+      const testText = testMessage.trim();
+      if (!testText) {
+        console.error('[JARVIS DEBUG] Test message is empty');
+        return { ok: false, error: 'Test message is empty' };
+      }
+      
+      console.log('[JARVIS DEBUG] Step 1: Building wake word payload (simulating onTranscript with wakeWordTriggered=true)...');
+      const testPayload = buildPayload(testText, { source: 'voice', attachments: [], wakeWordTriggered: true });
+      console.log('[JARVIS DEBUG] Wake word payload built:', {
+        message: testPayload.message,
+        source: testPayload.source,
+        wakeWordTriggered: testPayload.wakeWordTriggered,
+        sessionId: testPayload.sessionId,
+        messageId: testPayload.messageId,
+        payloadSize: JSON.stringify(testPayload).length,
+        payloadKeys: Object.keys(testPayload)
+      });
+      
+      if (testPayload.wakeWordTriggered !== true) {
+        console.warn('%c[JARVIS DEBUG] ⚠ Warning: wakeWordTriggered flag not set in payload', 'color: #FFA500; font-weight: bold;');
+      } else {
+        console.log('%c[JARVIS DEBUG] ✓ wakeWordTriggered flag correctly set in payload', 'color: #00FF00; font-weight: bold;');
+      }
+      
+      console.log('[JARVIS DEBUG] Step 2: Sending wake word payload to n8n (simulating getLLMReply)...');
+      const { reply, data } = await getLLMReply(testText, { source: 'voice', attachments: [], wakeWordTriggered: true });
+      
+      console.log('[JARVIS DEBUG] Step 3: Response received:', {
+        hasReply: !!reply,
+        replyType: typeof reply,
+        replyLength: typeof reply === 'string' ? reply.length : 0,
+        hasData: !!data,
+        dataKeys: data ? Object.keys(data) : [],
+        replyPreview: typeof reply === 'string' ? reply.slice(0, 100) : ''
+      });
+      
+      if (typeof reply === 'string' && reply.length > 0) {
+        console.log('%c[JARVIS DEBUG] 🔔 ✓ Wake word payload flow test PASSED', 'color: #00FF00; font-weight: bold;');
+        console.log('[JARVIS DEBUG] Reply:', reply.slice(0, 200) + (reply.length > 200 ? '...' : ''));
+        return { ok: true, reply, data, payload: testPayload };
+      } else {
+        console.warn('%c[JARVIS DEBUG] 🔔 ⚠ Wake word payload flow test PARTIAL - no reply in response', 'color: #FFA500; font-weight: bold;');
+        console.log('[JARVIS DEBUG] Response data:', data);
+        return { ok: false, data, payload: testPayload, error: 'No reply in response' };
+      }
+    } catch (err) {
+      console.error('%c[JARVIS DEBUG] 🔔 ✗ Wake word payload flow test FAILED', 'color: #FF0000; font-weight: bold;');
+      console.error('[JARVIS DEBUG] Error:', err);
+      return { ok: false, error: err?.message || String(err) };
+    }
+  };
+  console.log('[JARVIS DEBUG] Run JARVIS_DEBUG_TEST_MIC_PAYLOAD("your test message") to test the mic payload flow.');
+  console.log('[JARVIS DEBUG] Run JARVIS_DEBUG_TEST_WAKE_WORD_PAYLOAD("your test message") to test the wake word payload flow.');
   
   // Helper to show all available debug functions
   window.JARVIS_DEBUG_HELP = function () {
     console.log('%c[JARVIS DEBUG] Available Debug Functions:', 'color: #FFB800; font-weight: bold; font-size: 14px;');
     console.log('  • JARVIS_DEBUG_SEND_TEST() - Send test message to n8n');
     console.log('  • JARVIS_DEBUG_CHECK_CONFIG() - Check configuration and mic status');
+    console.log('  • JARVIS_DEBUG_TEST_MIC_PAYLOAD("message") - Test mic payload send/receive flow');
+    console.log('  • JARVIS_DEBUG_TEST_WAKE_WORD_PAYLOAD("message") - Test wake word payload send/receive flow');
     console.log('  • JARVIS_DEBUG_HELP() - Show this help message');
     console.log('  • JARVIS_DEBUG_OPEN_DEVTOOLS() - Try to open DevTools (may not work in all browsers)');
     console.log('');
@@ -1237,18 +1749,76 @@ if (btnSend) {
       });
       DEBUG.trace('Text button: full payload structure', textPayload);
       
-      const { reply: replyText, data: replyData } = await getLLMReply(text, { source: 'text', attachments: attachmentPayload });
+      // Wrap getLLMReply in a timeout to prevent status from getting stuck (same as voice handler)
+      let replyText, replyData;
+      let timeoutId;
+      try {
+        const timeoutPromise = new Promise((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error('Request timeout after 35 seconds')), 35000);
+        });
+        const result = await Promise.race([
+          getLLMReply(text, { source: 'text', attachments: attachmentPayload }),
+          timeoutPromise
+        ]);
+        // Clear timeout if getLLMReply succeeded
+        if (timeoutId) clearTimeout(timeoutId);
+        replyText = result.reply;
+        replyData = result.data;
+      } catch (timeoutErr) {
+        // Clear timeout on error
+        if (timeoutId) clearTimeout(timeoutId);
+        /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+        console.error('[JARVIS] Text: getLLMReply timeout or error', { 
+          error: timeoutErr,
+          errorMessage: timeoutErr?.message,
+          errorStack: timeoutErr?.stack,
+          text: text.slice(0, 100),
+          textLength: text.length
+        });
+        DEBUG.error('Text: getLLMReply failed', timeoutErr);
+        // Use fallback reply if request times out or fails
+        replyText = timeoutErr?.message?.includes('timeout') 
+          ? "Request timed out. The assistant is taking too long to respond. Please try again."
+          : "Sorry, I couldn't reach the assistant. Please try again.";
+        replyData = {};
+        // Show error indicator
+        setStatus('Error: Failed to send message', 'error');
+      }
       /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
-      console.log('[JARVIS] Received reply from n8n', { replyLength: replyText?.length || 0, hasData: !!replyData });
-      appendMessage('assistant', replyText);
+      console.log('[JARVIS] Text button: Received reply from n8n', { 
+        replyLength: replyText?.length || 0, 
+        hasData: !!replyData,
+        replyPreview: replyText ? replyText.slice(0, 100) : 'NO REPLY',
+        replyDataKeys: replyData ? Object.keys(replyData) : [],
+        payloadReceived: true
+      });
+      // Ensure we always have a string for chat and TTS (correct payload → text + audio in UI)
+      const displayText = typeof replyText === 'string' ? replyText : (replyText != null ? String(replyText) : 'No response received.');
+      appendMessage('assistant', displayText);
       const files = extractFilesFromJson(replyData);
-      if (apiKey) {
-        setStatus('Speaking…', 'speaking');
+      const hasTextToSpeak = displayText.trim().length > 0;
+      /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+      console.log('[JARVIS] Text response: text shown in chat (length=' + displayText.length + '), TTS ' + (apiKey && hasTextToSpeak ? 'playing' : apiKey ? 'skipped (empty text)' : 'skipped (no API key)'));
+      if (apiKey && hasTextToSpeak) {
+        setStatus('Connecting TTS…', 'speaking');
         try {
           /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
-          console.log('[JARVIS] Speaking text response...');
-          // speakText() will call connectTTS() internally, which ensures TTS node is initialized
-          await bridge.speakText(replyText);
+          console.log('[JARVIS] Connecting TTS WebSocket for text response...');
+          // Pre-connect TTS WebSocket before speaking for better UX
+          await bridge.connectTTS().catch((connectErr) => {
+            /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+            console.warn('[JARVIS] TTS WebSocket pre-connect warning (will retry in speakText):', connectErr?.message || connectErr);
+          });
+          setStatus('Speaking…', 'speaking');
+          /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+          console.log('[JARVIS] Speaking text response...', { 
+            replyLength: displayText.length,
+            replyPreview: displayText.slice(0, 100),
+            hasApiKey: !!apiKey,
+            hasVoiceId: !!voiceId
+          });
+          // speakText() will call connectTTS() internally if not already connected, which ensures TTS node is initialized
+          await bridge.speakText(displayText);
           /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
           console.log('[JARVIS] Finished speaking text');
           setStatus('Ready');
@@ -1256,11 +1826,21 @@ if (btnSend) {
         } catch (err) {
           /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
           console.error('[JARVIS] Error in TTS/speak', err);
+          const errorMsg = err?.message || String(err);
           setStatus('Error', 'error');
-          appendMessage('assistant', 'Sorry, something went wrong. ' + (err?.message || err));
+          // Provide more specific error message for WebSocket issues
+          if (errorMsg.includes('WebSocket') || errorMsg.includes('connection')) {
+            appendMessage('assistant', 'Sorry, I could not connect to the voice service. Please check your internet connection and API key.');
+          } else {
+            appendMessage('assistant', 'Sorry, something went wrong. ' + errorMsg);
+          }
         }
       } else {
-        setStatus('Ready (no voice: add CARTESIA_API_KEY for TTS)', '');
+        if (apiKey && !hasTextToSpeak) {
+          setStatus('Ready (empty response)', '');
+        } else {
+          setStatus('Ready (no voice: add CARTESIA_API_KEY for TTS)', '');
+        }
         if (files.length) await processFileSpecs(files);
       }
     } catch (err) {
@@ -1368,9 +1948,17 @@ if (btnMic) {
     }
     syncMicButton(false, true);
     try {
-      setStatus('Connecting…');
-      await bridge.connectTTS().catch(() => {});
+      setStatus('Connecting TTS…');
+      /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+      console.log('[JARVIS] Mic button: Connecting TTS WebSocket...');
+      await bridge.connectTTS().catch((err) => {
+        /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+        console.warn('[JARVIS] Mic button: TTS WebSocket pre-connect warning (will retry if needed):', err?.message || err);
+      });
       DEBUG.trace('TTS connected, starting STT…');
+      setStatus('Connecting STT…');
+      /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+      console.log('[JARVIS] Mic button: Starting STT (will connect STT WebSocket)...');
       try {
         const saved = typeof localStorage !== 'undefined' && localStorage.getItem(MIC_BOOST_STORAGE_KEY);
         if (saved != null) {
@@ -1382,6 +1970,8 @@ if (btnMic) {
       await bridge.startSTT({ skipWakeWordWait: true });
       syncMicButton(true, false);
       setStatus('Listening…', 'listening');
+      /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+      console.log('[JARVIS] Mic button: STT started, WebSockets connected, ready to listen');
       // Update wake word tracker status after mic permission is granted and STT starts
       // This ensures the tracker shows the correct status after user grants permission
       if (wakeWordConfigured) {
@@ -1391,7 +1981,14 @@ if (btnMic) {
       }
     } catch (err) {
       const msg = err?.message || String(err);
-      setStatus(msg.startsWith('Mic ') ? msg : 'Mic: ' + msg, 'error');
+      /* eslint-disable-next-line no-console -- intentional: always visible for troubleshooting */
+      console.error('[JARVIS] Mic button: Error starting STT', { error: err, message: msg });
+      // Provide more specific error message for WebSocket issues
+      let errorMsg = msg.startsWith('Mic ') ? msg : 'Mic: ' + msg;
+      if (msg.includes('WebSocket') || msg.includes('connection') || msg.includes('timeout')) {
+        errorMsg = 'Connection error. Please check your internet connection and API key.';
+      }
+      setStatus(errorMsg, 'error');
       syncMicButton(false, false);
     }
   });

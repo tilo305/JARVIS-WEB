@@ -14,8 +14,8 @@ The Wake Word Error Monitor has been enhanced to provide **100% coverage** of al
 - ✅ Access key missing
 - ✅ Access key not found
 - ✅ Access key empty
-- ✅ Invalid Picovoice access key
-- ✅ Picovoice access key invalid
+- ✅ Invalid access key
+- ✅ Access key invalid
 - ✅ Access key authentication
 - ✅ Unauthorized access key
 
@@ -204,7 +204,6 @@ The error detection system now uses **expanded keyword matching** with 40+ wake 
 
 - Wake word variations (wake word, wake-word, wakeword)
 - Porcupine variations (porcupine, Porcupine, PORCUPINE)
-- Picovoice variations (picovoice, Picovoice, PICOVOICE)
 - All initialization, error, failed, timeout variations
 - All processor, manager, detection variations
 
@@ -232,7 +231,7 @@ Each error category has a dedicated fix strategy:
 
 The monitor is automatically active when:
 - Wake word is enabled (`wakeWordEnabled === true`)
-- Picovoice AccessKey is configured
+- AccessKey is configured
 - At least one keyword path is provided
 
 No manual setup required - it starts automatically and monitors all console errors in real-time.

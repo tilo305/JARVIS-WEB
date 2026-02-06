@@ -114,7 +114,7 @@ function loadEnv() {
 
 const config = loadEnv();
 const apiKey = config.CARTESIA_API_KEY || config.VITE_CARTESIA_API_KEY || '';
-const picovoiceKey = config.PICOVOICE_ACCESS_KEY || config.VITE_PICOVOICE_ACCESS_KEY || '';
+const wakeWordKey = config.WAKE_WORD_ACCESS_KEY || config.VITE_WAKE_WORD_ACCESS_KEY || '';
 
 // Readline interface
 const rl = readline.createInterface({
@@ -213,19 +213,19 @@ async function initializeBridge() {
     log(`Using Cartesia API Key (${apiKey.substring(0, 10)}...)`, 'success');
   }
   
-  const isValidKey = picovoiceKey && picovoiceKey.length >= 20 && 
-                     picovoiceKey !== 'your_access_key_here' && 
-                     picovoiceKey !== 'your_key_here' && 
-                     picovoiceKey !== 'your_key';
+  const isValidKey = wakeWordKey && wakeWordKey.length >= 20 && 
+                     wakeWordKey !== 'your_access_key_here' && 
+                     wakeWordKey !== 'your_key_here' && 
+                     wakeWordKey !== 'your_key';
   
   if (!isValidKey) {
-    log('CRITICAL: PICOVOICE_ACCESS_KEY is missing or invalid!', 'error');
-    log('Wake word detection will NOT work without a valid Picovoice AccessKey', 'error');
+    log('CRITICAL: WAKE_WORD_ACCESS_KEY is missing or invalid!', 'error');
+    log('Wake word detection will NOT work without a valid AccessKey', 'error');
     log('', 'info');
     log('SOLUTION: Update .env file and RESTART dev server', 'info');
     log('1. Open .env file in project root', 'info');
-    log('2. Ensure line exists: VITE_PICOVOICE_ACCESS_KEY=your_actual_key', 'info');
-    log('3. Replace "your_actual_key" with your key from https://console.picovoice.ai/', 'info');
+    log('2. Ensure line exists: VITE_WAKE_WORD_ACCESS_KEY=your_actual_key', 'info');
+    log('3. Replace "your_actual_key" with your key from your service provider', 'info');
     log('4. IMPORTANT: Stop dev server (Ctrl+C) and restart: npm run vite', 'error');
     log('   (Vite only loads .env at startup - changes require restart!)', 'error');
     status.bridge = 'Missing AccessKey - Cannot Initialize';
@@ -233,7 +233,7 @@ async function initializeBridge() {
     return;
   }
   
-  log(`Using Picovoice AccessKey (${picovoiceKey.length} chars)`, 'success');
+  log(`Using AccessKey (${wakeWordKey.length} chars)`, 'success');
   
   // Simulate initialization
   await new Promise(resolve => setTimeout(resolve, 500));
@@ -591,13 +591,13 @@ async function main() {
     log('Warning: CARTESIA_API_KEY not found in environment', 'warning');
   }
   
-  const isValidKey = picovoiceKey && picovoiceKey.length >= 20 && 
-                     picovoiceKey !== 'your_access_key_here' && 
-                     picovoiceKey !== 'your_key_here' && 
-                     picovoiceKey !== 'your_key';
+  const isValidKey = wakeWordKey && wakeWordKey.length >= 20 && 
+                     wakeWordKey !== 'your_access_key_here' && 
+                     wakeWordKey !== 'your_key_here' && 
+                     wakeWordKey !== 'your_key';
   
   if (!isValidKey) {
-    log('Warning: PICOVOICE_ACCESS_KEY not found or invalid', 'warning');
+    log('Warning: WAKE_WORD_ACCESS_KEY not found or invalid', 'warning');
     log('Wake word detection will not work without a valid key', 'warning');
   }
   

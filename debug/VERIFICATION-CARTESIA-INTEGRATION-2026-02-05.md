@@ -23,7 +23,7 @@
 
 2. **docs/INTEGRATION.md**
    - New "Cartesia integration (bridged and connected)" section.
-   - Table and troubleshooting updated for OpenWakeWord (no Picovoice references in checklist).
+   - Table and troubleshooting updated for OpenWakeWord (no wake word service references in checklist).
 
 ## Result
 

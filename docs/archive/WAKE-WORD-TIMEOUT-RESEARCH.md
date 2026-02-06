@@ -204,7 +204,7 @@ async preloadPorcupine() {
   if (this._porcupinePreloaded) return;
   try {
     // Load SDK without initializing
-    await import('@picovoice/porcupine-web');
+    await import('@porcupine-web');
     this._porcupinePreloaded = true;
   } catch (err) {
     DEBUG.warn('WakeWordManager: Failed to preload Porcupine SDK', err);
@@ -308,7 +308,6 @@ async initWakeWord() {
 - `"Hey Google"`
 - `"Hey Siri"`
 - `"Okay Google"`
-- `"Picovoice"`
 - `"Porcupine"`
 - `"Terminator"`
 - And more...
@@ -379,7 +378,7 @@ const wakeWordKeywords = ['Jarvis']; // Use built-in keyword
 | `Porcupine.create() timeout after 10000ms` | Porcupine initialization slow | Increase timeout to 20s, check network |
 | `AudioWorklet loading timeout after 5000ms` | File loading slow | Increase timeout to 10s, check file path |
 | `Keyword file not found` | .ppn file missing | Use built-in keyword or fix file path |
-| `Invalid AccessKey` | AccessKey incorrect | Verify from Picovoice Console |
+| `Invalid AccessKey` | AccessKey incorrect | Verify from your service provider |
 | `CORS error` | File served from different origin | Fix CORS headers or use same origin |
 
 ## Performance Targets

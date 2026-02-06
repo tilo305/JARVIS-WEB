@@ -12,23 +12,23 @@ This document tracks all errors encountered and their fixes in the JARVIS-WEB pr
 
 **Error:**
 ```
-Uncaught SyntaxError: The requested module '/@fs/C:/Users/lazar/Downloads/GitHub/JARVIS-WEB/node_modules/.vite/deps/@picovoice_porcupine-web.js?v=312251e8' does not provide an export named 'default'.
+Uncaught SyntaxError: The requested module does not provide an export named 'default'.
 at wake-word-manager.js:12:8
 ```
 
 **Root Cause:**
-The `@picovoice/porcupine-web` package (v4.0.0) exports `Porcupine` as a **named export**, not a default export. The code was using incorrect default import syntax.
+The wake word package exports `Porcupine` as a **named export**, not a default export. The code was using incorrect default import syntax.
 
 **Fix:**
 1. **File:** `public/js/wake-word-manager.js`
-   - Changed: `import Porcupine from '@picovoice/porcupine-web';`
-   - To: `import { Porcupine } from '@picovoice/porcupine-web';`
+   - Changed: `import Porcupine from 'wake-word-package';`
+   - To: `import { Porcupine } from 'wake-word-package';`
 
 2. **File:** `vite.config.js`
    - Added `optimizeDeps` configuration to ensure proper handling:
    ```javascript
    optimizeDeps: {
-     include: ['@picovoice/porcupine-web'],
+     include: [],
      esbuildOptions: {
        target: 'es2022',
      },

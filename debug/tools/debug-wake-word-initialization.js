@@ -25,7 +25,7 @@ const envPath = getFirstEnvPath(root) ?? join(root, '.env');
 const keywordsDir = join(root, 'public/keywords');
 
 // Built-in Porcupine keywords
-const BUILT_IN_KEYWORDS = ['Alexa', 'Americano', 'Blueberry', 'Bumblebee', 'Computer', 'Grapefruit', 'Grasshopper', 'Hey Google', 'Hey Siri', 'Jarvis', 'Okay Google', 'Picovoice', 'Porcupine', 'Terminator'];
+const BUILT_IN_KEYWORDS = ['Alexa', 'Americano', 'Blueberry', 'Bumblebee', 'Computer', 'Grapefruit', 'Grasshopper', 'Hey Google', 'Hey Siri', 'Jarvis', 'Okay Google', 'Porcupine', 'Terminator'];
 
 function log(msg, type = 'info') {
   const prefixes = {
@@ -62,7 +62,7 @@ logSection('1. Configuration Check');
 
 if (!existsSync(envPath)) {
   log('.env file not found', 'error');
-  issues.push('Create .env file with PICOVOICE_ACCESS_KEY and PORCUPINE_KEYWORD');
+  issues.push('Create .env file with WAKE_WORD_ACCESS_KEY and PORCUPINE_KEYWORD');
 } else {
   log('.env file exists', 'success');
   const raw = readFileSync(envPath, 'utf8');
@@ -77,16 +77,16 @@ if (!existsSync(envPath)) {
     }
   }
 
-  // Check PICOVOICE_ACCESS_KEY
-  const accessKey = env.PICOVOICE_ACCESS_KEY || env.VITE_PICOVOICE_ACCESS_KEY || '';
+  // Check WAKE_WORD_ACCESS_KEY
+  const accessKey = env.WAKE_WORD_ACCESS_KEY || env.VITE_WAKE_WORD_ACCESS_KEY || '';
   if (!accessKey || accessKey.length === 0) {
-    log('PICOVOICE_ACCESS_KEY is not set', 'error');
-    issues.push('Set PICOVOICE_ACCESS_KEY in .env file (get from https://console.picovoice.ai/)');
+    log('WAKE_WORD_ACCESS_KEY is not set', 'error');
+    issues.push('Set WAKE_WORD_ACCESS_KEY in .env file (get from your service provider)');
   } else if (accessKey === 'your_access_key_here' || accessKey.length < 20) {
-    log('PICOVOICE_ACCESS_KEY appears to be a placeholder or invalid', 'error');
-    issues.push('PICOVOICE_ACCESS_KEY is too short or appears to be a placeholder');
+    log('WAKE_WORD_ACCESS_KEY appears to be a placeholder or invalid', 'error');
+    issues.push('WAKE_WORD_ACCESS_KEY is too short or appears to be a placeholder');
   } else {
-    log(`PICOVOICE_ACCESS_KEY is set (${accessKey.substring(0, 10)}...)`, 'success');
+    log(`WAKE_WORD_ACCESS_KEY is set (${accessKey.substring(0, 10)}...)`, 'success');
   }
 
   // Check PORCUPINE_KEYWORD
@@ -168,13 +168,13 @@ logSection('3. Dependencies Check');
 
 try {
   const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-  const porcupineVersion = packageJson.dependencies?.['@picovoice/porcupine-web'] || 
-                          packageJson.devDependencies?.['@picovoice/porcupine-web'];
+  const porcupineVersion = packageJson.dependencies?.['@porcupine-web'] || 
+                          packageJson.devDependencies?.['@porcupine-web'];
   if (porcupineVersion) {
-    log(`@picovoice/porcupine-web is installed: ${porcupineVersion}`, 'success');
+    log(`Wake word package is installed: ${porcupineVersion}`, 'success');
   } else {
-    log('@picovoice/porcupine-web is not installed', 'error');
-    issues.push('Run: npm install @picovoice/porcupine-web');
+    log('Wake word package is not installed', 'error');
+    issues.push('Run: npm install wake-word-package');
   }
 } catch (err) {
   log(`Error checking package.json: ${err.message}`, 'error');

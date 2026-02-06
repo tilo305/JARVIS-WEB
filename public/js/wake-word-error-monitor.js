@@ -50,13 +50,11 @@ export class WakeWordErrorMonitor {
         /access.*key.*missing/i,
         /access.*key.*not.*found/i,
         /access.*key.*empty/i,
-        /invalid.*picovoice.*access.*key/i,
-        /picovoice.*access.*key.*invalid/i,
         /access.*key.*authentication/i,
         /unauthorized.*access.*key/i
       ],
       
-      // Picovoice activation refused (invalid/expired key, quota, or domain) - do not retry
+      // Wake word activation refused (invalid/expired key, quota, or domain) - do not retry
       activationRefused: [
         /PorcupineActivationRefusedError/i,
         /ActivationRefused/i,
@@ -159,6 +157,24 @@ export class WakeWordErrorMonitor {
         /dns.*error/i,
         /connection.*refused/i,
         /network.*unreachable/i
+      ],
+      
+      // WebSocket connection errors (OpenWakeWord specific)
+      websocketConnectionError: [
+        /websocket.*connection.*failed/i,
+        /unable.*to.*connect.*ws:/i,
+        /websocket.*error/i,
+        /websocket.*failed/i,
+        /failed.*to.*connect.*websocket/i,
+        /websocket.*connection.*refused/i,
+        /websocket.*connection.*timeout/i,
+        /websocket.*closed.*abnormally/i,
+        /websocket.*close.*code.*1006/i,
+        /code.*1006/i,
+        /reconnect.*attempts/i,
+        /websocket.*connection.*failed.*after.*reconnect/i,
+        /openwakeword.*server.*running/i,
+        /is.*the.*openwakeword.*server.*running/i
       ],
       
       // Porcupine errors
@@ -277,6 +293,7 @@ export class WakeWordErrorMonitor {
       audioWorkletError: this._fixAudioWorkletError.bind(this),
       corsError: this._fixCorsError.bind(this),
       networkError: this._fixNetworkError.bind(this),
+      websocketConnectionError: this._fixWebSocketConnectionError.bind(this),
       porcupineError: this._fixPorcupineError.bind(this),
       keywordsArrayError: this._fixKeywordsArrayError.bind(this),
       microphonePermission: this._fixMicrophonePermission.bind(this),
@@ -403,7 +420,6 @@ export class WakeWordErrorMonitor {
     const wakeWordKeywords = [
       'wake.*word',
       'porcupine',
-      'picovoice',
       'accesskey',
       'access.*key',
       'keyword.*file',
@@ -429,8 +445,6 @@ export class WakeWordErrorMonitor {
       'porcupine.*error',
       'porcupine.*failed',
       'porcupine.*timeout',
-      'picovoice.*access',
-      'picovoice.*key',
       'keyword.*not.*found',
       'keyword.*file.*not',
       'keyword.*invalid',
@@ -760,6 +774,46 @@ export class WakeWordErrorMonitor {
   }
   
   /**
+   * Fix: WebSocket connection error (OpenWakeWord specific)
+   */
+  // eslint-disable-next-line no-unused-vars
+  async _fixWebSocketConnectionError(_errorEntry) {
+    // WebSocket connection errors usually mean the server is not running
+    // We can't fix this automatically - user needs to start the server
+    if (!this.bridge) {
+      return { fixed: false, reason: 'No bridge instance available' };
+    }
+    
+    // Check if OpenWakeWord is configured
+    if (typeof window !== 'undefined') {
+      const wsUrl = window.JARVIS_CONFIG?.openWakeWordWsUrl || 
+                    (typeof import.meta !== 'undefined' ? import.meta.env?.VITE_OPENWAKEWORD_WS_URL : null);
+      
+      if (!wsUrl || typeof wsUrl !== 'string' || !wsUrl.trim()) {
+        return {
+          fixed: false,
+          reason: 'OpenWakeWord WebSocket URL not configured',
+          suggestion: 'Set VITE_OPENWAKEWORD_WS_URL=ws://localhost:8765/ws in .env and restart dev server. Then start the server: python scripts/openwakeword-server.py'
+        };
+      }
+      
+      // The server is likely not running - we can't fix this automatically
+      // But we can provide clear guidance
+      return {
+        fixed: false,
+        reason: 'WebSocket connection failed - OpenWakeWord server is not running',
+        suggestion: 'Start the OpenWakeWord server: python scripts/openwakeword-server.py. The server must be running before the app can connect. Use the mic button to talk while the server is unavailable.'
+      };
+    }
+    
+    return {
+      fixed: false,
+      reason: 'WebSocket connection error - server may not be running',
+      suggestion: 'Start OpenWakeWord server: python scripts/openwakeword-server.py'
+    };
+  }
+  
+  /**
    * Fix: Porcupine error
    */
   async _fixPorcupineError(errorEntry) {
@@ -771,7 +825,7 @@ export class WakeWordErrorMonitor {
     if (/PorcupineActivationRefusedError|ActivationRefused|_status.*10011|10011.*_status/i.test(text)) {
       return {
         fixed: false,
-        reason: 'Activation refused; reinitialization would fail. Use mic button or fix Picovoice key.'
+        reason: 'Activation refused; reinitialization would fail. Use mic button or fix wake word key.'
       };
     }
     // Do not reinitialize on activation limit (10009) or throttled (10010) — each init burns another activation

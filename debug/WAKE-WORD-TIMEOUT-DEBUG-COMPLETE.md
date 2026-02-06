@@ -65,10 +65,10 @@ node debug/tools/debug-wake-word-initialization.js
 
 **Checks:**
 - ✅ .env file and configuration
-- ✅ PICOVOICE_ACCESS_KEY validity
+- ✅ WAKE_WORD_ACCESS_KEY validity
 - ✅ PORCUPINE_KEYWORD (built-in or custom)
 - ✅ Keyword files (.ppn) existence
-- ✅ Dependencies (@picovoice/porcupine-web)
+- ✅ Dependencies (wake word package)
 - ✅ Timeout configuration
 - ✅ Common issues and fixes
 
@@ -141,7 +141,7 @@ window.runWakeWordInitializationTests();
 
 | Error Message | Cause | Solution |
 |--------------|-------|----------|
-| `"Wake word not enabled or access key missing"` | Configuration issue | Set `VITE_WAKE_WORD_ENABLED=true` and `VITE_PICOVOICE_ACCESS_KEY` |
+| `"Wake word not enabled or access key missing"` | Configuration issue | Set `VITE_WAKE_WORD_ENABLED=true` and `VITE_WAKE_WORD_ACCESS_KEY` |
 | `"Microphone permission needed: Permission denied"` | Mic permission | Grant microphone permission in browser |
 | `"No keyword paths provided"` | Missing keywords | Set `VITE_PORCUPINE_KEYWORD` or `keywordPaths` |
 | `"WakeWordManager.initialize returned null"` | Initialization failed | Check AccessKey, keyword files, or use built-in keyword |

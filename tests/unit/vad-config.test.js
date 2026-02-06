@@ -97,7 +97,7 @@ describe('VAD_CONFIG', () => {
     it('should have silenceAfterSpeechToStopMicMs for fallback path', () => {
       expect(VAD_CONFIG.silenceAfterSpeechToStopMicMs).toBeDefined();
       expect(typeof VAD_CONFIG.silenceAfterSpeechToStopMicMs).toBe('number');
-      expect(VAD_CONFIG.silenceAfterSpeechToStopMicMs).toBe(3500);
+      expect(VAD_CONFIG.silenceAfterSpeechToStopMicMs).toBe(2500);
     });
 
     it('should have silenceClosingDelayAfterTtsMs (delay before 10s countdown)', () => {

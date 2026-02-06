@@ -39,7 +39,7 @@ npm run test:integration
 |------|---------|
 | `run-debug-suite.mjs` | CI-style pipeline: lint, test, build, vite build |
 | `tools/check-console-errors.js` | Static check for bad patterns in source code |
-| `tools/check-porcupine-import.js` | Verifies @picovoice/porcupine-web import resolution |
+| `tools/check-porcupine-import.js` | Verifies wake word package import resolution |
 | `tools/verify-wake-word-setup.js` | Full wake word setup (.env, keywords, paths) — `npm run test:wakeword` |
 | `tools/debug-wake-word-initialization.js` | Wake word initialization debugging |
 | `tools/debug-wake-word-keyword-validation-live.js` | Live keyword validation (built-in vs custom) |

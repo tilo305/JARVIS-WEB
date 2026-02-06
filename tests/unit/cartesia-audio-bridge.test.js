@@ -51,12 +51,12 @@ describe('CartesiaAudioBridge', () => {
     expect(source).toMatch(/CARTESIA_VERSION\s*=\s*['"]2025-04-16['"]/);
   });
 
-  it('must use VAD_CONFIG.silenceAfterSpeechToStopMicMs for post-speech stop timer (3.5s fix)', () => {
+  it('must use VAD_CONFIG.silenceAfterSpeechToStopMicMs for post-speech stop timer (2.5s fix)', () => {
     const { readFileSync } = require('fs');
     const { join } = require('path');
     const source = readFileSync(join(__dirname, '../../public/js/cartesia-audio-bridge.js'), 'utf8');
     expect(source).toMatch(/VAD_CONFIG\.silenceAfterSpeechToStopMicMs/);
-    expect(source).toMatch(/\?\?\s*3500/);
+    expect(source).toMatch(/\?\?\s*2500/);
   });
 
   it('must use VAD_CONFIG.silenceClosingDelayAfterTtsMs in startAgentSilenceTimer (10s delay fix)', () => {
@@ -65,6 +65,23 @@ describe('CartesiaAudioBridge', () => {
     const source = readFileSync(join(__dirname, '../../public/js/cartesia-audio-bridge.js'), 'utf8');
     expect(source).toMatch(/silenceClosingDelayAfterTtsMs/);
     expect(source).toMatch(/delayMs\s*=\s*VAD_CONFIG\.silenceClosingDelayAfterTtsMs/);
+  });
+
+  it('onSpeechStart must always clear silence stop timer (not conditionally) to allow back-and-forth conversation', () => {
+    const { readFileSync } = require('fs');
+    const { join } = require('path');
+    const source = readFileSync(join(__dirname, '../../public/js/cartesia-audio-bridge.js'), 'utf8');
+    // Verify that _clearSilenceStopTimer() is called unconditionally in onSpeechStart
+    // The fix ensures it's always called, not conditionally based on _hadTranscriptFromPreviousSegment
+    // Check that we have the unconditional call pattern
+    expect(source).toMatch(/Always clear the silence stop timer when user speaks again/);
+    // Verify all onSpeechStart handlers call _clearSilenceStopTimer() unconditionally
+    // (not inside: if (this._hadTranscriptFromPreviousSegment) this._clearSilenceStopTimer())
+    const conditionalPattern = /if\s*\([^)]*_hadTranscriptFromPreviousSegment[^)]*\)\s*this\._clearSilenceStopTimer/;
+    expect(source).not.toMatch(conditionalPattern); // Should NOT have conditional clearing
+    // Should have unconditional calls
+    const unconditionalCalls = (source.match(/_clearSilenceStopTimer\(\)/g) || []).length;
+    expect(unconditionalCalls).toBeGreaterThan(0);
   });
 
   it('destroy() should release WakeWordManager and stop media stream (integration cleanup)', () => {

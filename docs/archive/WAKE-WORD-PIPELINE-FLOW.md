@@ -17,7 +17,7 @@ When the app loads, it creates a `CartesiaAudioBridge` instance with wake word c
 ```javascript
 const bridge = new CartesiaAudioBridge({
   wakeWordEnabled: true,
-  picovoiceAccessKey: '...',
+  wakeWordAccessKey: '...',
   wakeWordKeywordPaths: ['keywords/jarvis_en_wasm_v3_0_0.ppn'],
   wakeWordSensitivities: [0.5],
   // ... other options
@@ -457,7 +457,7 @@ Audio captured during wake word detection is buffered in `_preSpeechBuffer` and 
 ```javascript
 {
   wakeWordEnabled: true,
-  picovoiceAccessKey: 'your-access-key',
+  wakeWordAccessKey: 'your-access-key',
   wakeWordKeywordPaths: ['keywords/jarvis_en_wasm_v3_0_0.ppn'],
   wakeWordSensitivities: [0.5], // 0.0-1.0, higher = more sensitive
   wakeWordCooldownMs: 3000 // Cooldown between detections

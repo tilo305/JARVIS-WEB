@@ -4,21 +4,21 @@ This guide explains how to set up Porcupine wake word detection for JARVIS-WEB.
 
 ## Prerequisites
 
-1. **Picovoice Console Account**: Sign up at https://console.picovoice.ai/ (free, no credit card required)
-2. **AccessKey**: Copy your AccessKey from the Picovoice Console home page
-3. **Custom Wake Word**: Train a wake word model via Picovoice Console
+1. **Wake Word Service Account**: Sign up with your wake word service provider
+2. **AccessKey**: Copy your AccessKey from your service provider
+3. **Custom Wake Word**: Train a wake word model via your service provider
 
 ## Step-by-Step Setup
 
-### 1. Get Your Picovoice AccessKey
+### 1. Get Your AccessKey
 
-1. Go to https://console.picovoice.ai/
+1. Get AccessKey from your service provider
 2. Sign up or log in
 3. Copy your `AccessKey` from the home page
 
 ### 2. Create a Custom Wake Word
 
-1. In Picovoice Console, navigate to the **Porcupine** page
+1. Navigate to the wake word configuration page
 2. Select your language (e.g., English)
 3. Type your wake phrase (e.g., "Hey JARVIS", "Computer")
 4. Click **Test** to test the wake word in your browser
@@ -50,7 +50,7 @@ Create a `.env` file in the project root with the following:
 ```env
 # WAKE WORD / VAD (Voice Activity Detection)
 # ============================================
-PICOVOICE_ACCESS_KEY=your_access_key_here
+WAKE_WORD_ACCESS_KEY=your_access_key_here
 PORCUPINE_KEYWORD=jarvis
 PORCUPINE_SENSITIVITY=0.3
 WAKE_WORD_ENABLED=false
@@ -63,7 +63,7 @@ DEBUG_VAD=true
 
 **Configuration Options:**
 
-- `PICOVOICE_ACCESS_KEY`: Your Picovoice AccessKey (required if wake word enabled)
+- `WAKE_WORD_ACCESS_KEY`: Your AccessKey (required if wake word enabled)
 - `PORCUPINE_KEYWORD`: The keyword name (used to construct file path)
 - `PORCUPINE_SENSITIVITY`: Sensitivity (0.0-1.0). Lower = fewer false alarms, may miss detections. Higher = more detections, higher false alarm rate. Default: 0.5
 - `WAKE_WORD_ENABLED`: Set to `true` to enable wake word detection
@@ -129,7 +129,7 @@ When wake word detection is enabled:
 
 - **Check sensitivity**: Try increasing to 0.6-0.7
 - **Verify keyword file**: Ensure `.ppn` file is in `public/keywords/` and path is correct
-- **Check AccessKey**: Verify `PICOVOICE_ACCESS_KEY` is correct
+- **Check AccessKey**: Verify `WAKE_WORD_ACCESS_KEY` is correct
 - **Browser console**: Check for errors in browser DevTools
 - **Test in quiet environment**: Background noise can interfere
 
@@ -178,8 +178,7 @@ bridge.onWakeWordDetected = (keywordIndex) => {
 
 ## References
 
-- [Porcupine Documentation](https://picovoice.ai/docs/porcupine/)
-- [Picovoice Console](https://console.picovoice.ai/)
+- [Porcupine Documentation](https://docs.porcupine.ai/)
 - [wAkE wOrD dOcS.md](./wAkE%20wOrD%20dOcS.md) - Comprehensive technical documentation
 - [cArTeSiA dOcS.md](./cArTeSiA%20dOcS.md) - **Cartesia STT/TTS WebSocket specifications** (sample rates, encoding, optimal latency)
 - [aUdiO dOcS.md](./aUdiO%20dOcS.md) - AudioWorklet architecture

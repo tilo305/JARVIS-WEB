@@ -45,6 +45,7 @@ export class OpenWakeWordClient {
     this._closed = false;
     this._loadedModels = [];
     this._audioChunksSent = 0;
+    this._hasLoggedError = false;
   }
 
   connect() {
@@ -68,6 +69,7 @@ export class OpenWakeWordClient {
     this._sampleRateSent = false;
     this._audioChunksSent = 0;
     this._reconnectAttempts = 0;
+    this._hasLoggedError = false; // Reset error flag on successful connection
     this.onConnect();
     DEBUG.trace('OpenWakeWordClient: connected', { url: this.wsUrl });
     /* eslint-disable no-console -- payload verification: user confirms connection */
@@ -108,15 +110,72 @@ export class OpenWakeWordClient {
 
   _handleError(event) {
     DEBUG.warn('OpenWakeWordClient: WebSocket error', event);
-    this.onError('WebSocket error');
+    // WebSocket error event fires before close event, but doesn't provide much detail.
+    // We'll provide detailed error in _handleClose based on close code.
+    // Only report here if we were already connected (connection lost during operation).
+    if (this._sampleRateSent) {
+      this.onError('WebSocket connection error (connection lost)', event);
+    }
+    // For initial connection failures, wait for close event which has more info
   }
 
   _handleClose(event) {
     this._ws = null;
+    const wasConnected = this._sampleRateSent;
     this._sampleRateSent = false;
     this.onDisconnect();
+    
+    // Check if we've reached max attempts (will stop reconnecting after this)
+    const isMaxAttempts = this._reconnectAttempts >= RECONNECT_MAX_ATTEMPTS;
+    
+    // Provide detailed error message based on close code
+    // Only log error once - on first failure. If we reach max attempts, log a summary.
+    // Intermediate retry attempts are logged to DEBUG only
+    // Note: _reconnectAttempts is incremented in _scheduleReconnect, so check current value
+    const currentAttempt = this._reconnectAttempts;
+    const isFirstFailure = currentAttempt === 0;
+    const shouldLogError = isFirstFailure || (isMaxAttempts && !this._hasLoggedError);
+    
+    if (!this._closed && event.code !== 1000) {
+      let errorMsg = '';
+      if (event.code === 1006) {
+        // Abnormal closure - usually means connection refused or server not running
+        if (isMaxAttempts && !wasConnected && this._hasLoggedError) {
+          // Final failure summary - only if we already logged the initial error
+          errorMsg = `WebSocket connection failed after ${RECONNECT_MAX_ATTEMPTS} reconnect attempts. The OpenWakeWord server is not running. You can still use the app via the microphone button. To enable wake word detection, run: python scripts/openwakeword-server.py`;
+        } else if (!wasConnected && isFirstFailure) {
+          // Initial connection failure - log once
+          errorMsg = `WebSocket connection failed: Unable to connect to ${this.wsUrl}. Is the OpenWakeWord server running? Run: python scripts/openwakeword-server.py. You can still use the app via the microphone button.`;
+          this._hasLoggedError = true;
+        } else if (!wasConnected) {
+          // Connection lost after being connected
+          errorMsg = 'WebSocket connection lost unexpectedly';
+        }
+        // Only call onError if we should log (reduces spam)
+        if (shouldLogError && errorMsg) {
+          this.onError(errorMsg, { code: event.code, reason: event.reason });
+        } else if (!shouldLogError) {
+          // Still log to DEBUG for troubleshooting
+          DEBUG.trace('OpenWakeWordClient: connection failed (suppressing error log)', {
+            attempt: currentAttempt,
+            code: event.code,
+          });
+        }
+      } else if (event.code !== 1001 && event.code !== 1005) {
+        // Don't report normal closures (1000), going away (1001), or no status code (1005)
+        errorMsg = `WebSocket connection closed (code ${event.code}`;
+        if (event.reason) {
+          errorMsg += `: ${event.reason}`;
+        }
+        errorMsg += ')';
+        if (shouldLogError) {
+          this.onError(errorMsg, { code: event.code, reason: event.reason });
+        }
+      }
+    }
+    
     DEBUG.trace('OpenWakeWordClient: closed', { code: event.code, reason: event.reason });
-    if (!this._closed && this._reconnectAttempts < RECONNECT_MAX_ATTEMPTS) {
+    if (!this._closed && !isMaxAttempts) {
       this._scheduleReconnect();
     }
   }

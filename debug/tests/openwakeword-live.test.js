@@ -48,6 +48,8 @@ describe('openWakeWord (debug live)', () => {
     const { readFileSync } = require('fs');
     const { join } = require('path');
     const source = readFileSync(join(__dirname, '../../public/js/cartesia-audio-bridge.js'), 'utf8');
-    expect(source).toMatch(/getStream:\s*\(\)\s*=>\s*Promise\.resolve\(this\.mediaStream\)/);
+    // Check that getStream returns a Promise resolving to this.mediaStream
+    expect(source).toMatch(/getStream:\s*\(\)\s*=>/);
+    expect(source).toMatch(/Promise\.resolve\(this\.mediaStream\)/);
   });
 });

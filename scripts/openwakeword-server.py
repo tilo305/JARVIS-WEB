@@ -40,7 +40,7 @@ except ImportError:
 
 try:
     import resampy
-except ImportError:
+except (ImportError, AttributeError):
     resampy = None  # optional; require 16 kHz from client if not installed
 
 # --- Configuration ---
@@ -49,6 +49,7 @@ DEFAULT_CHUNK_SIZE = 1280  # 80 ms @ 16 kHz (openWakeWord optimal frame size)
 TARGET_SAMPLE_RATE = 16000
 THRESHOLD = 0.5  # openWakeWord default; tune for fewer false positives
 HEY_JARVIS_MODEL = "hey jarvis"
+MAX_BUFFER_SIZE = 12800  # Max 10 frames (1280 * 10) to prevent memory issues
 
 # --- Logging ---
 logging.basicConfig(
@@ -91,6 +92,11 @@ def _parse_args() -> argparse.Namespace:
         "--verbose",
         action="store_true",
         help="Log every prediction (noisy)",
+    )
+    p.add_argument(
+        "--enable-speex",
+        action="store_true",
+        help="Enable Speex noise suppression (can improve performance in noisy environments)",
     )
     return p.parse_args()
 
@@ -170,14 +176,28 @@ async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
             for s in data.tolist():
                 buffer.append(s)
 
+            # Prevent buffer overflow (drop oldest samples if buffer grows too large)
+            if len(buffer) > MAX_BUFFER_SIZE:
+                original_size = len(buffer)
+                dropped = original_size - MAX_BUFFER_SIZE
+                buffer = buffer[-MAX_BUFFER_SIZE:]
+                logger.warning("Buffer overflow: dropped %s samples (buffer was %s, max %s)", 
+                             dropped, original_size, MAX_BUFFER_SIZE)
+
             if not first_binary_logged:
                 first_binary_logged = True
                 logger.info("First binary audio payload received (samples=%s)", len(data))
 
             while len(buffer) >= chunk_size:
-                frame = np.array(buffer[:chunk_size], dtype=np.int16)
+                frame_int16 = np.array(buffer[:chunk_size], dtype=np.int16)
                 buffer = buffer[chunk_size:]
                 frame_count += 1
+
+                # Convert int16 PCM to float32 normalized (-1.0 to 1.0) for openWakeWord
+                # openWakeWord's predict() expects float32 normalized audio
+                frame = frame_int16.astype(np.float32) / 32768.0
+                # Clamp to [-1.0, 1.0] range to ensure proper normalization
+                frame = np.clip(frame, -1.0, 1.0)
 
                 try:
                     predictions = model.predict(frame)
@@ -194,6 +214,21 @@ async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
                     payload = json.dumps({"activations": activations})
                     await ws.send_str(payload)
                     logger.info("Activation #%s: %s (sent payload to client)", activation_count, activations)
+                    # CRITICAL: Flush model state after detection to prevent false positives
+                    # openWakeWord maintains internal state that can cause spurious detections
+                    # if not reset after a valid activation (per openWakeWord best practices)
+                    try:
+                        # Try reset() first (preferred method), fallback to flush() if available
+                        if hasattr(model, 'reset'):
+                            model.reset()
+                            logger.debug("Model state flushed after activation (reset)")
+                        elif hasattr(model, 'flush'):
+                            model.flush()
+                            logger.debug("Model state flushed after activation (flush)")
+                        else:
+                            logger.warning("Model does not have reset() or flush() method - state may persist")
+                    except Exception as e:
+                        logger.warning("Failed to flush model state: %s", e)
                 elif args.verbose and frame_count % 50 == 0:
                     logger.debug("Frame %s scores: %s", frame_count, predictions)
 
@@ -219,10 +254,16 @@ def main() -> int:
     except Exception as e:
         logger.warning("Pre-download models skipped: %s", e)
     try:
-        _oww_model = OWWModel(
-            wakeword_models=[HEY_JARVIS_MODEL],
-            inference_framework=args.inference_framework,
-        )
+        # Enable Speex noise suppression if requested (per openWakeWord best practices)
+        # This can reduce both false-reject and false-accept rates in noisy environments
+        model_kwargs = {
+            "wakeword_models": [HEY_JARVIS_MODEL],
+            "inference_framework": args.inference_framework,
+        }
+        if args.enable_speex:
+            model_kwargs["enable_speex_noise_suppression"] = True
+            logger.info("Speex noise suppression enabled")
+        _oww_model = OWWModel(**model_kwargs)
     except Exception as e:
         logger.error("Failed to load openWakeWord model: %s", e, exc_info=True)
         return 1

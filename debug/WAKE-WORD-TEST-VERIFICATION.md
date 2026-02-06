@@ -18,13 +18,13 @@ npm run test:wakeword
 ### What It Checks
 
 1. **Configuration**
-   - ✓ PICOVOICE_ACCESS_KEY is set and valid (min 20 chars)
+   - ✓ WAKE_WORD_ACCESS_KEY is set and valid (min 20 chars)
    - ✓ PORCUPINE_KEYWORD is configured
    - ✓ PORCUPINE_SENSITIVITY is valid (0-1 range)
    - ✓ WAKE_WORD_ENABLED status
 
 2. **Dependencies**
-   - ✓ @picovoice/porcupine-web is in package.json
+   - ✓ Wake word package is in package.json
    - ✓ Package is installed in node_modules
 
 3. **Vite Configuration**
@@ -72,11 +72,11 @@ After the terminal test passes:
 
 ### Terminal Test Errors
 
-1. **"PICOVOICE_ACCESS_KEY is not set or invalid"**
-   - Add to `.env`: `PICOVOICE_ACCESS_KEY=your_key_here`
-   - Get key from: https://console.picovoice.ai/
+1. **"WAKE_WORD_ACCESS_KEY is not set or invalid"**
+   - Add to `.env`: `WAKE_WORD_ACCESS_KEY=your_key_here`
+   - Get key from your service provider
 
-2. **"@picovoice/porcupine-web not found"**
+2. **"Wake word package not found"**
    - Run: `npm install`
 
 3. **"wake-word-manager.js not found"**

@@ -140,7 +140,7 @@ export default defineConfig(({ mode }) => {
       chunkSizeWarningLimit: 4096, // main bundle includes Porcupine/TTS deps; suppress size warning
     },
     optimizeDeps: {
-      include: ['@picovoice/porcupine-web'],
+      include: [],
       esbuildOptions: {
         // Ensure proper handling of ESM packages
         target: 'es2022',

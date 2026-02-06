@@ -11,7 +11,7 @@
 
 const BUILT_IN_KEYWORDS = ['Alexa', 'Americano', 'Blueberry', 'Bumblebee', 'Computer', 
   'Grapefruit', 'Grasshopper', 'Hey Google', 'Hey Siri', 'Jarvis', 
-  'Okay Google', 'Picovoice', 'Porcupine', 'Terminator'];
+  'Okay Google', 'Porcupine', 'Terminator'];
 
 function log(message, type = 'info') {
   const prefix = {

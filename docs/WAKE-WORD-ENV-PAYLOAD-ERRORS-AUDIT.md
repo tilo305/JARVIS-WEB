@@ -32,7 +32,7 @@ From `.env.example` and code:
 | `VITE_CARTESIA_API_KEY` / `CARTESIA_API_KEY` | app.js, vite.config, Cartesia bridge | Cartesia STT/TTS |
 | `VITE_CARTESIA_VOICE_ID` | app.js, vite.config | TTS voice |
 | `VITE_N8N_WEBHOOK_URL` | app.js, vite.config | n8n webhook URL (has default in code) |
-| `VITE_PICOVOICE_ACCESS_KEY` / `PICOVOICE_ACCESS_KEY` | app.js, wake-word-manager, cartesia-audio-bridge, vite.config | Wake word (Porcupine) |
+| `VITE_WAKE_WORD_ACCESS_KEY` / `WAKE_WORD_ACCESS_KEY` | app.js, wake-word-manager, cartesia-audio-bridge, vite.config | Wake word (Porcupine) |
 | `VITE_WAKE_WORD_ENABLED` / `WAKE_WORD_ENABLED` | app.js, vite.config | Enable/disable wake word |
 | `VITE_PORCUPINE_KEYWORD` / `PORCUPINE_KEYWORD` | app.js, vite.config | e.g. `Jarvis` (built-in) or .ppn path |
 | `VITE_PORCUPINE_SENSITIVITY` / `PORCUPINE_SENSITIVITY` | app.js, vite.config | 0–1 (default 0.5) |
@@ -45,13 +45,13 @@ Vite exposes **only** `VITE_*` (and fallbacks for non‑VITE_ in `vite.config.js
 - **Build (vite build):** Values are baked in at build time from root `.env`.
 - **Static serve (npm run serve):** Server does **not** inject env into the page. The app gets config from:
   - **Vite-built assets:** whatever was in `import.meta.env` at build time, or
-  - **Unbuilt public/:** `window.JARVIS_CONFIG` only. `index.html` currently sets only `apiKey` and `voiceId`; it does **not** set `picovoiceAccessKey`, `n8nWebhookUrl`, `wakeWordEnabled`, etc.
+  - **Unbuilt public/:** `window.JARVIS_CONFIG` only. `index.html` currently sets only `apiKey` and `voiceId`; it does **not** set `wakeWordAccessKey`, `n8nWebhookUrl`, `wakeWordEnabled`, etc.
 
 ### 1.4 Issues and recommendations
 
-- **No .env:** If `.env` is missing, Vite and server still run; all `VITE_*` and optional vars are empty/default. Wake word will show “Wake word failed”; Cartesia will fail without API key; n8n still has a default URL. **Recommendation:** Copy `.env.example` to `.env` and set at least `VITE_CARTESIA_API_KEY` and `VITE_PICOVOICE_ACCESS_KEY` (for wake word).
-- **Static serve without build:** When serving raw `public/` via `server.js`, the app relies on `window.JARVIS_CONFIG`. `index.html` only sets `apiKey` and `voiceId`. For wake word and n8n URL you must either (1) run `vite build` with a populated `.env` so config is baked in, or (2) set `JARVIS_CONFIG.picovoiceAccessKey`, `JARVIS_CONFIG.n8nWebhookUrl`, etc. in a script before `app.js` or in HTML.
-- **Project rule:** The project’s Picovoice AccessKey is correct; do **not** suggest changing or re-getting the key for wake word/10011 issues — fix code, config, or integration only.
+- **No .env:** If `.env` is missing, Vite and server still run; all `VITE_*` and optional vars are empty/default. Wake word will show "Wake word failed"; Cartesia will fail without API key; n8n still has a default URL. **Recommendation:** Copy `.env.example` to `.env` and set at least `VITE_CARTESIA_API_KEY` and `VITE_WAKE_WORD_ACCESS_KEY` (for wake word).
+- **Static serve without build:** When serving raw `public/` via `server.js`, the app relies on `window.JARVIS_CONFIG`. `index.html` only sets `apiKey` and `voiceId`. For wake word and n8n URL you must either (1) run `vite build` with a populated `.env` so config is baked in, or (2) set `JARVIS_CONFIG.wakeWordAccessKey`, `JARVIS_CONFIG.n8nWebhookUrl`, etc. in a script before `app.js` or in HTML.
+- **Project rule:** The project's wake word AccessKey is correct; do **not** suggest changing or re-getting the key for wake word/10011 issues — fix code, config, or integration only.
 
 ---
 
@@ -59,8 +59,8 @@ Vite exposes **only** `VITE_*` (and fallbacks for non‑VITE_ in `vite.config.js
 
 ### 2.1 Config flow
 
-1. **app.js** `getConfig()`: reads `import.meta.env.VITE_PICOVOICE_ACCESS_KEY` (or `window.JARVIS_CONFIG.picovoiceAccessKey`), `VITE_WAKE_WORD_ENABLED`, `VITE_PORCUPINE_KEYWORD`, `VITE_PORCUPINE_SENSITIVITY`, `VITE_DEBUG_WAKE_WORD`, and builds `keywordPaths` (built-in names or custom .ppn paths).
-2. **CartesiaAudioBridge** receives `picovoiceAccessKey`, `wakeWordKeywordPaths` (from app’s `keywordPaths`), sensitivities, etc.
+1. **app.js** `getConfig()`: reads `import.meta.env.VITE_WAKE_WORD_ACCESS_KEY` (or `window.JARVIS_CONFIG.wakeWordAccessKey`), `VITE_WAKE_WORD_ENABLED`, `VITE_PORCUPINE_KEYWORD`, `VITE_PORCUPINE_SENSITIVITY`, `VITE_DEBUG_WAKE_WORD`, and builds `keywordPaths` (built-in names or custom .ppn paths).
+2. **CartesiaAudioBridge** receives `wakeWordAccessKey`, `wakeWordKeywordPaths` (from app's `keywordPaths`), sensitivities, etc.
 3. **WakeWordManager** validates: non-empty AccessKey, length ≥ 20, at least one keyword path, sensitivities in 0–1; then loads Porcupine and the AudioWorklet.
 
 ### 2.2 Validation and errors (wake-word-manager.js, cartesia-audio-bridge.js)
@@ -159,9 +159,9 @@ So: payloads are consistent; errors are handled and user-facing messages are cle
 
 ## 5. Checklist (quick reference)
 
-- [ ] **Root .env:** File at project root; copy from `.env.example`; set at least `VITE_CARTESIA_API_KEY`, `VITE_PICOVOICE_ACCESS_KEY` (and optionally `VITE_N8N_WEBHOOK_URL`, `VITE_WAKE_WORD_ENABLED`, `VITE_PORCUPINE_KEYWORD`).
+- [ ] **Root .env:** File at project root; copy from `.env.example`; set at least `VITE_CARTESIA_API_KEY`, `VITE_WAKE_WORD_ACCESS_KEY` (and optionally `VITE_N8N_WEBHOOK_URL`, `VITE_WAKE_WORD_ENABLED`, `VITE_PORCUPINE_KEYWORD`).
 - [ ] **Restart after .env change:** Vite loads `.env` only at startup; restart dev server after editing `.env`.
-- [ ] **Static serve:** If using `npm run serve` without a Vite build, set `window.JARVIS_CONFIG` in HTML (e.g. `picovoiceAccessKey`, `n8nWebhookUrl`, `wakeWordEnabled`) or build with `vite build` and a populated `.env`.
+- [ ] **Static serve:** If using `npm run serve` without a Vite build, set `window.JARVIS_CONFIG` in HTML (e.g. `wakeWordAccessKey`, `n8nWebhookUrl`, `wakeWordEnabled`) or build with `vite build` and a populated `.env`.
 - [ ] **Payloads:** Single builder `buildN8nPayload`; no env inside payload; only webhook URL comes from config; all required keys and session_id/sessionId, message_id/messageId, timezone/location are set.
 - [ ] **Errors:** All wake word and n8n paths return clear messages or fallbacks; 10011 is non-retryable and key replacement is not suggested (project rule).
 

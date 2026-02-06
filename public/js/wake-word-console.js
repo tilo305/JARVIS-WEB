@@ -12,10 +12,10 @@ const PREFIX_ERROR = '[JARVIS Wake Word Error]';
 const PREFIX_WARN = '[JARVIS Wake Word]';
 const MAX_RECENT = 20;
 /** Dedupe window: same message logged again within this ms is not printed to console (UI still updated). */
-const DEDUPE_WINDOW_MS = 3000;
+const DEDUPE_WINDOW_MS = 10000; // Increased to 10 seconds to reduce spam during reconnect attempts
 
 const recentErrors = [];
-/** @type {{ message: string, time: number } | null} */
+/** @type {{ message: string, normalized: string, time: number } | null} */
 let lastErrorLog = null;
 /** @type {{ message: string, time: number } | null} */
 let lastWarnLog = null;
@@ -34,14 +34,25 @@ export function logWakeWordError(message, detail) {
   const c = safeConsole();
   const msg = typeof message === 'string' ? message : String(message);
   const now = Date.now();
-  const isDuplicate = lastErrorLog && lastErrorLog.message === msg && (now - lastErrorLog.time) < DEDUPE_WINDOW_MS;
+  
+  // Normalize message for deduplication (remove URLs and details that change)
+  const normalizedMsg = msg
+    .replace(/ws:\/\/[^\s]+/g, 'ws://...') // Normalize WebSocket URLs
+    .replace(/localhost:\d+/g, 'localhost:...') // Normalize localhost ports
+    .replace(/\{[^}]+\}/g, '') // Remove detail objects from message
+    .trim();
+  
+  const isDuplicate = lastErrorLog && 
+    (lastErrorLog.message === msg || lastErrorLog.normalized === normalizedMsg) && 
+    (now - lastErrorLog.time) < DEDUPE_WINDOW_MS;
+  
   if (c.error && !isDuplicate) {
     if (detail !== undefined && detail !== null) {
       c.error(PREFIX_ERROR, msg, detail);
     } else {
       c.error(PREFIX_ERROR, msg);
     }
-    lastErrorLog = { message: msg, time: now };
+    lastErrorLog = { message: msg, normalized: normalizedMsg, time: now };
   }
   recentErrors.push({
     type: 'error',

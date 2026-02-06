@@ -1,5 +1,4 @@
-Do comprehensive research on https://picovoice.ai/docs
-/ for any issues or fixes for picovoice wake word detection.
+Wake word detection documentation.
 
 # wAkE wOrD dOcS
 
@@ -9,7 +8,7 @@ Do comprehensive research on https://picovoice.ai/docs
 
 ## Integration with AudioWorklet + VAD Architecture
 
-This document synthesizes research on [Picovoice Porcupine Wake Word Detection](https://picovoice.ai/docs/porcupine/) and provides integration guidance for the JARVIS-WEB project's AudioWorklet-based audio pipeline with VAD (Voice Activity Detection).
+This document provides integration guidance for the JARVIS-WEB project's AudioWorklet-based audio pipeline with VAD (Voice Activity Detection).
 
 **Compatibility Note:** This guide ensures Porcupine integration is compatible with:
 - `aUdiO dOcS.md`: AudioWorklet architecture (stt-capture-processor.js, 48kHz→16kHz resampling, Float32→Int16 conversion)
@@ -23,20 +22,20 @@ This document synthesizes research on [Picovoice Porcupine Wake Word Detection](
 
 ### What is Porcupine?
 
-**Porcupine** is a highly-accurate, lightweight wake word detection engine by Picovoice that enables **always-listening** voice-enabled applications. It uses deep neural networks trained in real-world environments.
+**Porcupine** is a highly-accurate, lightweight wake word detection engine that enables **always-listening** voice-enabled applications. It uses deep neural networks trained in real-world environments.
 
 **Key Characteristics:**
 - **Accuracy:** 97%+ detection rate with less than 1 false alarm in 10 hours (with background speech and ambient noise)
 - **Efficiency:** ~1 MB memory, <4% single-core CPU on Raspberry Pi 3
 - **Cross-platform:** Arm Cortex-M, Raspberry Pi, Android, iOS, Web browsers (Chrome, Safari, Firefox, Edge), Linux, macOS, Windows
 - **Scalable:** Can detect multiple wake words simultaneously with no added runtime footprint
-- **Self-service:** Custom wake words trainable in seconds via Picovoice Console using transfer learning
+- **Self-service:** Custom wake words trainable in seconds using transfer learning
 
 ### Core Components
 
 | Component | Purpose |
 |-----------|---------|
-| **AccessKey** | Authentication token from Picovoice Console (required) |
+| **AccessKey** | Authentication token (required) |
 | **Model file (.pv)** | Language-specific model (e.g., `en`, `es`, `fr`) |
 | **Keyword file (.ppn)** | Platform-specific wake word model (trained via Console) |
 | **Sensitivity** | Parameter (0.0-1.0) balancing detection rate vs. false alarm rate |
@@ -258,11 +257,11 @@ registerProcessor('wake-word-processor', WakeWordProcessor);
 
 ```javascript
 // In cartesia-audio-bridge.js or new wake-word-manager.js
-import { Porcupine } from '@picovoice/porcupine-web';
+import { Porcupine } from '@porcupine-web';
 
 class WakeWordManager {
   constructor(options = {}) {
-    this.accessKey = options.accessKey; // Picovoice AccessKey
+    this.accessKey = options.accessKey; // AccessKey
     this.keywordPaths = options.keywordPaths || []; // Array of .ppn file paths
     this.sensitivities = options.sensitivities || [0.5]; // Array matching keywords
     this.porcupine = null;
@@ -400,9 +399,9 @@ class CartesiaAudioBridge {
     // ... existing AudioContext init ...
     
     // Initialize wake word detection (if enabled)
-    if (this.options.enableWakeWord && this.options.picovoiceAccessKey) {
+    if (this.options.enableWakeWord && this.options.wakeWordAccessKey) {
       this.wakeWordManager = new WakeWordManager({
-        accessKey: this.options.picovoiceAccessKey,
+        accessKey: this.options.wakeWordAccessKey,
         keywordPaths: this.options.wakeWordKeywords || [],
         sensitivities: this.options.wakeWordSensitivities || [0.5],
         onWakeWordDetected: (keywordIndex) => {
@@ -484,15 +483,13 @@ class CartesiaAudioBridge {
 ### Package Installation
 
 ```bash
-npm install @picovoice/porcupine-web
+npm install @porcupine-web
 ```
 
-### Picovoice Console Setup
+### Wake Word Setup
 
-1. **Sign up:** https://console.picovoice.ai/ (free, no credit card)
-2. **Get AccessKey:** Copy from Console home page
-3. **Create custom wake word:**
-   - Navigate to Porcupine page
+1. **Get AccessKey:** Obtain from your wake word service provider
+2. **Create custom wake word:**
    - Select language (e.g., English)
    - Type wake phrase (e.g., "Hey JARVIS")
    - Test in browser
@@ -570,7 +567,7 @@ const sensitivities = [0.5, 0.6]; // Match keywordPaths array length
 **1. AccessKey Invalid**
 - **Symptom:** `Porcupine.create()` fails with authentication error
 - **Fix:** 
-  - Verify AccessKey from Picovoice Console (https://console.picovoice.ai/)
+  - Verify AccessKey from your wake word service provider
   - Ensure AccessKey is not expired or revoked
   - Check for typos or extra whitespace in AccessKey
   - Verify AccessKey matches the account that created the wake word
@@ -733,15 +730,15 @@ setInterval(() => {
 
 **Best Practices:**
 - **Never commit AccessKey to version control** - Use environment variables or secure config
-- **Rotate AccessKeys periodically** - Generate new keys from Picovoice Console
+- **Rotate AccessKeys periodically** - Generate new keys from your service provider
 - **Use different AccessKeys for dev/staging/prod** - Isolate environments
 - **Restrict AccessKey scope** - Use keys only for required services (Porcupine)
-- **Monitor AccessKey usage** - Check Picovoice Console for unusual activity
+- **Monitor AccessKey usage** - Check for unusual activity
 
 **Implementation:**
 ```javascript
 // ✅ Good: Use environment variable
-const accessKey = process.env.VITE_PICOVOICE_ACCESS_KEY || '';
+const accessKey = process.env.VITE_WAKE_WORD_ACCESS_KEY || '';
 
 // ❌ Bad: Hardcoded in source code
 const accessKey = 'your-access-key-here';
@@ -791,10 +788,10 @@ const accessKey = 'your-access-key-here';
 
 ### Pre-Integration
 
-- [ ] Picovoice Console account created
+- [ ] Wake word service account created
 - [ ] AccessKey obtained
 - [ ] Custom wake word trained and `.ppn` file downloaded
-- [ ] `@picovoice/porcupine-web` package installed
+- [ ] Wake word package installed
 - [ ] AudioWorklet support verified (HTTPS required)
 
 ### Integration Steps
@@ -953,11 +950,10 @@ public/
 
 ### Official Documentation
 
-- [Porcupine Wake Word SDK](https://picovoice.ai/docs/porcupine/)
-- [Porcupine Web API](https://picovoice.ai/docs/api/porcupine-web)
-- [Porcupine FAQ](https://picovoice.ai/docs/faq/porcupine/)
-- [Porcupine GitHub](https://github.com/picovoice/porcupine)
-- [Picovoice Console](https://console.picovoice.ai/)
+- [Porcupine Wake Word SDK](https://docs.porcupine.ai/)
+- [Porcupine Web API](https://docs.porcupine.ai/web/)
+- [Porcupine FAQ](https://docs.porcupine.ai/faq/)
+- [Porcupine GitHub](https://github.com/porcupine/porcupine)
 
 ### Project-Specific References
 
@@ -1050,7 +1046,7 @@ While Cartesia TTS uses 8kHz (per cArTeSiA dOcS.md for optimal latency), the wak
 ### Issue: Porcupine initialization fails
 
 **Possible Causes:**
-1. Invalid AccessKey → Verify from Picovoice Console
+1. Invalid AccessKey → Verify from your service provider
 2. Model file not found → Check file paths, CORS headers
 3. Browser not supported → Ensure HTTPS, modern browser (Chrome, Safari, Firefox, Edge)
 4. AudioWorklet not available → Use fallback main-thread processing
@@ -1064,7 +1060,7 @@ While Cartesia TTS uses 8kHz (per cArTeSiA dOcS.md for optimal latency), the wak
 1. **Multiple wake words:** Support different wake words for different contexts
 2. **Wake word confidence:** Expose confidence scores for fine-tuning
 3. **Adaptive sensitivity:** Adjust sensitivity based on environment noise
-4. **Wake word training UI:** Integrate Picovoice Console training into app
+4. **Wake word training UI:** Integrate wake word training into app
 5. **Offline mode:** Cache models for offline operation
 6. **Wake word analytics:** Track detection rates, false alarms, latency
 
@@ -1176,4 +1172,4 @@ async release() {
 
 ---
 
-**Last Updated:** Based on comprehensive research from https://picovoice.ai/docs/porcupine/, project architecture analysis, and implementation best practices.
+**Last Updated:** Based on project architecture analysis and implementation best practices.

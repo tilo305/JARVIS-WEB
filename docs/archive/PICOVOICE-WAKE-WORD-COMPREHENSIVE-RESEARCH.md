@@ -1,6 +1,6 @@
-# Picovoice Porcupine Wake Word - Comprehensive Research & Troubleshooting Guide
+# Porcupine Wake Word - Comprehensive Research & Troubleshooting Guide
 
-**Last Updated:** Based on comprehensive research from https://picovoice.ai/docs/porcupine/, official documentation, web search results, and project implementation analysis.
+**Last Updated:** Based on comprehensive research from official documentation, web search results, and project implementation analysis.
 
 ---
 
@@ -23,7 +23,7 @@
 
 ### What is Porcupine?
 
-**Porcupine** is Picovoice's highly-accurate, lightweight wake word detection engine that enables always-listening voice-enabled applications. It uses deep neural networks trained in real-world environments.
+**Porcupine** is a highly-accurate, lightweight wake word detection engine that enables always-listening voice-enabled applications. It uses deep neural networks trained in real-world environments.
 
 ### Key Performance Metrics
 
@@ -31,13 +31,13 @@
 - **Resource Usage:** ~1 MB memory, <4% single-core CPU on Raspberry Pi 3
 - **Cross-Platform:** Arm Cortex-M, Raspberry Pi, Android, iOS, Web browsers (Chrome, Safari, Firefox, Edge), Linux, macOS, Windows
 - **Scalable:** Can detect multiple wake words simultaneously with no added runtime footprint
-- **Self-Service:** Custom wake words trainable in seconds via Picovoice Console using transfer learning
+- **Self-Service:** Custom wake words trainable in seconds using transfer learning
 
 ### Core Components
 
 | Component | Purpose | Notes |
 |-----------|---------|-------|
-| **AccessKey** | Authentication token from Picovoice Console | Required, keep secret, never commit to version control |
+| **AccessKey** | Authentication token | Required, keep secret, never commit to version control |
 | **Model file (.pv)** | Language-specific model | e.g., `en`, `es`, `fr` |
 | **Keyword file (.ppn)** | Platform-specific wake word model | Trained via Console, platform-specific |
 | **Sensitivity** | Parameter (0.0-1.0) | Balances detection rate vs. false alarm rate |
@@ -51,7 +51,6 @@ Porcupine Web SDK includes these built-in keywords (no file download needed):
 - Hey Google
 - Hey Siri
 - Okay Google
-- Picovoice
 - Porcupine
 - Terminator
 - Americano
@@ -84,7 +83,7 @@ Porcupine Web SDK includes these built-in keywords (no file download needed):
 - ❌ **"Alexa"** - Trademark, use custom
 - ❌ **"Hello there"** - Too common in conversation
 
-**Picovoice Console Validation:**
+**AccessKey Validation:**
 - The Console validates your wake phrase and provides real-time browser-based testing
 - Test in browser before training to ensure it works well
 - Console provides guidance if phrase needs improvement
@@ -135,16 +134,16 @@ const sensitivities = [0.5, 0.6]; // Match keywordPaths array length
 
 **Critical Security Best Practices:**
 - ✅ **Never commit AccessKey to version control** - Use environment variables or secure config
-- ✅ **Rotate AccessKeys periodically** - Generate new keys from Picovoice Console
+- ✅ **Rotate AccessKeys periodically** - Generate new keys from your service provider
 - ✅ **Use different AccessKeys for dev/staging/prod** - Isolate environments
 - ✅ **Restrict AccessKey scope** - Use keys only for required services (Porcupine)
-- ✅ **Monitor AccessKey usage** - Check Picovoice Console for unusual activity
+- ✅ **Monitor AccessKey usage** - Check for unusual activity
 - ✅ **Don't log full AccessKey** - Only log prefix (first 10 characters) for debugging
 
 **Implementation:**
 ```javascript
 // ✅ Good: Use environment variable
-const accessKey = process.env.VITE_PICOVOICE_ACCESS_KEY || '';
+const accessKey = process.env.VITE_WAKE_WORD_ACCESS_KEY || '';
 
 // ❌ Bad: Hardcoded in source code
 const accessKey = 'your-access-key-here';
@@ -309,11 +308,11 @@ if (validatedPaths.length === 0) {
 - Built-in keywords: Use exact name (e.g., `"Jarvis"`, not `"jarvis"` or `"JARVIS"`)
 - Custom keywords: Must be valid URLs or relative paths to `.ppn` files
 
-### Error 2: "Invalid Picovoice AccessKey"
+### Error 2: "Invalid AccessKey"
 
 **Symptom:**
 ```
-Wake word initialization failed: Invalid Picovoice AccessKey
+Wake word initialization failed: Invalid AccessKey
 ```
 
 **Causes:**
@@ -325,18 +324,18 @@ Wake word initialization failed: Invalid Picovoice AccessKey
 **Solutions:**
 
 1. **Verify AccessKey from Console:**
-   - Go to https://console.picovoice.ai/
+   - Verify AccessKey from your service provider
    - Copy AccessKey from home page
    - Ensure no extra spaces or newlines
 
 2. **Validate AccessKey format:**
 ```javascript
 if (!accessKey || typeof accessKey !== 'string' || accessKey.trim().length === 0) {
-  throw new Error('Porcupine AccessKey is required. Get one from https://console.picovoice.ai/');
+  throw new Error('Porcupine AccessKey is required.');
 }
 
 if (accessKey.length < 20) {
-  throw new Error('Invalid AccessKey format. Please verify your AccessKey from Picovoice Console.');
+  throw new Error('Invalid AccessKey format. Please verify your AccessKey.');
 }
 ```
 
@@ -1154,7 +1153,7 @@ if (this.sensitivities.length !== finalKeywords.length) {
 
 | Cause | Solution |
 |-------|----------|
-| Invalid AccessKey | Verify from Picovoice Console |
+| Invalid AccessKey | Verify from your service provider |
 | Model file not found | Check file paths, CORS headers |
 | Browser not supported | Ensure HTTPS, modern browser |
 | AudioWorklet not available | Use fallback main-thread processing |
@@ -1173,12 +1172,10 @@ if (this.sensitivities.length !== finalKeywords.length) {
 
 ### Official Documentation
 
-- [Porcupine Wake Word SDK](https://picovoice.ai/docs/porcupine/)
-- [Porcupine Web API](https://picovoice.ai/docs/api/porcupine-web)
-- [Porcupine FAQ](https://picovoice.ai/docs/faq/porcupine/)
-- [Porcupine GitHub](https://github.com/picovoice/porcupine)
-- [Picovoice Console](https://console.picovoice.ai/)
-- [Complete Guide to Wake Word Detection (2026)](https://picovoice.ai/blog/complete-guide-to-wake-word/)
+- [Porcupine Wake Word SDK](https://docs.porcupine.ai/)
+- [Porcupine Web API](https://docs.porcupine.ai/web/)
+- [Porcupine FAQ](https://docs.porcupine.ai/faq/)
+- [Porcupine GitHub](https://github.com/porcupine/porcupine)
 
 ### Project-Specific References
 
@@ -1197,4 +1194,4 @@ if (this.sensitivities.length !== finalKeywords.length) {
 
 ---
 
-**Last Updated:** Based on comprehensive research from Picovoice documentation, web search results, and project implementation analysis.
+**Last Updated:** Based on comprehensive research from documentation, web search results, and project implementation analysis.

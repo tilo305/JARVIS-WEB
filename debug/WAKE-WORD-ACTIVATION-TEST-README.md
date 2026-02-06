@@ -75,7 +75,7 @@ node debug/tools/test-wake-word-activation-flow.js
    ```javascript
    const bridge = new CartesiaAudioBridge({
      wakeWordEnabled: true,
-     picovoiceAccessKey: 'your-key',
+     wakeWordAccessKey: 'your-key',
      // ... other options
    });
    await bridge.init();

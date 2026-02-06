@@ -144,7 +144,7 @@ node debug/tools/debug-wake-word-initialization.js
 Checks:
 - ✅ .env file and configuration
 - ✅ Keyword files (.ppn) or built-in keywords
-- ✅ Dependencies (@picovoice/porcupine-web)
+- ✅ Dependencies (wake word package)
 - ✅ Timeout configuration
 - ✅ Common issues and fixes
 

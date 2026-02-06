@@ -2,12 +2,12 @@
 
 **Date:** 2026-02-04  
 **Issue:** `validKeywords` array is empty when passed to `Porcupine.create()`  
-**SDK:** `@picovoice/porcupine-web@^4.0.0`  
-**Reference:** https://picovoice.ai/docs/porcupine/web/
+**SDK:** Wake word package  
+**Reference:** Wake word documentation
 
 ## Root Cause Analysis
 
-Based on comprehensive research of [Picovoice documentation](https://picovoice.ai/docs/porcupine/web/), the issue occurs because:
+Based on comprehensive research of wake word documentation, the issue occurs because:
 
 ### Critical Finding: Built-in Keywords Must Be Exact Case
 
@@ -179,7 +179,6 @@ localStorage.setItem('DEBUG', 'true');
 
 ## References
 
-- [Picovoice Documentation](https://picovoice.ai/docs/)
-- [Porcupine Web SDK](https://picovoice.ai/docs/porcupine/web/)
-- `PICOVOICE-WAKE-WORD-COMPREHENSIVE-RESEARCH.md`
+- Wake word documentation
+- `WAKE-WORD-COMPREHENSIVE-RESEARCH.md`
 - `debug/PORCUPINE-KEYWORDS-RESEARCH.md`

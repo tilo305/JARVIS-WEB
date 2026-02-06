@@ -3,7 +3,7 @@
 **Date:** 2026-02-04  
 **Purpose:** Guide to check and diagnose console errors in the wake word test page
 
-**Important:** The script `node debug/tools/check-console-errors.js` is a **static** checker: it looks for bad patterns in source code (e.g. empty keywords, undefined refs). It does **not** run the app. So "0 errors" from that script means *no bad patterns in code* — it does **not** mean there are no runtime errors in the browser. Always check the browser DevTools Console (F12) and/or the LIVE capture tool for real runtime errors (e.g. Picovoice 403, wake word init failures).
+**Important:** The script `node debug/tools/check-console-errors.js` is a **static** checker: it looks for bad patterns in source code (e.g. empty keywords, undefined refs). It does **not** run the app. So "0 errors" from that script means *no bad patterns in code* — it does **not** mean there are no runtime errors in the browser. Always check the browser DevTools Console (F12) and/or the LIVE capture tool for real runtime errors (e.g. wake word 403, wake word init failures).
 
 ## LIVE Console Error Capture Tool
 
@@ -23,7 +23,7 @@
 | `[JARVIS] [ERROR] WakeWordManager: Initialization failed` | Porcupine or keyword setup failed |
 | `The keywords argument is undefined / empty` | Old bug (fixed): was wrong `Porcupine.create()` API |
 | `Wake word initialization timeout after 30000ms` | Init took >30s (network/CDN or first-time load) |
-| `Porcupine AccessKey is required` | Missing or empty `VITE_PICOVOICE_ACCESS_KEY` in `.env` |
+| `Porcupine AccessKey is required` | Missing or empty `VITE_WAKE_WORD_ACCESS_KEY` in `.env` |
 | `No valid wake word keywords provided` | Keyword config empty or invalid |
 | `Wake word unavailable: ... You can still use the microphone button` | Graceful fallback; mic button still works |
 
@@ -103,12 +103,12 @@ Environment vars available: NO
 ### Error 3: Porcupine Import Error
 **Symptom:**
 ```
-Failed to resolve module specifier "@picovoice/porcupine-web"
+Failed to resolve module specifier for wake word package
 ```
 
 **Cause:** Package not installed or import path incorrect
 
-**Fix:** Run `npm install` to ensure `@picovoice/porcupine-web` is installed
+**Fix:** Run `npm install` to ensure wake word package is installed
 
 ### Error 4: Keywords Array Empty
 **Symptom:**
@@ -124,34 +124,34 @@ The keywords argument is undefined / empty
 ### Error 5: AccessKey Missing
 **Symptom:**
 ```
-PICOVOICE_ACCESS_KEY is missing or invalid!
+WAKE_WORD_ACCESS_KEY is missing or invalid!
 ```
 
 **Cause:** Environment variable not loaded
 
-**Fix:** Check `.env` file has `VITE_PICOVOICE_ACCESS_KEY=...` and restart dev server
+**Fix:** Check `.env` file has `VITE_WAKE_WORD_ACCESS_KEY=...` and restart dev server
 
-### Error 6: Picovoice 10011 (activation refused)
+### Error 6: Wake word 10011 (activation refused)
 
 **Symptom (exact sequence you may see):**
 ```
-[JARVIS] Wake word error: Wake word unavailable (Picovoice status 10011). On the Free plan, Porcupine is limited to 1 monthly active user...
+[JARVIS] Wake word error: Wake word unavailable (status 10011). On the Free plan, Porcupine is limited to 1 monthly active user...
 [JARVIS] Wake word start failed: Initialization failed: ...
 ```
 
-**Cause:** Picovoice refused activation (status 10011). **Picovoice Console has no allowlist.** On the Free plan, Porcupine is limited to **1 monthly active user**. Or env was not loaded (e.g. server not restarted after changing `.env`).
+**Cause:** Wake word service refused activation (status 10011). On the Free plan, Porcupine is limited to **1 monthly active user**. Or env was not loaded (e.g. server not restarted after changing `.env`).
 
 **Fix:**
 
 1. **Porcupine 1/1 Users**  
-   Close all other tabs or apps using Porcupine with this AccessKey. Usage resets every 30 days. Check [Picovoice Console](https://console.picovoice.ai/) -> Home (Porcupine: X/1 Users).
+   Close all other tabs or apps using Porcupine with this AccessKey. Usage resets every 30 days.
 
 2. **Config loaded**  
-   Ensure `VITE_PICOVOICE_ACCESS_KEY` is in project root `.env` and **restart the dev server** (Vite reads `.env` only at startup).
+   Ensure `VITE_WAKE_WORD_ACCESS_KEY` is in project root `.env` and **restart the dev server** (Vite reads `.env` only at startup).
 
 3. **Optional:** To disable wake word, set `VITE_WAKE_WORD_ENABLED=false` in `.env`; the mic button still works.
 
-**Reference:** `docs/WAKE-WORD-TROUBLESHOOTING.md` — Picovoice status 10011.
+**Reference:** `docs/WAKE-WORD-TROUBLESHOOTING.md` — Wake word status 10011.
 
 ## Env location and verification
 
@@ -169,7 +169,7 @@ PICOVOICE_ACCESS_KEY is missing or invalid!
 ```bash
 node debug/tools/verify-wake-word-setup.js
 ```
-This checks that the root `.env` exists and that `VITE_PICOVOICE_ACCESS_KEY` (or `PICOVOICE_ACCESS_KEY`) is set (reports length only). If you see the key found but still get 10011, check code, config, and integration (per project rule: do not suggest replacing the AccessKey).
+This checks that the root `.env` exists and that `VITE_WAKE_WORD_ACCESS_KEY` (or `WAKE_WORD_ACCESS_KEY`) is set (reports length only). If you see the key found but still get 10011, check code, config, and integration (per project rule: do not suggest replacing the AccessKey).
 
 ## Step-by-Step Console Check
 
@@ -177,13 +177,13 @@ This checks that the root `.env` exists and that `VITE_PICOVOICE_ACCESS_KEY` (or
 Look for red errors about:
 - Module loading failures
 - `wake-word-test-config.js` not found
-- `@picovoice/porcupine-web` import errors
+- Wake word package import errors
 
 ### Step 2: Check Initialization Logs
 After page loads, you should see:
 ```
 Wake Word Activation Flow Test Tool loaded
-✅ Configuration loaded: Picovoice key found (55 chars)
+✅ Configuration loaded: AccessKey found (55 chars)
 Click "Initialize Bridge" to begin
 ```
 
@@ -193,7 +193,7 @@ If you see warnings about missing keys, check `.env` file.
 After clicking "Initialize Bridge", look for:
 ```
 Initializing CartesiaAudioBridge...
-✅ Using Picovoice AccessKey (55 chars)
+✅ Using AccessKey (55 chars)
 Bridge initialized successfully
 ```
 
@@ -243,7 +243,7 @@ bridge?.wakeWordManager?.keywordPaths
 bridge?.wakeWordManager?.porcupine
 
 // Check environment
-import.meta.env.VITE_PICOVOICE_ACCESS_KEY
+import.meta.env.VITE_WAKE_WORD_ACCESS_KEY
 import.meta.env.VITE_CARTESIA_API_KEY
 ```
 

@@ -1,6 +1,6 @@
 # openWakeWord Integration
 
-This project can use [openWakeWord](https://github.com/dscripka/openWakeWord) for wake word detection instead of Picovoice Porcupine. openWakeWord is open-source, supports "hey jarvis" out of the box, and runs in a small Python server that receives audio over WebSocket.
+This project can use [openWakeWord](https://github.com/dscripka/openWakeWord) for wake word detection instead of Porcupine. openWakeWord is open-source, supports "hey jarvis" out of the box, and runs in a small Python server that receives audio over WebSocket.
 
 ## Architecture
 
@@ -92,6 +92,7 @@ python scripts/openwakeword-server.py --help
 | `--inference-framework` | onnx | `onnx` or `tflite` |
 | `--threshold` | 0.5 | Activation threshold (0–1) |
 | `--verbose` | false | Log every prediction |
+| `--enable-speex` | false | Enable Speex noise suppression (improves performance in noisy environments) |
 
 ## Protocol
 
@@ -104,10 +105,12 @@ python scripts/openwakeword-server.py --help
 
 ## Latency and best practices
 
-- **80 ms frames**: Keeps latency low while matching openWakeWord’s recommended input (see [openWakeWord README](https://github.com/dscripka/openWakeWord#usage)).
+- **80 ms frames**: Keeps latency low while matching openWakeWord's recommended input (see [openWakeWord README](https://github.com/dscripka/openWakeWord#usage)).
 - **16 kHz mono**: Same as Cartesia STT; no extra resampling in the browser.
 - **Cooldown**: 3 s after each detection to avoid double triggers (configurable via bridge).
 - **Reconnect**: Client reconnects automatically (up to 10 attempts, 2 s delay).
+- **Model flushing**: Server automatically flushes model state after each detection to prevent false positives (per [openWakeWord best practices](https://github.com/dscripka/openWakeWord)).
+- **Noise suppression**: Optional Speex noise suppression (`--enable-speex`) can improve accuracy in noisy environments.
 
 ## Error handling and logging
 

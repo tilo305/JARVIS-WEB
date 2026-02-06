@@ -1,5 +1,5 @@
 /**
- * OpenWakeWord Manager - openWakeWord backend (no Picovoice).
+ * OpenWakeWord Manager - openWakeWord backend.
  * Same interface as WakeWordManager: initialize, setEnabled, onWakeWordDetected, getMetrics, release.
  * Uses AudioWorklet at 16 kHz Int16, 80 ms frames (1280 samples), streams to Python openWakeWord server via WebSocket.
  *

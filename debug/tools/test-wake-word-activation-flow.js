@@ -89,7 +89,7 @@ if (existsSync(envPath)) {
 }
 
 const apiKey = config.CARTESIA_API_KEY || config.VITE_CARTESIA_API_KEY || '';
-const picovoiceKey = config.PICOVOICE_ACCESS_KEY || config.VITE_PICOVOICE_ACCESS_KEY || '';
+const wakeWordKey = config.WAKE_WORD_ACCESS_KEY || config.VITE_WAKE_WORD_ACCESS_KEY || '';
 const wakeWordEnabled = (config.WAKE_WORD_ENABLED || config.VITE_WAKE_WORD_ENABLED || 'false').toLowerCase() === 'true';
 
 if (!apiKey || apiKey.length < 20) {
@@ -101,13 +101,13 @@ if (!apiKey || apiKey.length < 20) {
   logSuccess(`CARTESIA_API_KEY configured (${apiKey.substring(0, 10)}...)`);
 }
 
-if (!picovoiceKey || picovoiceKey.length < 20) {
-  logError('PICOVOICE_ACCESS_KEY is not set or invalid');
-  logInfo('Get your AccessKey from: https://console.picovoice.ai/');
-  logInfo('Add to .env: PICOVOICE_ACCESS_KEY=your_key_here');
+if (!wakeWordKey || wakeWordKey.length < 20) {
+  logError('WAKE_WORD_ACCESS_KEY is not set or invalid');
+  logInfo('Get your AccessKey from your service provider');
+  logInfo('Add to .env: WAKE_WORD_ACCESS_KEY=your_key_here');
   errors++;
 } else {
-  logSuccess(`PICOVOICE_ACCESS_KEY configured (${picovoiceKey.substring(0, 10)}...)`);
+  logSuccess(`WAKE_WORD_ACCESS_KEY configured (${wakeWordKey.substring(0, 10)}...)`);
 }
 
 if (!wakeWordEnabled) {

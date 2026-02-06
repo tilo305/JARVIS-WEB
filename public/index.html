@@ -11,7 +11,7 @@
   <!-- Modern UI v2.0 - Enhanced Iron Man Theme with Glassmorphism -->
   <style>
     :root {
-      --bg-deep: #0a0a0f;
+      --bg-deep: #000000;
       --bg-panel: #0f0f15;
       --bg-input: #1a1a22;
       --border: #2a2a35;
@@ -48,12 +48,12 @@
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
       text-rendering: optimizeLegibility;
-      background: var(--bg-deep);
+      background: #000000;
       background-image: 
-        radial-gradient(circle at 20% 30%, rgba(196, 30, 58, 0.2) 0%, transparent 60%),
-        radial-gradient(circle at 80% 70%, rgba(255, 184, 0, 0.25) 0%, transparent 60%),
-        radial-gradient(circle at 50% 50%, rgba(255, 184, 0, 0.15) 0%, transparent 70%),
-        linear-gradient(135deg, rgba(196, 30, 58, 0.12) 0%, rgba(255, 184, 0, 0.1) 50%, rgba(196, 30, 58, 0.08) 100%);
+        radial-gradient(circle at 20% 30%, rgba(220, 20, 60, 0.3) 0%, transparent 60%),
+        radial-gradient(circle at 80% 70%, rgba(255, 215, 0, 0.3) 0%, transparent 60%),
+        radial-gradient(circle at 50% 50%, rgba(255, 215, 0, 0.2) 0%, transparent 70%),
+        linear-gradient(135deg, rgba(220, 20, 60, 0.15) 0%, rgba(255, 215, 0, 0.12) 50%, rgba(220, 20, 60, 0.1) 100%);
       color: var(--text);
       margin: 0;
       min-height: 100vh;
@@ -68,9 +68,9 @@
       position: fixed;
       inset: 0;
       background: 
-        repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(196, 30, 58, 0.05) 2px, rgba(196, 30, 58, 0.05) 4px),
-        repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(255, 184, 0, 0.05) 2px, rgba(255, 184, 0, 0.05) 4px),
-        repeating-linear-gradient(45deg, transparent, transparent 1px, rgba(255, 184, 0, 0.03) 1px, rgba(255, 184, 0, 0.03) 2px);
+        repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(220, 20, 60, 0.06) 2px, rgba(220, 20, 60, 0.06) 4px),
+        repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(255, 215, 0, 0.06) 2px, rgba(255, 215, 0, 0.06) 4px),
+        repeating-linear-gradient(45deg, transparent, transparent 1px, rgba(255, 215, 0, 0.04) 1px, rgba(255, 215, 0, 0.04) 2px);
       pointer-events: none;
       z-index: 0;
       opacity: 0.5;
@@ -80,9 +80,9 @@
       position: fixed;
       inset: 0;
       background: 
-        radial-gradient(ellipse at 30% 40%, rgba(196, 30, 58, 0.06) 0%, transparent 50%),
-        radial-gradient(ellipse at 70% 60%, rgba(255, 184, 0, 0.05) 0%, transparent 50%),
-        radial-gradient(ellipse at 50% 50%, rgba(255, 184, 0, 0.04) 0%, transparent 60%);
+        radial-gradient(ellipse at 30% 40%, rgba(220, 20, 60, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse at 70% 60%, rgba(255, 215, 0, 0.07) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(255, 215, 0, 0.05) 0%, transparent 60%);
       pointer-events: none;
       z-index: 0;
       animation: backgroundPulse 8s ease-in-out infinite;
@@ -98,20 +98,20 @@
       flex-direction: column;
       background: rgba(15, 15, 21, 0.7);
       background-image: 
-        linear-gradient(135deg, rgba(196, 30, 58, 0.15) 0%, rgba(255, 184, 0, 0.12) 50%, rgba(196, 30, 58, 0.1) 100%),
-        radial-gradient(circle at top left, rgba(196, 30, 58, 0.2) 0%, transparent 50%),
-        radial-gradient(circle at bottom right, rgba(255, 184, 0, 0.18) 0%, transparent 50%);
+        linear-gradient(135deg, rgba(220, 20, 60, 0.15) 0%, rgba(255, 215, 0, 0.12) 50%, rgba(220, 20, 60, 0.1) 100%),
+        radial-gradient(circle at top left, rgba(220, 20, 60, 0.2) 0%, transparent 50%),
+        radial-gradient(circle at bottom right, rgba(255, 215, 0, 0.18) 0%, transparent 50%);
       border: none;
       border-radius: var(--radius);
       overflow: hidden;
       box-shadow: 
         0 25px 70px rgba(0, 0, 0, 0.8),
-        0 0 0 2px rgba(196, 30, 58, 0.3),
-        0 0 80px rgba(196, 30, 58, 0.3),
-        0 0 120px rgba(255, 184, 0, 0.2),
-        0 0 100px rgba(196, 30, 58, 0.15),
+        0 0 0 2px rgba(220, 20, 60, 0.3),
+        0 0 80px rgba(220, 20, 60, 0.3),
+        0 0 120px rgba(255, 215, 0, 0.2),
+        0 0 100px rgba(220, 20, 60, 0.15),
         inset 0 2px 4px rgba(255, 255, 255, 0.12),
-        inset 0 -2px 4px rgba(255, 184, 0, 0.15);
+        inset 0 -2px 4px rgba(255, 215, 0, 0.15);
       backdrop-filter: blur(25px) saturate(200%);
       -webkit-backdrop-filter: blur(25px) saturate(200%);
       position: relative;
@@ -1261,42 +1261,271 @@
         var stack = '';
         for (var i = 0; i < args.length; i++) {
           var a = args[i];
-          if (a != null && typeof a === 'object' && typeof a.stack === 'string') stack = a.stack;
-          if (a == null) msgParts.push(String(a));
-          else if (typeof a === 'object') { try { msgParts.push(JSON.stringify(a)); } catch (_) { msgParts.push(String(a)); } }
-          else msgParts.push(String(a));
+          if (a != null && typeof a === 'object') {
+            // Check if it's an Error-like object (has stack, name, or message)
+            var hasStack = typeof a.stack === 'string' && a.stack.length > 0;
+            var hasName = typeof a.name === 'string' && a.name.length > 0;
+            var hasMessage = typeof a.message === 'string' && a.message.length > 0;
+            var isErrorLike = hasStack || (hasName && hasMessage) || (a instanceof Error);
+            
+            if (isErrorLike) {
+              // Capture stack trace if available
+              if (hasStack) {
+                stack = a.stack;
+              }
+              
+              // Build comprehensive error message with all available properties
+              var errorParts = [];
+              if (hasName) {
+                errorParts.push(a.name);
+              }
+              if (hasMessage) {
+                errorParts.push(a.message);
+              }
+              
+              // Include additional error properties (code, fileName, lineNumber, etc.)
+              var extraProps = [];
+              if (typeof a.code !== 'undefined' && a.code !== null) {
+                extraProps.push('code: ' + String(a.code));
+              }
+              if (typeof a.fileName === 'string') {
+                extraProps.push('file: ' + a.fileName);
+              }
+              if (typeof a.lineNumber !== 'undefined' && a.lineNumber !== null) {
+                extraProps.push('line: ' + String(a.lineNumber));
+              }
+              if (typeof a.columnNumber !== 'undefined' && a.columnNumber !== null) {
+                extraProps.push('column: ' + String(a.columnNumber));
+              }
+              
+              // For DOMException, include more details
+              if (a instanceof DOMException || (hasName && a.name === 'DOMException')) {
+                if (typeof a.code !== 'undefined') {
+                  var codeNames = {
+                    1: 'INDEX_SIZE_ERR', 2: 'DOMSTRING_SIZE_ERR', 3: 'HIERARCHY_REQUEST_ERR',
+                    4: 'WRONG_DOCUMENT_ERR', 5: 'INVALID_CHARACTER_ERR', 6: 'NO_DATA_ALLOWED_ERR',
+                    7: 'NO_MODIFICATION_ALLOWED_ERR', 8: 'NOT_FOUND_ERR', 9: 'NOT_SUPPORTED_ERR',
+                    10: 'INUSE_ATTRIBUTE_ERR', 11: 'INVALID_STATE_ERR', 12: 'SYNTAX_ERR',
+                    13: 'INVALID_MODIFICATION_ERR', 14: 'NAMESPACE_ERR', 15: 'INVALID_ACCESS_ERR',
+                    16: 'VALIDATION_ERR', 17: 'TYPE_MISMATCH_ERR', 18: 'SECURITY_ERR',
+                    19: 'NETWORK_ERR', 20: 'ABORT_ERR', 21: 'URL_MISMATCH_ERR',
+                    22: 'QUOTA_EXCEEDED_ERR', 23: 'TIMEOUT_ERR', 24: 'INVALID_NODE_TYPE_ERR',
+                    25: 'DATA_CLONE_ERR'
+                  };
+                  if (codeNames[a.code]) {
+                    extraProps.push('DOMException code: ' + codeNames[a.code]);
+                  }
+                }
+              }
+              
+              // Build final error message
+              var errorMsg = errorParts.length > 0 ? errorParts.join(': ') : 'Error';
+              if (extraProps.length > 0) {
+                errorMsg += ' (' + extraProps.join(', ') + ')';
+              }
+              msgParts.push(errorMsg);
+              
+              // If no stack was found but we have an Error object, try to get it
+              if (!hasStack && a instanceof Error && Error.captureStackTrace) {
+                // Some environments might have captureStackTrace
+                try {
+                  Error.captureStackTrace(a);
+                  if (a.stack) stack = a.stack;
+                } catch (_) {}
+              }
+            } else {
+              // Not an error-like object, try to stringify with enhanced error handling
+              try {
+                var str = JSON.stringify(a, function(key, value) {
+                  // Include error properties that might be lost in JSON.stringify
+                  if (value instanceof Error) {
+                    var errObj = { name: value.name, message: value.message, stack: value.stack };
+                    if (value.code !== undefined) errObj.code = value.code;
+                    if (value.fileName !== undefined) errObj.fileName = value.fileName;
+                    if (value.lineNumber !== undefined) errObj.lineNumber = value.lineNumber;
+                    if (value.columnNumber !== undefined) errObj.columnNumber = value.columnNumber;
+                    return errObj;
+                  }
+                  // Handle DOMException
+                  if (value instanceof DOMException) {
+                    var domErr = { name: value.name, message: value.message, code: value.code };
+                    if (value.stack) domErr.stack = value.stack;
+                    return domErr;
+                  }
+                  return value;
+                }, 2); // Pretty print with 2-space indent
+                msgParts.push(str);
+              } catch (stringifyErr) {
+                // If stringify fails, try to get useful info
+                try {
+                  if (a.toString && typeof a.toString === 'function') {
+                    var toStringResult = a.toString();
+                    if (toStringResult !== '[object Object]') {
+                      msgParts.push(toStringResult);
+                    } else {
+                      // Try to get constructor name and key properties
+                      var constructorName = a.constructor ? a.constructor.name : 'Object';
+                      var keys = Object.keys(a).slice(0, 10); // Limit to first 10 keys
+                      msgParts.push('[object ' + constructorName + ']' + (keys.length > 0 ? ' {keys: ' + keys.join(', ') + '}' : ''));
+                    }
+                  } else {
+                    msgParts.push('[object Object]');
+                  }
+                } catch (_) {
+                  msgParts.push('[object Object]');
+                }
+              }
+            }
+          } else if (a == null) {
+            msgParts.push(String(a));
+          } else {
+            msgParts.push(String(a));
+          }
         }
         return { message: msgParts.join(' '), stack: stack };
       }
+      var bc = null;
       try {
-        const bc = new BroadcastChannel('jarvis-console-errors');
-        function send(type, message, stack) {
-          if (type === 'warn' && typeof message === 'string' && message.includes('Multi-threading is not supported')) return;
+        bc = new BroadcastChannel('jarvis-console-errors');
+      } catch (_) {
+        // BroadcastChannel not available, continue without it
+      }
+      function send(type, message, stack) {
+        if (type === 'warn' && typeof message === 'string' && message.includes('Multi-threading is not supported')) return;
+        try {
           addEntry(type, message, stack);
-          try { bc.postMessage({ type: type, message: message, stack: stack || '' }); } catch (_) {}
+          if (bc) {
+            try { bc.postMessage({ type: type, message: message, stack: stack || '' }); } catch (_) {}
+          }
+        } catch (err) {
+          // If error capture itself fails, at least try to log to original console
+          try {
+            var origConsole = console.error || console.log;
+            origConsole('[JARVIS] Error capture failed:', err);
+          } catch (_) {}
         }
-        const origError = console.error;
-        const origWarn = console.warn;
-        console.error = function() {
+      }
+      const origError = console.error;
+      const origWarn = console.warn;
+      console.error = function() {
+        try {
           origError.apply(console, arguments);
+        } catch (_) {}
+        try {
           var o = argsToMessageAndStack(Array.from(arguments));
           send('error', o.message, o.stack);
-        };
-        console.warn = function() {
+        } catch (err) {
+          // If processing fails, at least capture a basic message
+          try {
+            send('error', 'Error capture processing failed: ' + String(err), '');
+          } catch (_) {}
+        }
+      };
+      console.warn = function() {
+        try {
           origWarn.apply(console, arguments);
+        } catch (_) {}
+        try {
           var o = argsToMessageAndStack(Array.from(arguments));
           send('warn', o.message, o.stack);
-        };
-        window.onerror = function(msg, src, line, col, err) {
-          var m = (msg != null ? String(msg) : 'Unknown error') + ' at ' + (src || '') + ':' + (line ?? '') + ':' + (col ?? '');
-          send('error', m, err && typeof err.stack === 'string' ? err.stack : '');
-        };
-        window.onunhandledrejection = function(ev) {
+        } catch (err) {
+          try {
+            send('warn', 'Warning capture processing failed: ' + String(err), '');
+          } catch (_) {}
+        }
+      };
+      window.onerror = function(msg, src, line, col, err) {
+        try {
+          var errorMsg = msg != null ? String(msg) : 'Unknown error';
+          var location = (src || 'unknown') + ':' + (line != null ? String(line) : '?') + ':' + (col != null ? String(col) : '?');
+          var m = errorMsg + ' at ' + location;
+          
+          // Extract stack trace - prefer err.stack, but also try to build from location
+          var stack = '';
+          if (err && typeof err.stack === 'string' && err.stack.length > 0) {
+            stack = err.stack;
+          } else if (src && line != null) {
+            // Build a basic stack trace from the location info
+            stack = '    at ' + location;
+            if (err && typeof err.message === 'string') {
+              stack = err.message + '\n' + stack;
+            }
+          }
+          
+          // Include error name and code if available
+          if (err) {
+            if (typeof err.name === 'string' && err.name.length > 0) {
+              m = err.name + ': ' + m;
+            }
+            if (typeof err.code !== 'undefined' && err.code !== null) {
+              m += ' (code: ' + String(err.code) + ')';
+            }
+          }
+          
+          send('error', m, stack);
+        } catch (captureErr) {
+          // If error handler itself fails, try to log to original console
+          try {
+            origError('[JARVIS] Error handler failed:', captureErr);
+          } catch (_) {}
+        }
+        // Return false to allow default error handling
+        return false;
+      };
+      window.onunhandledrejection = function(ev) {
+        try {
           var r = ev && ev.reason;
-          var msg = (r != null && (typeof r.message === 'string' ? r.message : String(r))) || 'Unhandled rejection';
-          send('error', msg, r && typeof r.stack === 'string' ? r.stack : '');
-        };
-      } catch (_) {}
+          var msg = 'Unhandled promise rejection';
+          var stack = '';
+          
+          if (r != null) {
+            if (r instanceof Error) {
+              // Full Error object - capture all details
+              var errorParts = [];
+              if (r.name) errorParts.push(r.name);
+              if (r.message) errorParts.push(r.message);
+              msg = errorParts.length > 0 ? errorParts.join(': ') : 'Error';
+              
+              // Include error code if available (e.g., DOMException)
+              if (typeof r.code !== 'undefined' && r.code !== null) {
+                msg += ' (code: ' + String(r.code) + ')';
+              }
+              
+              stack = r.stack || '';
+            } else if (typeof r === 'object') {
+              // Object with error-like properties
+              var objParts = [];
+              if (r.name) objParts.push(r.name);
+              if (r.message) objParts.push(r.message);
+              if (objParts.length > 0) {
+                msg = objParts.join(': ');
+              } else {
+                // Try to stringify the object
+                try {
+                  msg = JSON.stringify(r, function(key, value) {
+                    if (value instanceof Error) {
+                      return { name: value.name, message: value.message, stack: value.stack };
+                    }
+                    return value;
+                  });
+                } catch (_) {
+                  msg = String(r);
+                }
+              }
+              stack = r.stack || '';
+            } else {
+              // Primitive value
+              msg = String(r);
+            }
+          }
+          
+          send('error', msg, stack);
+        } catch (captureErr) {
+          try {
+            origError('[JARVIS] Unhandled rejection handler failed:', captureErr);
+          } catch (_) {}
+        }
+      };
       // Copy log button — always visible; shows captured count (errors + warnings)
       (function addCopyLogButton() {
         function updateLabel() {
@@ -1314,6 +1543,8 @@
         updateLabel();
         btn.onclick = function() {
           var header = 'JARVIS captured errors/warnings from this page.\n' +
+            'Captured: console.error(), console.warn(), window.onerror, window.onunhandledrejection\n' +
+            'Includes: Error objects, DOMException, TypeError, network errors, WebSocket errors, validation errors, and all error details (name, message, code, stack trace).\n' +
             'Note: Browser-generated messages (e.g. AudioContext) and extension errors appear in DevTools but are not captured here.\n' +
             '---\n';
           if (captured.length === 0) {
@@ -1328,7 +1559,11 @@
             return;
           }
           var text = header + captured.map(function(e) {
-            return '[' + e.time + '] ' + e.type.toUpperCase() + '\n' + e.message + (e.stack ? '\n' + e.stack : '');
+            var entry = '[' + e.time + '] ' + e.type.toUpperCase() + '\n' + e.message;
+            if (e.stack && e.stack.trim().length > 0) {
+              entry += '\nStack trace:\n' + e.stack;
+            }
+            return entry;
           }).join('\n---\n');
           navigator.clipboard.writeText(text).then(function() {
             btn.textContent = 'Copied ' + captured.length;
@@ -1382,6 +1617,6 @@
     
     // Status text is managed by app.js wake word tracker
   </script>
-  <script type="module" src="./js/app.js"></script>
+  <script type="module" src="/js/app.js"></script>
 </body>
 </html>

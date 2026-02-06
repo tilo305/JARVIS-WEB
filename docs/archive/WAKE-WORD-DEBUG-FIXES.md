@@ -102,8 +102,8 @@
 
 ## Next Steps
 
-1. **Place Keyword File:** Download `.ppn` file from Picovoice Console and place in `public/keywords/`
-2. **Set Environment Variables:** Configure `.env` with `PICOVOICE_ACCESS_KEY` and `WAKE_WORD_ENABLED=true`
+1. **Place Keyword File:** Download `.ppn` file from your service provider and place in `public/keywords/`
+2. **Set Environment Variables:** Configure `.env` with `WAKE_WORD_ACCESS_KEY` and `WAKE_WORD_ENABLED=true`
 3. **Test in Browser:** Run `npm run vite` and test wake word detection
 4. **Monitor Console:** Check browser console for any runtime errors
 5. **Verify Integration:** Ensure STT activates after wake word detection

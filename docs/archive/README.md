@@ -6,4 +6,4 @@ This folder contains historical documentation that has been archived for referen
 - Code audit and orphaned-code check reports
 - Project analysis and verification checklists
 - Wake word research, setup, fixes, and troubleshooting guides
-- Picovoice comprehensive research
+- Wake word comprehensive research

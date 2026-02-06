@@ -7,8 +7,19 @@ export function getWakeWordTestConfig() {
   const win = typeof window !== 'undefined' ? window : {};
   const cfg = win.JARVIS_CONFIG || {};
 
-  const wakeWordEnabled = (env.VITE_WAKE_WORD_ENABLED || env.WAKE_WORD_ENABLED || cfg.wakeWordEnabled || 'true').toLowerCase() === 'true';
-  const useOpenWakeWord = (env.VITE_USE_OPENWAKEWORD || env.USE_OPENWAKEWORD || cfg.useOpenWakeWord || 'true').toLowerCase() === 'true';
+  // Check if env vars are explicitly set (Vite may inject 'false' as a string)
+  const wakeWordEnabledEnv = env.VITE_WAKE_WORD_ENABLED || env.WAKE_WORD_ENABLED;
+  const useOpenWakeWordEnv = env.VITE_USE_OPENWAKEWORD || env.USE_OPENWAKEWORD;
+  
+  // If env var is explicitly set, use it; otherwise check cfg or default
+  const wakeWordEnabled = wakeWordEnabledEnv 
+    ? wakeWordEnabledEnv.toLowerCase() === 'true'
+    : (cfg.wakeWordEnabled !== undefined ? cfg.wakeWordEnabled : true);
+  
+  const useOpenWakeWord = useOpenWakeWordEnv
+    ? useOpenWakeWordEnv.toLowerCase() === 'true'
+    : (cfg.useOpenWakeWord !== undefined ? cfg.useOpenWakeWord : true);
+  
   const openWakeWordWsUrl = (env.VITE_OPENWAKEWORD_WS_URL || env.OPENWAKEWORD_WS_URL || cfg.openWakeWordWsUrl || 'ws://localhost:8765/ws').trim();
 
   return {

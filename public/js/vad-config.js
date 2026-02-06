@@ -44,8 +44,8 @@ export const VAD_CONFIG = {
 
   // silenceAfterSpeechToStopMicMs: After user stops speaking (onSpeechEnd), wait this
   // many ms of silence. Then stop mic and send buffered transcript to agent.
-  // 3.5s avoids conversation "stopping too early" when user pauses briefly (see debug/SILENCE-AND-CONVERSATION-TIMER-FIXES.md).
-  silenceAfterSpeechToStopMicMs: 3500,
+  // 2.5s balances responsiveness with allowing brief pauses (see debug/SILENCE-AND-CONVERSATION-TIMER-FIXES.md).
+  silenceAfterSpeechToStopMicMs: 2500,
 
   // maxListeningMs: Maximum time the mic can stay on in one session (ms). After this,
   // we force-stop and send any transcript. Ensures the mic always stops even if VAD

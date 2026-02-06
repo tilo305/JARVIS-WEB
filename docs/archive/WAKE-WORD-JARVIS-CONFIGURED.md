@@ -16,7 +16,7 @@ const porcupineKeyword = env.VITE_PORCUPINE_KEYWORD || cfg.porcupineKeyword || '
 **After:**
 ```javascript
 // Default to "Jarvis" built-in keyword if wake word is enabled but no keyword specified
-const porcupineKeyword = env.VITE_PORCUPINE_KEYWORD || cfg.porcupineKeyword || (wakeWordEnabled && picovoiceAccessKey ? 'Jarvis' : '');
+const porcupineKeyword = env.VITE_PORCUPINE_KEYWORD || cfg.porcupineKeyword || (wakeWordEnabled && wakeWordAccessKey ? 'Jarvis' : '');
 ```
 
 ## Benefits
@@ -52,7 +52,7 @@ const porcupineKeyword = env.VITE_PORCUPINE_KEYWORD || cfg.porcupineKeyword || (
 ### Option 1: Environment Variable (Recommended)
 ```bash
 # In .env file
-VITE_PICOVOICE_ACCESS_KEY=your_access_key_here
+VITE_WAKE_WORD_ACCESS_KEY=your_access_key_here
 VITE_WAKE_WORD_ENABLED=true
 # VITE_PORCUPINE_KEYWORD=Jarvis  # Optional - defaults to "Jarvis" if not set
 ```
@@ -61,7 +61,7 @@ VITE_WAKE_WORD_ENABLED=true
 ```javascript
 // In public/index.html or before app.js loads
 window.JARVIS_CONFIG = {
-  picovoiceAccessKey: 'your_access_key_here',
+  wakeWordAccessKey: 'your_access_key_here',
   wakeWordEnabled: true,
   porcupineKeyword: 'Jarvis'  // Optional - defaults to "Jarvis" if not set
 };
@@ -82,7 +82,6 @@ Per `wAkE wOrD dOcS.md`, these built-in keywords are available:
 - "Hey Google"
 - "Hey Siri"
 - "Okay Google"
-- "Picovoice"
 - "Porcupine"
 - "Terminator"
 - "Americano"

@@ -34,7 +34,7 @@ The wake word documentation (`wAkE wOrD dOcS.md`) is comprehensive and well-stru
 ### 1.2 Built-in Keyword Handling
 
 **Documentation (Section 7):**
-- Lists built-in keywords: `['Alexa', 'Americano', 'Blueberry', 'Bumblebee', 'Computer', 'Grapefruit', 'Grasshopper', 'Hey Google', 'Hey Siri', 'Jarvis', 'Okay Google', 'Picovoice', 'Porcupine', 'Terminator']`
+- Lists built-in keywords: `['Alexa', 'Americano', 'Blueberry', 'Bumblebee', 'Computer', 'Grapefruit', 'Grasshopper', 'Hey Google', 'Hey Siri', 'Jarvis', 'Okay Google', 'Porcupine', 'Terminator']`
 - Recommends using built-in keywords for faster initialization
 
 **Implementation (`wake-word-manager.js:106-250`):**

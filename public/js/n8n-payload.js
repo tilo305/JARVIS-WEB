@@ -122,6 +122,7 @@ export function getNaturalFallback(userMessage) {
  * - source: 'voice' | 'text'
  * - attachments: array of { name, type, size, data? } — data is base64 file content when present
  * - locale, language: browser locale/language
+ * - wakeWordTriggered: boolean — true when voice input was triggered by wake word (vs mic button)
  *
  * Agentic Design Patterns (optional, for n8n workflow branching):
  * - conversationHistory: recent user/assistant turns (Memory pattern)
@@ -134,6 +135,7 @@ export function getNaturalFallback(userMessage) {
  * @param {string} [options.source='text'] - 'voice' | 'text' — voice is used for both mic button and wake word (same payload)
  * @param {string} [options.sessionId] - Override session ID (auto-generated if omitted)
  * @param {Array} [options.attachments] - File attachments
+ * @param {boolean} [options.wakeWordTriggered] - true if voice input was triggered by wake word (vs mic button)
  * @param {Array<{role: string, content: string}>} [options.conversationHistory] - Recent turns (Memory)
  * @param {string} [options.intent] - Classified intent (Routing)
  * @param {Object} [options.agenticHints] - planMode, refineMode, etc.
@@ -174,6 +176,11 @@ export function buildN8nPayload(message, options = {}) {
     locale: locale || undefined,
     language: language || undefined,
   };
+
+  // Wake word indicator — distinguish wake word from mic button
+  if (options.wakeWordTriggered === true) {
+    payload.wakeWordTriggered = true;
+  }
 
   // Agentic Design Patterns — optional fields for n8n
   if (Array.isArray(options.conversationHistory) && options.conversationHistory.length > 0) {
