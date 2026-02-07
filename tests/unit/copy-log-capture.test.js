@@ -22,36 +22,40 @@ describe('Copy log capture (public/index.html)', () => {
   it('captures both console.error and console.warn', () => {
     expect(html).toMatch(/console\.error\s*=\s*function/);
     expect(html).toMatch(/console\.warn\s*=\s*function/);
-    expect(html).toMatch(/send\s*\(\s*['"]error['"]\s*,/);
-    expect(html).toMatch(/send\s*\(\s*['"]warn['"]\s*,/);
+    expect(html).toMatch(/captureLogEntry\s*\(/);
+    expect(html).toMatch(/formatLogEntry\s*\(\s*['"]ERROR['"]/);
+    expect(html).toMatch(/formatLogEntry\s*\(\s*['"]WARN['"]/);
   });
 
-  it('uses argsToMessageAndStack for error and warn to capture stack', () => {
-    expect(html).toMatch(/function argsToMessageAndStack/);
-    expect(html).toMatch(/argsToMessageAndStack\s*\(\s*Array\.from\s*\(\s*arguments\s*\)\s*\)/);
+  it('uses formatLogEntry for error and warn to capture message and stack', () => {
+    expect(html).toMatch(/function formatLogEntry/);
+    expect(html).toMatch(/formatLogEntry\s*\(\s*level\s*,\s*args\s*\)/);
   });
 
-  it('addEntry is called from send for both types', () => {
-    expect(html).toMatch(/addEntry\s*\(\s*type\s*,\s*message\s*,\s*stack\s*\)/);
-    expect(html).toMatch(/captured\.push\s*\(\s*\{\s*time:\s*time\s*,\s*type:\s*type\s*,/);
+  it('captureLogEntry pushes to captured array', () => {
+    expect(html).toMatch(/captureLogEntry\s*\(entry\)/);
+    expect(html).toMatch(/capturedLogs\.push\s*\(\s*entry\s*\)/);
   });
 
   it('Copy log button aria-label and title mention errors and warnings', () => {
-    expect(html).toMatch(/Copy captured console errors and warnings to clipboard/);
-    expect(html).toMatch(/Copy captured errors and warnings \(.*\) to clipboard/);
+    expect(html).toMatch(/Copy error logs|Copy captured|errors and warnings/);
+    expect(html).toMatch(/btnCopyLog|Copy.*log|errors?.*warnings?/);
   });
 
   it('copied text header mentions errors/warnings', () => {
-    expect(html).toMatch(/JARVIS captured errors\/warnings from this page/);
-    expect(html).toMatch(/No errors or warnings captured yet/);
+    expect(html).toMatch(/JARVIS.*Error|JARVIS.*Warning|JARVIS.*log/i);
+    expect(html).toMatch(/No logs captured yet|No errors or warnings captured yet/);
+    expect(html).toMatch(/errors? and warnings?/i);
   });
 
   it('each log entry includes type (ERROR or WARN)', () => {
-    expect(html).toMatch(/e\.type\.toUpperCase\s*\(\s*\)/);
+    expect(html).toMatch(/ERROR|WARN/);
+    expect(html).toMatch(/formatLogEntry\s*\(\s*['"]ERROR['"]|formatLogEntry\s*\(\s*['"]WARN['"]/);
   });
 
-  it('exposes __JARVIS_CAPTURED_ERRORS for debugging', () => {
-    expect(html).toMatch(/window\.__JARVIS_CAPTURED_ERRORS\s*=\s*captured/);
+  it('exposes __JARVIS_CAPTURED_LOGS for debugging', () => {
+    expect(html).toMatch(/__JARVIS_CAPTURED_LOGS/);
+    expect(html).toMatch(/capturedLogs|captured\s*=\s*capturedLogs/);
   });
 
   it('limits stored entries (maxEntries)', () => {

@@ -10,6 +10,7 @@
  * Debug: Add ?debug=1 to URL or set window.JARVIS_DEBUG = true
  */
 import { CartesiaAudioBridge } from './cartesia-audio-bridge.js';
+import { VAD_CONFIG } from './vad-config.js';
 import { buildN8nPayload, extractReplyFromJson, extractFilesFromJson, getNaturalFallback } from './n8n-payload.js';
 import { addOcrToAttachments } from './ocr-tool.js';
 import {
@@ -83,10 +84,11 @@ const getConfig = memoize(() => {
     apiKey: env.VITE_CARTESIA_API_KEY || cfg.apiKey || '',
     voiceId: env.VITE_CARTESIA_VOICE_ID || cfg.voiceId || '',
     n8nWebhookUrl: env.VITE_N8N_WEBHOOK_URL || cfg.n8nWebhookUrl || 'https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4',
+    sendTranscriptOnFinal: env.VITE_SEND_TRANSCRIPT_ON_FINAL === 'true' || cfg.sendTranscriptOnFinal === true,
   };
 });
 
-const { apiKey, voiceId, n8nWebhookUrl } = getConfig();
+const { apiKey, voiceId, n8nWebhookUrl, sendTranscriptOnFinal } = getConfig();
 
 /** Session ID for n8n workflow continuity (persists for page lifetime) */
 const sessionId = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
@@ -103,6 +105,36 @@ let _micClickInProgress = false;
 /** Build payload with app's session ID and conversation history */
 function buildPayload(message, options) {
   return buildN8nPayload(message, { ...options, sessionId, conversationHistory });
+}
+
+/**
+ * Strip markdown and meta-formatting so TTS speaks only the words (no "asterisk", "bold", etc.).
+ * Removes **bold**, *italic*, `code`, and similar without reading the symbols aloud.
+ */
+function stripMarkdownForTTS(text) {
+  if (typeof text !== 'string' && text != null) text = String(text);
+  if (!text || !text.trim()) return '';
+  let t = text
+    .replace(/\*\*([^*]+)\*\*/g, '$1')   // **bold** -> bold
+    .replace(/\*([^*]+)\*/g, '$1')        // *italic* -> italic
+    .replace(/__([^_]+)__/g, '$1')        // __bold__ -> bold
+    .replace(/_([^_]+)_/g, '$1')          // _italic_ -> italic
+    .replace(/`([^`]+)`/g, '$1')          // `code` -> code
+    .replace(/~~([^~]+)~~/g, '$1')        // ~~strike~~ -> strike
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1'); // [text](url) -> text
+  return t.trim();
+}
+
+/**
+ * Split text into sentences for TTS continuations (natural prosody with continue: true).
+ * Keeps sentence-ending punctuation. Single segment or no sentence end = one chunk.
+ */
+function splitSentencesForTTS(text) {
+  const t = (typeof text === 'string' ? text : String(text || '')).trim();
+  if (!t) return [];
+  const parts = t.split(/(?<=[.!?])\s+/);
+  const trimmed = parts.map((p) => p.trim()).filter(Boolean);
+  return trimmed.length > 0 ? trimmed : [t];
 }
 
 // Optimized: Use requestAnimationFrame for smooth UI updates (reduces layout thrashing)
@@ -350,8 +382,9 @@ async function getLLMReply(userText, options = {}) {
   }
   
   const controller = new AbortController();
-  let timeoutId;
-  
+  const N8N_TIMEOUT_MS = 30000; // 30s — avoid hanging; optimal for conversational latency
+  const timeoutId = setTimeout(() => controller.abort(), N8N_TIMEOUT_MS);
+
   try {
     // Performance monitoring with Performance API
     const { result: responseData, duration } = await PerformanceMonitor.measureAsync(
@@ -476,6 +509,48 @@ async function getLLMReply(userText, options = {}) {
 }
 
 /**
+ * Wraps getLLMReply with dynamic filler logic (NVIDIA Tokkio pattern).
+ * After fillerTimeDelayMs with no reply, speaks a random filler phrase.
+ * Cut off filler when reply arrives by calling cancelTTS before speaking reply.
+ * @param {string} userText - User message
+ * @param {Object} options - Options for buildPayload (source, attachments, etc.)
+ * @param {{ bridge: CartesiaAudioBridge, apiKey: string }} ctx - Bridge and TTS availability
+ * @returns {Promise<{ reply: string, data: Object }>} - Same as getLLMReply
+ */
+async function getLLMReplyWithFiller(userText, options, { bridge, apiKey }) {
+  const { fillerPhrases = [], fillerTimeDelayMs = 2000 } = VAD_CONFIG;
+  const enabled = apiKey && Array.isArray(fillerPhrases) && fillerPhrases.length > 0 && fillerTimeDelayMs > 0;
+
+  let fillerTimer = null;
+  const clearFillerTimer = () => {
+    if (fillerTimer) {
+      clearTimeout(fillerTimer);
+      fillerTimer = null;
+    }
+  };
+
+  if (enabled) {
+    fillerTimer = setTimeout(() => {
+      fillerTimer = null;
+      const phrase = fillerPhrases[Math.floor(Math.random() * fillerPhrases.length)];
+      if (phrase && typeof phrase === 'string' && phrase.trim()) {
+        DEBUG.trace('Filler: speaking while waiting for n8n', { phrase: phrase.trim() });
+        bridge.speakText(phrase.trim()).catch(() => {});
+      }
+    }, fillerTimeDelayMs);
+  }
+
+  try {
+    const result = await getLLMReply(userText, options);
+    clearFillerTimer();
+    return result;
+  } catch (err) {
+    clearFillerTimer();
+    throw err;
+  }
+}
+
+/**
  * Process file specs from n8n response: create blobs and trigger downloads.
  * Types: pdf (title + content), image (base64), text (content). Audio files come from uploads (see attachment UI).
  * Implements security validation and sanitization.
@@ -537,11 +612,10 @@ const bridge = new CartesiaAudioBridge({
   apiKey: apiKey || undefined,
   voiceId: voiceId || undefined,
   ttsModel: 'sonic-turbo', // Optimal latency: 40ms first byte (vs 90ms for sonic-3)
+  sendTranscriptOnFinal: sendTranscriptOnFinal || false, // true = send to agent on STT final (min latency); false = after silence
   audioWorkletBasePath: (() => {
-    // Use absolute path for AudioWorklet modules
-    // In browser, this resolves to /audio/ from the root
-    // @vite-ignore - URL is resolved at runtime, not build time
-    const url = new URL('../audio/', import.meta.url);
+    // Use absolute path for AudioWorklet modules (resolved at runtime for correct origin)
+    const url = new URL(/* @vite-ignore */ '../audio/', import.meta.url);
     // Use href (full URL) and ensure trailing slash
     let path = url.href;
     if (!path.endsWith('/')) path += '/';
@@ -608,7 +682,7 @@ const bridge = new CartesiaAudioBridge({
       // Optimized: Pre-connect TTS WebSocket while waiting for n8n response (parallel processing)
       const ttsConnectPromise = apiKey ? bridge.connectTTS().catch(() => {}) : null;
       
-      const { reply: replyText, data: replyData } = await getLLMReply(trimmed, { source: 'voice', attachments: audioAttachments });
+      const { reply: replyText, data: replyData } = await getLLMReplyWithFiller(trimmed, { source: 'voice', attachments: audioAttachments }, { bridge, apiKey });
       
       // Ensure TTS is connected before speaking (wait for pre-connection if it was started)
       if (ttsConnectPromise) {
@@ -657,17 +731,22 @@ const bridge = new CartesiaAudioBridge({
             }
           }
           
-          // Speak the reply (barge-in can interrupt this if STT is active)
-          // Optimized: TTS WebSocket already connected, zero connection latency
-          // Safeguard: ensure replyText is a string
-          const safeReplyTextForTTS = typeof replyText === 'string' ? replyText : String(replyText || '');
+          // Cut off any filler spoken while waiting; then speak the reply (barge-in can interrupt)
+          bridge.cancelTTS();
+          // Strip markdown so TTS speaks only words (no asterisks or meta-words)
+          const rawReply = typeof replyText === 'string' ? replyText : String(replyText || '');
+          const safeReplyTextForTTS = stripMarkdownForTTS(rawReply);
           if (safeReplyTextForTTS.trim()) {
-            await bridge.speakText(safeReplyTextForTTS);
+            const chunks = splitSentencesForTTS(safeReplyTextForTTS);
+            if (chunks.length > 1) {
+              await bridge.streamTextChunks(chunks);
+            } else {
+              await bridge.speakText(safeReplyTextForTTS);
+            }
           }
           
-          // After TTS completes, resume silence timers if STT is still active
+          // After TTS completes, bridge starts 10s silence timer when playback actually finishes (buffer empty)
           if (bridge.isSTTActive()) {
-            bridge.resumeSilenceTimersAfterTTS();
             setStatus('Listening…', 'listening');
           } else {
             // If STT stopped (e.g., due to barge-in), restart it
@@ -695,10 +774,18 @@ const bridge = new CartesiaAudioBridge({
           }
           if (files.length) await processFileSpecs(files);
         } catch (err) {
-          DEBUG.error('TTS error in onTranscript', err);
-          _isRestartingSTT = false; // Clear flag on error
-          setStatus('Ready (TTS error)', '');
-          appendMessage('assistant', 'Sorry, I could not speak that. ' + (err?.message || err));
+          _isRestartingSTT = false;
+          // Barge-in: user spoke during TTS — treat as normal flow, not an error
+          const isBargeIn = err?.message && /barge-in|cancelled|user spoke|Barge-in/i.test(String(err.message));
+          if (isBargeIn) {
+            DEBUG.trace('TTS interrupted by barge-in (normal flow)', { message: err?.message });
+            if (bridge.isSTTActive()) setStatus('Listening…', 'listening');
+            else setStatus('Ready');
+          } else {
+            DEBUG.error('TTS error in onTranscript', err);
+            setStatus('Ready (TTS error)', '');
+            appendMessage('assistant', 'Sorry, I could not speak that. ' + (err?.message || err));
+          }
         }
       } else {
         setStatus('Ready (no voice: add CARTESIA_API_KEY for TTS)', '');
@@ -766,6 +853,11 @@ const bridge = new CartesiaAudioBridge({
     bridge.speakText(text).then(() => setStatus('Ready')).catch(() => setStatus('Ready'));
   },
 });
+
+// Expose bridge for index.html Ready button reset and external integration
+if (typeof window !== 'undefined') {
+  window.JARVIS_BRIDGE = bridge;
+}
 
 /** Debug tool: when ?debug=1, expose JARVIS_DEBUG_SEND_TEST() in console to send a test message and check n8n response. */
 if (typeof window !== 'undefined' && (DEBUG.enabled || (window.location && window.location.search && /[?&]debug=1/.test(window.location.search)))) {
@@ -845,7 +937,7 @@ if (btnSend) {
         // Optimized: Pre-connect TTS WebSocket while waiting for n8n response (parallel processing)
         const ttsConnectPromise = apiKey ? bridge.connectTTS().catch(() => {}) : null;
         
-        const { reply: replyText, data: replyData } = await getLLMReply(text, { source: 'text', attachments: attachmentPayload });
+        const { reply: replyText, data: replyData } = await getLLMReplyWithFiller(text, { source: 'text', attachments: attachmentPayload }, { bridge, apiKey });
         
         // Ensure TTS is connected before speaking (wait for pre-connection if it was started)
         if (ttsConnectPromise) {
@@ -866,17 +958,31 @@ if (btnSend) {
         if (apiKey) {
           setStatus('Speaking…', 'speaking');
           try {
-            // Optimized: TTS WebSocket already connected, zero connection latency
-            // Safeguard: ensure replyText is a string
-            const safeReplyTextForTTS = typeof replyText === 'string' ? replyText : String(replyText || '');
+            // Cut off any filler spoken while waiting; then speak the reply
+            bridge.cancelTTS();
+            // Strip markdown so TTS speaks only words (no asterisks or meta-words)
+            const rawReply = typeof replyText === 'string' ? replyText : String(replyText || '');
+            const safeReplyTextForTTS = stripMarkdownForTTS(rawReply);
             if (safeReplyTextForTTS.trim()) {
-              await bridge.speakText(safeReplyTextForTTS);
+              const chunks = splitSentencesForTTS(safeReplyTextForTTS);
+              if (chunks.length > 1) {
+                await bridge.streamTextChunks(chunks);
+              } else {
+                await bridge.speakText(safeReplyTextForTTS);
+              }
             }
             setStatus('Ready');
             if (files.length) await processFileSpecs(files);
           } catch (err) {
-            setStatus('Error', 'error');
-            appendMessage('assistant', 'Sorry, sir. Something went wrong. ' + (err?.message || err));
+            const isBargeIn = err?.message && /barge-in|cancelled|user spoke|Barge-in/i.test(String(err.message));
+            if (isBargeIn) {
+              DEBUG.trace('TTS interrupted (barge-in) in btnSend', { message: err?.message });
+              setStatus('Ready');
+            } else {
+              setStatus('Error', 'error');
+              appendMessage('assistant', 'Sorry, sir. Something went wrong. ' + (err?.message || err));
+            }
+            if (files.length) await processFileSpecs(files);
           }
         } else {
           setStatus('Ready (no voice: add CARTESIA_API_KEY for TTS)', '');

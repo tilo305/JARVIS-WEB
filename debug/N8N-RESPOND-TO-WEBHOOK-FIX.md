@@ -5,7 +5,7 @@
 **Causes (check both):**
 
 1. **Webhook Respond setting** — Must be "Using Respond to Webhook Node" (not "Immediately").
-2. **Respond to Webhook node missing or not connected** — n8n shows: *"Insert a 'Respond to Webhook' node to control when and how you respond."* That means either the node is missing, or it’s not in the execution path so it never runs.
+2. **Respond to Webhook node missing or not connected** — n8n shows: *"Insert a 'Respond to Webhook' node to control when and how you respond."* That means either the node is missing, or it's not in the execution path so it never runs.
 
 ---
 
@@ -19,7 +19,7 @@
 
 ## 2. Insert and connect the Respond to Webhook node (fixes the yellow warning)
 
-The Webhook is waiting for a **Respond to Webhook** node to run. If that node doesn’t exist or isn’t in the flow, no response is ever sent and the frontend gets nothing.
+The Webhook is waiting for a **Respond to Webhook** node to run. If that node doesn't exist or isn't in the flow, no response is ever sent and the frontend gets nothing.
 
 1. **Add the node:** In the same workflow, add a **Respond to Webhook** node (search "Respond to Webhook" in the node list).
 2. **Put it in the path:** Connect it **after** the node that has the reply (e.g. AI Agent). Flow should be:  
@@ -38,7 +38,7 @@ After this, each request that hits the Webhook will get a response when the **Re
 | `https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4` | `https://n8n.hempstarai.com/webhook-test/e7278dba-076f-4fe9-8c8f-0241e4103ac4` |
 
 - **Production** (`/webhook/...`) runs your active workflow and returns the Respond to Webhook body (e.g. `[{ "output": "Hello, sir. ..." }]`).
-- **Test** (`/webhook-test/...`) is for the n8n editor “Test workflow” and may not return that same response to an external app.
+- **Test** (`/webhook-test/...`) is for the n8n editor "Test workflow" and may not return that same response to an external app.
 
 In JARVIS: set `VITE_N8N_WEBHOOK_URL` (or `window.JARVIS_CONFIG.n8nWebhookUrl`) to the **production** URL above. Then reload the app and try again.
 
@@ -74,4 +74,4 @@ After the Respond to Webhook node is in the path and the workflow is active:
 - You should see the assistant message in the chat and hear TTS.
 - In browser DevTools → Network, the webhook request should show response body like `{"output": "..."}`.
 
-If the response body is empty or missing, the Respond to Webhook node either didn’t run (check connections and that you’re using the production webhook URL, not the test URL) or the Webhook node’s Respond setting was reverted.
+If the response body is empty or missing, the Respond to Webhook node either didn't run (check connections and that you're using the production webhook URL, not the test URL) or the Webhook node's Respond setting was reverted.

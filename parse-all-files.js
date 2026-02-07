@@ -581,9 +581,6 @@ function parseClient(content, filePath) {
   } else if (filename.includes('tts-client')) {
     stats.clientType = 'tts';
     stats.clientName = 'TTS Client';
-  } else if (filename.includes('openwakeword-client')) {
-    stats.clientType = 'openwakeword';
-    stats.clientName = 'OpenWakeWord Client';
   } else if (filename.includes('audio-bridge')) {
     stats.clientType = 'audio-bridge';
     stats.clientName = 'Audio Bridge';
@@ -628,7 +625,6 @@ function parseBridge(content, filePath) {
     hasSTT: false,
     hasTTS: false,
     hasVAD: false,
-    hasWakeWord: false,
     hasBargeIn: false,
     hasReconnection: false,
     audioProcessors: [],
@@ -702,11 +698,6 @@ function parseBridge(content, filePath) {
   // Check for VAD
   if (/\bVAD\b|MicVAD|voice.*activity|vad/i.test(content)) {
     stats.hasVAD = true;
-  }
-
-  // Check for Wake Word
-  if (/wake.*word|wakeWord|WakeWord|openWakeWord/i.test(content)) {
-    stats.hasWakeWord = true;
   }
 
   // Check for Barge-in

@@ -17,7 +17,7 @@ Findings from a full project parse. Use this to clean up dead code, consolidate 
 
 ### 1.2 `escapeHtml` (same helper in two places) — ✅ Fixed
 
-- **`public/js/debug.js`**: Single export `escapeHtml(s)` — imported by `app.js`, `fallback-revert-debug.html`, `console-errors-live.html`, and `wake-word-tracker.js`.
+- **`public/js/debug.js`**: Single export `escapeHtml(s)` — imported by `app.js`, `fallback-revert-debug.html`, and `console-errors-live.html`.
 
 ---
 
@@ -89,7 +89,7 @@ Same URL string appears in `src/config.ts`, `public/js/app.js` (getConfig fallba
 | Category        | Item                          | Location(s)                                      | Action | Status |
 |----------------|-------------------------------|---------------------------------------------------|--------|--------|
 | Duplicate      | `getNaturalFallback`         | `public/js/n8n-payload.js` (exported) | ✅ Fixed | Single export, imported in app.js and fallback-revert-debug.html |
-| Duplicate      | `escapeHtml`                 | `debug.js` (exported) | ✅ Fixed | Single export, imported in app.js, fallback-revert-debug.html, console-errors-live.html, wake-word-tracker.js |
+| Duplicate      | `escapeHtml`                 | `debug.js` (exported) | ✅ Fixed | Single export, imported in app.js, fallback-revert-debug.html, console-errors-live.html |
 | Duplicate      | Debug n8n fetch + reply      | `app.js` - `JARVIS_DEBUG_SEND_TEST()` | ✅ Fixed | Now uses `getLLMReply()` |
 | Duplicate      | `float32ToInt16` / floatTo16BitPCM | `public/js/audio-utils.js` | ✅ Fixed | `float32ToInt16` calls `floatTo16BitPCM` |
 | Duplicate      | Default webhook URL          | Multiple files | ✅ Acceptable | Canonical in src/config.ts |
@@ -112,17 +112,59 @@ Same URL string appears in `src/config.ts`, `public/js/app.js` (getConfig fallba
 
 **Current debug tools:** See `debug/README.md` and `debug/DEBUG-TOOLS-SUMMARY.md`.
 
+**Cleanup (2026-02-07):** The `debug:live` npm script was removed (debug/live/ was already gone). **MD cleanup:** `debug/archive/` (old verification reports) was removed. The single doc referenced by app and docs—`N8N-RESPOND-TO-WEBHOOK-FIX.md`—lives in `debug/`. Root-level parse/summary .md (e.g. *-PARSE.md, *-SUMMARY.md) and duplicate docs in `docs/` (ERROR-FIXES-COMPLETE, FINAL-VERIFICATION-*, INTEGRATION-VERIFICATION) were removed.
+
 ---
 
-## 7. Orphaned Wake Word Test Page (2026-02-05)
+## 6. VAD files (2026-02-07)
+
+**Current (only):** `public/js/vad-config.js` (config), `tests/unit/vad-config.test.js` (unit tests). Both in use by app and bridge.
+
+**Removed / obsolete:** No separate VAD parser or duplicate tests. `parse-vad-files.js` was removed; VAD parsing is part of `parse-all-files.js`. `debug/tests/filler-config-live.test.js` was removed as duplicate of `tests/unit/vad-config.test.js`.
+
+---
+
+## 7. Test cleanup (2026-02-07)
+
+**Orphaned / removed:**
+
+- **`debug/live/`** — Empty. Former live tests (`n8n-webhook.test.js`, `example-run.test.js`) were removed; Jest no longer matches this path (`testPathIgnorePatterns` includes `debug/live`).
+- **`debug/tests/bridge-stream-optimization.test.js`** — Removed. Logic merged into `tests/unit/cartesia-audio-bridge.test.js` (streamTextChunks optimization tests).
+- **`debug/tests/filler-config-live.test.js`** — Removed. Duplicate of `tests/unit/vad-config.test.js` (fillerPhrases, fillerTimeDelayMs, and allowed keys already covered).
+
+**AudioWorklet (2026-02-07):** No duplicate or orphaned processor files. Only two processors remain and are in use: `public/audio/stt-capture-processor.js` and `public/audio/tts-playback-processor.js`. The former `public/audio/wake-word-processor.js` was already removed. Docs updated: `docs/INTEGRATION.md` (removed wake-word/OpenWakeWord rows and troubleshooting), `docs/archive/VERIFICATION-CHECKLIST.md` (historical note). Debug pages `debug-audioworklet.html` and `voice-pipeline-debug.html` stay; they validate the two active processors.
+
+---
+
+## 8. Orphaned Wake Word Test Page (2026-02-05)
 
 **Removed:** `public/wake-word-test.html` — Orphaned. Duplicated functionality of `public/debug/wake-word-activation-test.html` (the canonical test). Not referenced in any docs, tools, or scripts.
 
+**Removed (2026-02-07):** `public/debug/wake-word-activation-test.html` — Orphaned stub after wake word feature removal. Page only showed "check console" with no real test; wake word backend and scripts were already deleted.
+
 ---
 
-## 6. Current Status (2026-02-02)
+## 9. Orphaned JS modules removed (2026-02-07)
 
-**All critical duplicates have been fixed.** The codebase is in excellent condition:
+**Removed — not imported by app.js, server, or any runtime:**
+
+- **`public/js/cors-handler.js`** — CORS diagnostic module. Never imported; server handles CORS separately.
+- **`public/js/ui-patterns.js`** — UI patterns/easing module. Never imported by app.
+- **`public/js/agentic-patterns.js`** — Agentic design patterns (ConversationHistory, etc.). Only used by its unit test; app implements its own flow.
+- **`public/js/payload-verification.js`** — Payload validation helpers. Only used by its unit test; app does not call `validatePayload` at runtime.
+
+**Tests removed (only tested the removed modules):**
+
+- **`tests/unit/agentic-patterns.test.js`**
+- **`tests/unit/payload-verification.test.js`**
+
+**Still in use (app.js import chain):** `app.js` → cartesia-audio-bridge, vad-config, n8n-payload, ocr-tool, file-creator, debug.js, utils/error-handling, utils/performance, security.js, utils/debug. All other `public/js/*.js` and `public/js/utils/*.js` are either used or are the barrel `utils/index.js` (documented optional entry).
+
+---
+
+## 10. Current Status (2026-02-07)
+
+**All critical duplicates have been fixed.** Orphaned JS modules have been removed.
 
 - ✅ `getNaturalFallback` - Single source of truth in `n8n-payload.js`
 - ✅ `float32ToInt16` - Delegates to `floatTo16BitPCM`
@@ -130,7 +172,10 @@ Same URL string appears in `src/config.ts`, `public/js/app.js` (getConfig fallba
 - ✅ Cartesia API version - `2025-04-16` everywhere
 - ✅ Webhook URL - No duplicate constants
 - ✅ `escapeHtml` - Consolidated in debug.js, imported where needed
+- ✅ Orphaned JS removed: cors-handler, ui-patterns, agentic-patterns, payload-verification (and their tests)
 
-**No orphaned code or unused imports found.**
+**Cartesia cleanup (2026-02-07):** Removed orphaned `parse-cartesia-files.js` (superseded by `parse-all-files.js`). Removed stub `cArTeSiA wEbSoCkEt.md` and consolidated API reference URL into `cArTeSiA dOcS.md`; updated src @see refs.
+
+**Frontend (public/) cleanup:** No orphaned or duplicate frontend files remain. Entry: `index.html` → `js/app.js`. App imports: cartesia-audio-bridge, vad-config, n8n-payload, ocr-tool, file-creator, debug.js, utils (error-handling, performance, debug), security.js. Audio: only `audio/stt-capture-processor.js` and `audio/tts-playback-processor.js`. Debug pages in use: `debug/console-errors-live.html`, `debug/debug-audioworklet.html`, `debug/fallback-revert-debug.html`, `debug/voice-pipeline-debug.html`. No references to removed modules in `public/`.
 
 See `docs/archive/CODE-AUDIT-REPORT.md` for detailed verification.

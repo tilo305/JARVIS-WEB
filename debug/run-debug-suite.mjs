@@ -9,8 +9,8 @@ import { promisify } from 'util';
 const execAsync = promisify(exec);
 
 const steps = [
-  { name: 'Lint', script: 'npm run lint' },
-  { name: 'Test', script: 'npm run test' },
+  { name: 'Lint', script: 'npm run lint:check' },
+  { name: 'Test', script: 'npm test -- --watchAll=false' },
   { name: 'TypeScript Build', script: 'npm run build' },
   { name: 'Vite Build', script: 'npm run vite:build' },
 ];

@@ -65,6 +65,7 @@ export default tseslint.config(
     rules: {
       "no-console": "off",
       "no-undef": "off", // Node.js globals are available
+      "no-unused-vars": ["error", { "argsIgnorePattern": "^_", "caughtErrorsIgnorePattern": "^_" }],
     },
   },
 

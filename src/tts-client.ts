@@ -19,7 +19,7 @@ type WebSocketWithPing = WebSocket & { ping?: () => void };
 /**
  * Cartesia TTS WebSocket Client
  * cArTeSiA dOcS.md: continuations (context_id, continue:true/false), max_buffer_delay_ms 0 for streaming.
- * cArTeSiA wEbSoCkEt.md: research https://docs.cartesia.ai/api-reference/tts/websocket for issues/fixes.
+ * cArTeSiA dOcS.md
  */
 export class CartesiaTTSClient {
   private ws: WebSocket | null = null;

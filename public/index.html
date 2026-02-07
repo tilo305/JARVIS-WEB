@@ -1206,13 +1206,14 @@
       window.JARVIS_DEBUG = true;
     }
 
-    // Error Log Capture System
+    // Console error + warning capture (errors and warnings)
     (function() {
       'use strict';
       
-      // Initialize captured logs array
+      const maxEntries = 2000;
       window.__JARVIS_CAPTURED_LOGS = window.__JARVIS_CAPTURED_LOGS || [];
       const capturedLogs = window.__JARVIS_CAPTURED_LOGS;
+      const captured = capturedLogs;
       
       // Track captured entries to avoid duplicates
       const capturedEntrySet = new Set();
@@ -1282,6 +1283,9 @@
         if (!capturedEntrySet.has(entryHash)) {
           capturedEntrySet.add(entryHash);
           capturedLogs.push(entry);
+          if (captured.length > maxEntries) {
+            capturedLogs.splice(0, capturedLogs.length - maxEntries);
+          }
           updateLogCount();
           // Clean up old hashes periodically (keep last 2000)
           if (capturedEntrySet.size > 2000) {

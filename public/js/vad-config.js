@@ -2,6 +2,12 @@
  * VAD Configuration — Voice Activity Detection
  * Aligned with Voice Bot Design principles (bOoK oN vOiCe BoT dEsIgN.md)
  *
+ * Tuned for: optimal latency + natural bidirectional conversational flow.
+ * - Low latency: shorter redemptionMs, preSpeechPadMs, minSpeechMs; sensitive thresholds
+ *   so speech start/end are detected quickly and pre-speech buffer captures onset.
+ * - Bidirectional flow: STT/VAD stay active during TTS so user can barge-in immediately;
+ *   silence timers are paused during TTS and resumed after (see pauseSilenceTimersForBargeIn).
+ *
  * Design rationale:
  * - Turn-taking (S7): "Give users a chance before jumping in" — redemptionMs delays
  *   end-of-speech so we don't cut off users who pause mid-sentence
@@ -65,6 +71,17 @@ export const VAD_CONFIG = {
   // many ms of no user speech. Then output a single dynamic closing message to let
   // the user know the agent is still there, then INACTIVE.
   silenceClosingMessageMs: 10000,
+
+  // Dynamic fillers: spoken by the app when waiting for LLM/n8n (NVIDIA Tokkio pattern).
+  // Heuristic S2: Make system status clear — user hears something while the agent processes.
+  fillerPhrases: [
+    'One moment, sir.',
+    'Let me think.',
+    'Right.',
+    'Hmm.',
+    'Just a moment.',
+  ],
+  fillerTimeDelayMs: 2000,
 
   // British closing phrases (5–10 words) for silence timeout; one chosen at random.
   silenceClosingPhrases: [

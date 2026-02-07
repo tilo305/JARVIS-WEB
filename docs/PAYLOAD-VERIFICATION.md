@@ -1,5 +1,7 @@
 # Payload Verification System
 
+> **Note (2026-02-07):** The runtime module `public/js/payload-verification.js` was removed as orphaned (not imported by the app). This doc is kept for reference; payload building and reply extraction remain in `n8n-payload.js`.
+
 This document describes the comprehensive payload verification system that ensures the front-end, UI, and back-end are sending and receiving payloads correctly.
 
 ## Overview

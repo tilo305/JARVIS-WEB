@@ -1,8 +1,14 @@
 /**
  * Jest global setup for JARVIS-WEB tests.
  * @see jEsT dOcS.md — Project-Specific Setup, Test Setup File
+ * ESM: jest is imported so it is available when running with type: "module".
  */
+import { jest } from '@jest/globals';
+
 process.env.NODE_ENV = 'test';
+
+// Expose jest on global so setup and tests can use it (e.g. jest.clearAllMocks())
+global.jest = jest;
 
 const originalConsole = console;
 

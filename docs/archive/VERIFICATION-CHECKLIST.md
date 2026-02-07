@@ -1,5 +1,9 @@
 # Wake Word Implementation - 100% Verification Checklist
 
+**Historical:** Wake word (Porcupine/OpenWakeWord), `wake-word-processor.js`, and related manager/tracker files have been removed from the project. This checklist is kept in `docs/archive/` for reference only. Current AudioWorklet processors are only `stt-capture-processor.js` and `tts-playback-processor.js` in `public/audio/`.
+
+**Note:** The checkboxes below refer to components that no longer exist; they are left unchanged for historical reference only.
+
 ## ✅ Build & Lint Status
 
 - [x] **TypeScript Build**: `npm run build` - ✅ PASSES

@@ -1,5 +1,7 @@
 do comprehensive research on docs.cartesia.ai for any issues. then do comprehensive research in this doc. do not do the research, just add the words i wrote
 
+**API Reference:** https://docs.cartesia.ai/api-reference/tts/websocket
+
 # Comprehensive Cartesia WebSocket Implementation Guide
 ## Optimal Latency & Bidirectional Conversational Flow for STT & TTS
 

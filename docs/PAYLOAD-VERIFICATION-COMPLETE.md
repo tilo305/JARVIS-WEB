@@ -1,7 +1,7 @@
 # Payload Verification System - Complete & Verified ✅
 
 **Date:** 2026-01-XX  
-**Status:** ✅ **100% Complete - All Tests Passing**
+**Status:** **Archived.** The module `public/js/payload-verification.js` and its tests were removed 2026-02-07 as orphaned (not used by the app). This doc is kept for historical reference.
 
 ---
 

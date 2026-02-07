@@ -137,11 +137,16 @@ class TTSPlaybackProcessor extends AudioWorkletProcessor {
     }
 
     // Efficiently consume samples (update ring buffer pointers)
+    const hadSamples = this.bufferLength > 0;
     const consumed = Math.ceil((blockSize - 1) * invRatio) + 1;
     if (consumed > 0 && this.bufferLength > 0) {
       const toConsume = Math.min(consumed, this.bufferLength);
       this.bufferStart = (this.bufferStart + toConsume) % this.buffer.length;
       this.bufferLength -= toConsume;
+    }
+    // Notify when playback buffer drains so 10s silence timer starts after agent stops speaking
+    if (hadSamples && this.bufferLength === 0) {
+      this.port.postMessage({ type: 'bufferEmpty' });
     }
 
     return true;

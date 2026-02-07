@@ -1,7 +1,7 @@
 /**
  * Cartesia API Configuration
  * cArTeSiA dOcS.md: optimal latency and bidirectional flow.
- * cArTeSiA wEbSoCkEt.md: research https://docs.cartesia.ai/api-reference/tts/websocket for issues/fixes.
+ * cArTeSiA dOcS.md
  */
 const defaultN8n = 'https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4';
 export const N8N_WEBHOOK_URL =

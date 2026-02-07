@@ -35,6 +35,10 @@ export function extractReplyFromJson(data) {
   }
   for (const v of Object.values(data)) {
     if (typeof v === 'string') return v;
+    if (Array.isArray(v) && v.length) {
+      const fromArr = extractReplyFromJson(v[0]);
+      if (fromArr) return fromArr;
+    }
     if (v && typeof v === 'object' && !Array.isArray(v)) {
       const nested = extractReplyFromJson(v);
       if (nested) return nested;
@@ -125,13 +129,15 @@ export function getNaturalFallback(userMessage) {
  * @param {string} [options.sessionId] - Override session ID (auto-generated if omitted)
  * @param {Array} [options.attachments] - File attachments
  * @param {Array} [options.conversationHistory] - Previous conversation messages for context
+ * @param {string} [options.intent] - Agentic: detected intent (e.g. greeting)
+ * @param {Object} [options.contextEnrichment] - Agentic: context (e.g. viewportWidth)
  * @returns {Object} Full payload object
  */
 export function buildN8nPayload(message, options = {}) {
   const source = options.source ?? 'text';
   const sessionId = options.sessionId ?? `sess_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
   const rawAttachments = options.attachments ?? [];
-  const conversationHistory = options.conversationHistory ?? [];
+  const hasConversationHistory = Array.isArray(options.conversationHistory) && options.conversationHistory.length > 0;
 
   const attachments = rawAttachments.map((f) => {
     if (f instanceof File) return { name: f.name, type: f.type, size: f.size };
@@ -148,7 +154,7 @@ export function buildN8nPayload(message, options = {}) {
   const messageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
   const { timezone, locale, language } = getClientLocation();
 
-  return {
+  const payload = {
     message: (message || '').trim(),
     session_id: sessionId,
     sessionId,
@@ -159,9 +165,14 @@ export function buildN8nPayload(message, options = {}) {
     messageId,
     source,
     attachments,
-    conversation_history: conversationHistory,
-    conversationHistory,
     locale: locale || undefined,
     language: language || undefined,
   };
+  if (hasConversationHistory) {
+    payload.conversation_history = options.conversationHistory;
+    payload.conversationHistory = options.conversationHistory;
+  }
+  if (options.intent != null) payload.intent = options.intent;
+  if (options.contextEnrichment != null) payload.contextEnrichment = options.contextEnrichment;
+  return payload;
 }

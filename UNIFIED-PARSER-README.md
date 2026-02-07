@@ -160,7 +160,6 @@ You can now use `parse-all-files.js` instead of running individual parsers:
 - ❌ `node parse-frontend-complete.js`
 - ❌ `node parse-client-files.js`
 - ❌ `node parse-cartesia-files.js`
-- ❌ `node parse-vad-files.js`
 - ❌ `node parse-websocket-files.js`
 - ❌ `node parse-json-files.js`
 - ❌ `node parse-md-files.js`

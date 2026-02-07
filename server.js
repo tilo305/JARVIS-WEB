@@ -1,21 +1,34 @@
 /**
  * Secure static file server for the browser AudioWorklet demo.
- * Serves public/ on http://localhost:3000
+ * Serves public/ (or dist-public when built) on http://localhost:3000.
+ * WebSocket server attached on same port for /ws (status/health bridge).
  * Required: HTTPS for production (AudioWorklet needs secure context).
- * 
+ *
+ * WebSocket integration:
+ * - Browser → Cartesia STT/TTS: direct wss://api.cartesia.ai (from cartesia-audio-bridge.js).
+ * - Optional: Browser → this server ws://localhost:3000/ws for status/health (same-origin).
+ *
  * Security improvements based on:
  * - OWASP Secure Headers Project
  * - Building Secure and Reliable Systems (Google)
  * - Security Engineering best practices
  */
 import { createServer } from 'http';
+import { loadEnvEverywhere } from './scripts/load-env-everywhere.mjs';
 import { readFile } from 'fs/promises';
-import { join, extname } from 'path';
+import { existsSync } from 'fs';
+import { join, extname, normalize } from 'path';
 import { fileURLToPath } from 'url';
+import { WebSocketServer } from 'ws';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
+loadEnvEverywhere(__dirname);
 const PORT = process.env.PORT || 3000;
-const PUBLIC_DIR = join(__dirname, 'public');
+const WS_PATH = '/ws';
+// Serve dist-public (Vite production build) when present; otherwise public/ for development
+const DIST_PUBLIC = join(__dirname, 'dist-public');
+const PUBLIC_FALLBACK = join(__dirname, 'public');
+const PUBLIC_DIR = existsSync(join(DIST_PUBLIC, 'index.html')) ? DIST_PUBLIC : PUBLIC_FALLBACK;
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 const MIME = {
@@ -98,7 +111,7 @@ function isBlockedPath(path) {
 const server = createServer(async (req, res) => {
   let raw = req.url === '/' ? '/index.html' : req.url;
   raw = raw.split('?')[0].replace(/\.\./g, '').replace(/^\//, '');
-  const path = join(PUBLIC_DIR, raw);
+  const path = normalize(join(PUBLIC_DIR, raw));
 
   // Security: Prevent path traversal and access to sensitive files
   if (!path.startsWith(PUBLIC_DIR) || isBlockedPath(path)) {
@@ -132,8 +145,40 @@ const server = createServer(async (req, res) => {
   }
 });
 
+// WebSocket server: same port as HTTP, path /ws — bridged and connected for status/health
+const wss = new WebSocketServer({ noServer: true });
+
+server.on('upgrade', (request, socket, head) => {
+  const urlPath = (request.url || '/').split('?')[0];
+  if (urlPath !== WS_PATH) {
+    socket.destroy();
+    return;
+  }
+  wss.handleUpgrade(request, socket, head, (ws) => {
+    wss.emit('connection', ws, request);
+  });
+});
+
+wss.on('connection', (ws) => {
+  ws.send(JSON.stringify({ type: 'connected', server: 'jarvis', ws: true, ts: Date.now() }));
+  ws.on('message', (data) => {
+    try {
+      const msg = typeof data === 'string' ? JSON.parse(data) : { type: 'unknown' };
+      if (msg.type === 'ping') {
+        ws.send(JSON.stringify({ type: 'pong', ts: Date.now() }));
+      }
+    } catch {
+      // ignore
+    }
+  });
+  ws.on('close', () => {});
+  ws.on('error', () => {});
+});
+
 server.listen(PORT, () => {
   console.log(`Server: http://localhost:${PORT}`);
+  console.log(`WebSocket: ws://localhost:${PORT}${WS_PATH} (bridged)`);
+  console.log(`Serving: ${PUBLIC_DIR === DIST_PUBLIC ? 'dist-public (production build)' : 'public (development)'}`);
   console.log('Note: AudioWorklet requires HTTPS in production.');
 });
 

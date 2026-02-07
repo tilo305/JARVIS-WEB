@@ -8,7 +8,7 @@ import type { PerformanceMetrics } from './types.js';
  * Orchestrates STT → Processing → TTS flow with optimal latency.
  * cArTeSiA dOcS.md: process is_final:false immediately, stream TTS as soon as final transcript,
  * continuations for multi-sentence, unique context_id per turn.
- * cArTeSiA wEbSoCkEt.md: research https://docs.cartesia.ai/api-reference/tts/websocket for issues/fixes.
+ * cArTeSiA dOcS.md
  */
 export class BidirectionalConversation {
   private sttClient: CartesiaSTTClient;

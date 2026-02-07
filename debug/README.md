@@ -1,58 +1,50 @@
 # JARVIS-WEB Debug Suite
 
-Lightweight debugging and validation tools. Kept essential tools only; redundant ones removed.
+Lightweight debugging and validation. Only essential tools are kept; redundant and obsolete ones have been removed.
 
 ## Structure
 
 | Path | Purpose |
 |------|---------|
-| `debug/tools/` | Standalone validation scripts (config, n8n webhook) |
-| `debug/live/` | LIVE Jest tests (n8n, example run) and env check |
-| `debug/tests/` | Unit + integration tests (STT, TTS, bidirectional, audio, Cartesia) |
-| `debug/results/` | Test run output (optional) |
+| `debug/tools/` | Standalone scripts (console check, copy-log, greeting, timestamp, text-response tests) |
+| `debug/tests/` | Jest tests: STT, TTS, bidirectional, integration, audio, greeting, timestamp, etc. |
+| `debug/results/` | Optional test run output |
 
 ## Running
 
 ```bash
-# Main debug suite (lint → test → build → vite build)
+# Full debug suite (lint → test → build → vite build)
 npm run debug
 
-# Validate config (requires build first)
-npm run debug:config
+# All tests (including debug/tests)
+npm test
 
-# Test n8n webhook connectivity
-npm run debug:n8n
-
-# Verify STT audio format and sample rate
-npm run debug:stt
-
-# Open app with ?debug=1 and send test message from console
-npm run debug:app
-
-# Check .env setup (no build required)
-npm run debug:env
-
-# Run LIVE Jest tests (n8n, example)
-npm run debug:live
-
-# Run integration tests (Cartesia WebSocket - skips if no API key)
+# Integration tests only (Cartesia WebSocket; skips if no API key)
 npm run test:integration
 ```
 
-## Tools Kept
+## Tools
 
 | Tool | Purpose |
 |------|---------|
 | `run-debug-suite.mjs` | CI-style pipeline: lint, test, build, vite build |
-| `check-n8n-webhook.js` | Quick n8n webhook connectivity check |
-| `check-stt-sample-rate.js` | Verify STT audio format and sample rate |
-| `open-app-debug-send.mjs` | Opens app at `?debug=1`, runs Node fetch test, then you run `JARVIS_DEBUG_SEND_TEST()` in the browser console to send a message and check for reply/errors |
-| `validate-config.js` | Validates Cartesia + n8n config (post-build) |
-| `check-env.js` | Validates .env file exists and has required keys |
-| `n8n-webhook.test.js` | Jest LIVE test for n8n webhook |
-| `example-run.test.js` | Verifies bidirectional example runs |
-| `format-boundary-live.test.js` | Audio Float32↔Int16 boundary tests |
-| `cartesia-websocket-live.test.ts` | Live Cartesia TTS/STT WebSocket (skips if no key) |
-| `debug-audioworklet.html` | Browser AudioWorklet validation |
-| `public/debug/fallback-revert-debug.html` | Live n8n test from browser (CORS context) — diagnose mic/text fallback reverts |
-| `FALLBACK-REVERT-RESEARCH.md` | Root-cause analysis: mic button and text message fallback reverts |
+| `check-console-errors.js` | Static check for bad patterns in app and bridge |
+| `test-copy-log-reset.js` | Copy-log reset behavior |
+| `test-text-response-fix.js` | Text response handling |
+| `test-timestamp-live.js` | Timestamp checks |
+| `test-greeting-live.html` | Browser greeting/time-of-day test |
+
+## Browser debug pages (`public/debug/`)
+
+- **debug-audioworklet.html** — AudioWorklet validation
+- **voice-pipeline-debug.html** — Voice pipeline checks
+- **fallback-revert-debug.html** — Mic/text fallbacks and n8n test
+- **console-errors-live.html** — Live console error capture (use main app with `?capture_errors=1`)
+
+## Docs
+
+- `DEBUG-TOOLS-SUMMARY.md` — Current tools and scripts
+- `ORPHANED-DUPLICATE-OLD-CODE.md` — Audit of removed/duplicate code
+- `CONSOLE-ERROR-CHECK-GUIDE.md` — Console error checking
+- `errors-and-fixes.md` — Error fixes log
+- `N8N-RESPOND-TO-WEBHOOK-FIX.md` — n8n webhook response fix (referenced by app and docs)

@@ -112,6 +112,23 @@ describe('VAD_CONFIG', () => {
       expect(VAD_CONFIG.maxListeningMs).toBeGreaterThan(0);
       expect(VAD_CONFIG.maxListeningMs).toBe(60000);
     });
+
+    it('should have fillerPhrases as non-empty array of strings (dynamic fillers)', () => {
+      expect(VAD_CONFIG.fillerPhrases).toBeDefined();
+      expect(Array.isArray(VAD_CONFIG.fillerPhrases)).toBe(true);
+      expect(VAD_CONFIG.fillerPhrases.length).toBeGreaterThan(0);
+      VAD_CONFIG.fillerPhrases.forEach((phrase) => {
+        expect(typeof phrase).toBe('string');
+        expect(phrase.trim().length).toBeGreaterThan(0);
+      });
+    });
+
+    it('should have fillerTimeDelayMs as positive number', () => {
+      expect(VAD_CONFIG.fillerTimeDelayMs).toBeDefined();
+      expect(typeof VAD_CONFIG.fillerTimeDelayMs).toBe('number');
+      expect(VAD_CONFIG.fillerTimeDelayMs).toBeGreaterThan(0);
+      expect(VAD_CONFIG.fillerTimeDelayMs).toBe(2000);
+    });
   });
 
   it('should not have unexpected extra keys', () => {
@@ -120,6 +137,7 @@ describe('VAD_CONFIG', () => {
       'positiveSpeechThreshold', 'negativeSpeechThreshold', 'submitUserSpeechOnPause',
       'silenceAfterSpeechToStopMicMs', 'silenceClosingMessageMs', 'silenceClosingPhrases',
       'silenceClosingDelayAfterTtsMs', 'maxListeningMs',
+      'fillerPhrases', 'fillerTimeDelayMs',
       'baseAssetPath', 'onnxWASMBasePath',
     ]);
     Object.keys(VAD_CONFIG).forEach((key) => {

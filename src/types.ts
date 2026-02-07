@@ -1,6 +1,6 @@
 /**
  * Type definitions for Cartesia WebSocket APIs
- * cArTeSiA dOcS.md, cArTeSiA wEbSoCkEt.md
+ * cArTeSiA dOcS.md
  */
 
 // TTS Types

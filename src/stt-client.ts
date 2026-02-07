@@ -17,7 +17,7 @@ type WebSocketWithPing = WebSocket & { ping?: () => void };
 /**
  * Cartesia STT WebSocket Client
  * cArTeSiA dOcS.md: 100ms chunks, ink-whisper, pcm_s16le 16kHz, process is_final:false immediately.
- * cArTeSiA wEbSoCkEt.md: research https://docs.cartesia.ai/api-reference/tts/websocket for issues/fixes.
+ * cArTeSiA dOcS.md
  */
 export class CartesiaSTTClient {
   private ws: WebSocket | null = null;

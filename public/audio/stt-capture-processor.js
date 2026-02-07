@@ -1,12 +1,13 @@
 /**
  * STT Capture AudioWorklet Processor
  * Captures microphone audio, resamples 48kHz→16kHz, converts Float32→Int16,
- * buffers ~100ms chunks for optimal Cartesia STT latency.
+ * buffers ~100ms chunks for optimal Cartesia STT latency (balanced; ~100ms recommended).
+ * For ultra-low latency, CHUNK_MS can be reduced to 50 (more messages, slightly higher CPU).
  * Optimized for minimal latency: zero-copy transfers, efficient buffering.
  * @see aUdiO dOcS.md
  */
 const SAMPLE_RATE_OUT = 16000;
-const CHUNK_MS = 100;
+const CHUNK_MS = 100; // 100ms = Cartesia-recommended; 50ms = ultra-low latency option
 const SAMPLES_PER_CHUNK = Math.floor((SAMPLE_RATE_OUT * CHUNK_MS) / 1000);
 
 class STTCaptureProcessor extends AudioWorkletProcessor {

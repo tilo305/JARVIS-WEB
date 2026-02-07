@@ -65,7 +65,7 @@
         pass('AudioContext OK (state: ' + ctx.state + ', sampleRate: ' + ctx.sampleRate + ')');
 
         // 4. AudioWorklet processors
-        const base = new URL('../audio/', document.baseURI).href;
+        const base = new URL('/audio/', window.location.origin).href;
         await ctx.audioWorklet.addModule(base + 'stt-capture-processor.js');
         pass('STT capture processor loaded');
         await ctx.audioWorklet.addModule(base + 'tts-playback-processor.js');

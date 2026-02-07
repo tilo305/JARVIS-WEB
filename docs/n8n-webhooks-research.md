@@ -22,9 +22,9 @@ This document summarizes all n8n webhook usage across the project (single webhoo
 
 **`public/js/n8n-payload.js`** — Shared module used by:
 - Chat UI (`app.js`) — via `buildN8nPayload`
-- Debug test (`debug/live/n8n-webhook.test.js`)
-- Debug tool (`debug/tools/check-n8n-webhook.js`)
 - Fallback-revert debug page (`public/debug/fallback-revert-debug.html`)
+
+*(Optional CLI tools such as check-n8n-webhook.js were removed during debug cleanup; use the main app or fallback-revert-debug.html for n8n testing.)*
 
 All n8n requests use `buildN8nPayload(message, options)` to ensure session_id, timezone, location, and all fields are always sent. No minimal payloads.
 
@@ -80,11 +80,10 @@ So the **same single webhook** is used everywhere; only the way it’s supplied 
 
 | File | Purpose | Payload |
 |------|----------|---------|
-| **`debug/tools/check-n8n-webhook.js`** | Live connectivity check | `{ message: 'Hello from JARVIS debug' }`. |
-| **`debug/live/n8n-webhook.test.js`** | Jest LIVE test | `{ message: 'test from JARVIS' }`. |
-| **`debug/tools/validate-config.js`** | Validates config (including URL format); does **not** call the webhook. | N/A |
+| **`public/debug/fallback-revert-debug.html`** | Browser-based n8n test | Same as app (`buildN8nPayload`). |
+| **Main app** | Chat UI | Uses `buildN8nPayload` and posts to webhook. |
 
-- **Scripts**: `npm run debug:n8n` runs `check-n8n-webhook.js` (after build). The live test runs with the full test suite.
+*(CLI tools check-n8n-webhook.js / validate-config.js and script debug:n8n were removed during debug cleanup.)*
 
 ---
 
@@ -142,7 +141,7 @@ So the n8n workflow should return at least one of these keys with a string value
 | **Vite build** | `vite.config.js` uses `env.VITE_N8N_WEBHOOK_URL` (from `.env`) or the default. |
 | **Node / examples / debug** | Change `N8N_WEBHOOK_URL` in `src/config.ts` and rebuild, or ensure `dist/config.js` is built from that. No env for n8n in `config.ts` (only Cartesia uses `process.env` there). |
 
-**Valid URL format** (enforced in `debug/tools/validate-config.js` and `tests/unit/config.test.ts`):
+**Valid URL format** (enforced in `tests/unit/config.test.ts`):
 
 - Regex: `^https:\/\/.+\/webhook\/[a-f0-9-]+$`
 - Example: `https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4`
@@ -157,12 +156,10 @@ So the n8n workflow should return at least one of these keys with a string value
 | `public/js/app.js` | Chat UI: `buildN8nPayload`, `getLLMReply`, `extractReplyFromJson`, `N8N_REPLY_KEYS`. |
 | `vite.config.js` | Injects `VITE_N8N_WEBHOOK_URL` for frontend. |
 | `src/examples/bidirectional-conversation.ts` | Example: `processTranscript` POSTs minimal payload. |
-| `debug/tools/check-n8n-webhook.js` | Standalone webhook connectivity check. |
-| `debug/tools/validate-config.js` | Validates URL format (no HTTP call). |
-| `debug/live/n8n-webhook.test.js` | Jest LIVE test for webhook. |
+| `public/debug/fallback-revert-debug.html` | Browser-based webhook test. |
 | `tests/unit/config.test.ts` | Unit test: `N8N_WEBHOOK_URL` defined and matches URL regex. |
 | `README.md`, `QUICKSTART.md` | Document `VITE_N8N_WEBHOOK_URL` and n8n usage. |
-| `package.json` | Script: `debug:n8n` → build + `node debug/tools/check-n8n-webhook.js`. |
+| `package.json` | Script: `debug` → full suite (lint, test, build). |
 
 ---
 

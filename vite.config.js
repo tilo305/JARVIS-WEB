@@ -129,7 +129,6 @@ export default defineConfig(({ mode }) => {
           { src: 'audio/*', dest: 'audio' },
           { src: 'debug/*.html', dest: 'debug' },
           { src: 'js/n8n-payload.js', dest: 'js' },
-          { src: 'keywords/*', dest: 'keywords' }, // Porcupine keyword files (.ppn)
         ],
       }),
       cartesiaWebSocketStatusPlugin(),
@@ -137,7 +136,7 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: join(__dirname, 'dist-public'), // absolute path to project root
       emptyOutDir: true,
-      chunkSizeWarningLimit: 4096, // main bundle includes Porcupine/TTS deps; suppress size warning
+      chunkSizeWarningLimit: 4096,
     },
     optimizeDeps: {
       include: [],
@@ -160,10 +159,7 @@ export default defineConfig(({ mode }) => {
       const cartesiaApiKey = env.VITE_CARTESIA_API_KEY || env.CARTESIA_API_KEY || '';
       const cartesiaVoiceId = env.VITE_CARTESIA_VOICE_ID || env.CARTESIA_VOICE_ID || '95131c95-525c-463b-893d-803bafdf93c4';
       const n8nWebhookUrl = env.VITE_N8N_WEBHOOK_URL || env.N8N_WEBHOOK_URL || defaultN8n;
-      const wakeWordEnabled = env.VITE_WAKE_WORD_ENABLED || env.WAKE_WORD_ENABLED || 'false';
-      const debugWakeWord = env.VITE_DEBUG_WAKE_WORD || env.DEBUG_WAKE_WORD || 'false';
-      const useOpenWakeWord = env.VITE_USE_OPENWAKEWORD || env.USE_OPENWAKEWORD || 'false';
-      const openWakeWordWsUrl = env.VITE_OPENWAKEWORD_WS_URL || env.OPENWAKEWORD_WS_URL || 'ws://localhost:8765/ws';
+      const sendTranscriptOnFinal = env.VITE_SEND_TRANSCRIPT_ON_FINAL === 'true';
       return {
         'import.meta.env.VITE_CARTESIA_API_KEY': JSON.stringify(cartesiaApiKey),
         'import.meta.env.CARTESIA_API_KEY': JSON.stringify(cartesiaApiKey),
@@ -171,14 +167,7 @@ export default defineConfig(({ mode }) => {
         'import.meta.env.CARTESIA_VOICE_ID': JSON.stringify(cartesiaVoiceId),
         'import.meta.env.VITE_N8N_WEBHOOK_URL': JSON.stringify(n8nWebhookUrl),
         'import.meta.env.N8N_WEBHOOK_URL': JSON.stringify(n8nWebhookUrl),
-        'import.meta.env.VITE_WAKE_WORD_ENABLED': JSON.stringify(wakeWordEnabled),
-        'import.meta.env.WAKE_WORD_ENABLED': JSON.stringify(wakeWordEnabled),
-        'import.meta.env.VITE_DEBUG_WAKE_WORD': JSON.stringify(debugWakeWord),
-        'import.meta.env.DEBUG_WAKE_WORD': JSON.stringify(debugWakeWord),
-        'import.meta.env.VITE_USE_OPENWAKEWORD': JSON.stringify(useOpenWakeWord),
-        'import.meta.env.USE_OPENWAKEWORD': JSON.stringify(useOpenWakeWord),
-        'import.meta.env.VITE_OPENWAKEWORD_WS_URL': JSON.stringify(openWakeWordWsUrl),
-        'import.meta.env.OPENWAKEWORD_WS_URL': JSON.stringify(openWakeWordWsUrl),
+        'import.meta.env.VITE_SEND_TRANSCRIPT_ON_FINAL': JSON.stringify(String(sendTranscriptOnFinal)),
       };
     })(),
   };
