@@ -26,6 +26,7 @@ class MockWebSocket extends EventEmitter {
   readyState = 0;
   url = '';
   sentMessages: Array<string | ArrayBuffer | Buffer> = [];
+  bufferedAmount = 0; // For backpressure testing
 
   constructor(url: string) {
     super();
@@ -251,6 +252,45 @@ describe('CartesiaSTTClient', () => {
 
       const avgLatency = client.getAverageFinalLatency();
       expect(avgLatency).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  describe('Backpressure Handling', () => {
+    beforeEach(async () => {
+      await client.connect();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    it('should skip chunks when bufferedAmount exceeds threshold', () => {
+      const mockWs = client['ws'] as unknown as MockWebSocket;
+      if (mockWs) {
+        // Set bufferedAmount above threshold (256KB)
+        mockWs.bufferedAmount = 300 * 1024; // 300KB
+        
+        const audioBuffer = new ArrayBuffer(3200);
+        const initialMessageCount = mockWs.sentMessages.length;
+        
+        client.sendAudio(audioBuffer);
+        
+        // Should not send the chunk due to backpressure
+        expect(mockWs.sentMessages.length).toBe(initialMessageCount);
+      }
+    });
+
+    it('should send chunks when bufferedAmount is below threshold', () => {
+      const mockWs = client['ws'] as unknown as MockWebSocket;
+      if (mockWs) {
+        // Set bufferedAmount below threshold
+        mockWs.bufferedAmount = 100 * 1024; // 100KB
+        
+        const audioBuffer = new ArrayBuffer(3200);
+        const initialMessageCount = mockWs.sentMessages.length;
+        
+        client.sendAudio(audioBuffer);
+        
+        // Should send the chunk
+        expect(mockWs.sentMessages.length).toBeGreaterThan(initialMessageCount);
+      }
     });
   });
 });

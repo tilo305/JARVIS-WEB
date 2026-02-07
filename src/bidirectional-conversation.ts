@@ -1,5 +1,6 @@
 import { CartesiaSTTClient } from './stt-client.js';
 import { CartesiaTTSClient } from './tts-client.js';
+import { CARTESIA_CONFIG } from './config.js';
 import type { PerformanceMetrics } from './types.js';
 
 /**
@@ -67,9 +68,12 @@ export class BidirectionalConversation {
 
   /**
    * Setup TTS client callbacks
+   * Optimized: Callbacks are non-blocking and fire immediately
    */
   private setupTTSCallbacks(): void {
     this.ttsClient.onAudio((audioData, _contextId) => {
+      // Callback fires immediately when audio chunk arrives
+      // This is non-blocking and allows for real-time streaming
       if (this.onAssistantAudioCallback) {
         this.onAssistantAudioCallback(audioData);
       }
@@ -77,6 +81,10 @@ export class BidirectionalConversation {
 
     this.ttsClient.onDone((contextId) => {
       console.log(`[Conversation] TTS done for context: ${contextId}`);
+      // Clear context ID when done to allow new responses
+      if (this.currentContextId === contextId) {
+        this.currentContextId = null;
+      }
     });
 
     this.ttsClient.onError((error, _contextId) => {
@@ -89,27 +97,40 @@ export class BidirectionalConversation {
 
   /**
    * Handle partial transcript (cArTeSiA dOcS: process is_final:false immediately for low latency).
-   * Optional: stream partial LLM output to TTS with continue:true for ultra-low E2E (not implemented here).
+   * Non-blocking: fires and forgets to avoid delaying audio processing.
+   * Optimized: Minimal overhead, immediate callback invocation.
+   * Note: onUserSpeechCallback is already called in setupSTTCallbacks, so we don't call it here.
    */
-  private async handlePartialTranscript(text: string): Promise<void> {
+  private handlePartialTranscript(text: string): void {
+    // Non-blocking: don't await to avoid blocking audio pipeline
     if (this.processTranscript) {
-      try {
-        await this.processTranscript(text);
-      } catch (error) {
+      // Fire and forget - process in background for potential early TTS start
+      this.processTranscript(text).catch((error) => {
         console.error('[Conversation] Error processing partial transcript:', error);
-      }
+      });
     }
   }
 
   /**
    * Handle final transcript
+   * Optimized for low latency: cancels any ongoing TTS before processing new request.
+   * Non-blocking where possible to maintain audio pipeline responsiveness.
+   * Note: onUserSpeechCallback is already called in setupSTTCallbacks, so we don't call it here.
    */
   private async handleFinalTranscript(text: string): Promise<void> {
     const startTime = Date.now();
+    
+    // Cancel any ongoing TTS immediately on new user input (barge-in optimization)
+    // This must be synchronous for immediate response
+    if (this.currentContextId) {
+      this.cancelTTS();
+    }
+    
     this.conversationHistory.push(`User: ${text}`);
 
     try {
       // Process transcript (e.g., through LLM)
+      // This is the main latency bottleneck - optimize the processTranscript function
       let responseText: string;
       
       if (this.processTranscript) {
@@ -119,12 +140,16 @@ export class BidirectionalConversation {
         responseText = `You said: ${text}`;
       }
 
+      // Note: Race condition protection is handled by cancelTTS() being called
+      // at the start of handleFinalTranscript() before processing begins
+
       this.conversationHistory.push(`Assistant: ${responseText}`);
 
       // Generate new context ID for this response
       this.currentContextId = this.generateContextId();
 
-      // Stream response to TTS
+      // Stream response to TTS immediately (non-blocking send)
+      // TTS client handles the actual WebSocket send asynchronously
       this.speakText(responseText, this.currentContextId);
 
       // Calculate end-to-end latency
@@ -143,16 +168,24 @@ export class BidirectionalConversation {
   /**
    * Speak text using TTS with optimal streaming (cArTeSiA dOcS: stream as soon as STT/LLM produces text).
    * Splits into sentences and uses continue:true/false for prosody continuity.
+   * Optimized for minimal latency: sends chunks immediately without batching.
    */
   private speakText(text: string, contextId: string): void {
+    // Validate input
+    if (!text || !text.trim()) {
+      console.warn('[Conversation] Empty text provided to speakText');
+      return;
+    }
+
     // Split text into sentences for continuations (verbatim spacing preserved)
     const sentences = this.splitIntoSentences(text);
     
     if (sentences.length > 1) {
       // Stream multiple sentences with continuations
+      // streamTextChunks sends all chunks immediately for optimal latency
       this.ttsClient.streamTextChunks(sentences, contextId);
     } else {
-      // Single sentence
+      // Single sentence - send immediately
       this.ttsClient.sendText(text, contextId, false);
     }
   }
@@ -171,11 +204,20 @@ export class BidirectionalConversation {
 
   /**
    * Send audio to STT
+   * Optimized: Minimal validation, direct send for lowest latency.
    */
   sendAudio(audioBuffer: ArrayBuffer): void {
+    // Fast path: check ready state inline (minimal overhead)
     if (!this.sttClient.isReady()) {
+      // Try to reconnect if connection is lost (non-blocking)
+      if (CARTESIA_CONFIG.WS.PERSIST_CONNECTIONS) {
+        this.sttClient.connect().catch((err) => {
+          console.error('[Conversation] STT reconnection failed:', err);
+        });
+      }
       throw new Error('STT client not ready (not connected or WebSocket not open)');
     }
+    // Direct send - no buffering for optimal latency
     this.sttClient.sendAudioChunk(audioBuffer);
   }
 
@@ -188,22 +230,47 @@ export class BidirectionalConversation {
 
   /**
    * Cancel current TTS generation
+   * Optimized for barge-in: immediately stops TTS and clears context.
+   * Synchronous for zero-latency interruption.
    */
   cancelTTS(): void {
     if (this.currentContextId) {
-      this.ttsClient.cancelContext(this.currentContextId);
-      this.currentContextId = null;
+      const contextIdToCancel = this.currentContextId;
+      this.currentContextId = null; // Clear immediately to prevent race conditions
+      // Cancel synchronously - don't await to avoid any delay
+      try {
+        this.ttsClient.cancelContext(contextIdToCancel);
+      } catch (err) {
+        // Log but don't throw - barge-in should always succeed
+        console.warn(`[Conversation] TTS cancel warning: ${err}`);
+      }
+      console.log(`[Conversation] TTS cancelled for barge-in: ${contextIdToCancel}`);
     }
+  }
+
+  /**
+   * Handle barge-in: user interrupts assistant speech
+   * Cancels TTS and prepares for new user input.
+   * Optimized: Immediate synchronous cancellation for zero-latency response.
+   */
+  handleBargeIn(): void {
+    // Synchronous cancellation - no async operations
+    this.cancelTTS();
+    // Clear any pending TTS operations immediately
+    // Note: STT should continue running to capture the new user input
+    // This is handled by the audio bridge's barge-in logic
   }
 
   /**
    * Initialize and connect both STT and TTS WebSockets in parallel.
    * cArTeSiA dOcS: TTS wss://api.cartesia.ai/tts/websocket, STT wss://api.cartesia.ai/stt/websocket.
+   * Optimized: Pre-connects if enabled in config for zero-latency first request.
    */
   async initialize(): Promise<void> {
     console.log('[Conversation] Initializing bidirectional conversation...');
     
     try {
+      // Connect in parallel for optimal latency
       await Promise.all([
         this.sttClient.connect(),
         this.ttsClient.connect(),
@@ -213,6 +280,46 @@ export class BidirectionalConversation {
     } catch (error) {
       console.error('[Conversation] Initialization error:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Pre-connect WebSockets if not already connected.
+   * Call this early (e.g., on app load) to eliminate connection latency for first request.
+   */
+  async preConnect(): Promise<void> {
+    if (CARTESIA_CONFIG.WS.PRE_CONNECT) {
+      try {
+        // Connect in parallel, but don't throw if already connected
+        await Promise.allSettled([
+          this.sttClient.connect().catch((err) => {
+            // Check if already connected or if error indicates connection in progress
+            if (this.sttClient.connected) {
+              return; // Already connected
+            }
+            const errMsg = err instanceof Error ? err.message : String(err);
+            if (errMsg.includes('already in progress') || errMsg.includes('already connected')) {
+              return; // Connection in progress, ignore
+            }
+            throw err; // Re-throw other errors
+          }),
+          this.ttsClient.connect().catch((err) => {
+            // Check if already connected or if error indicates connection in progress
+            if (this.ttsClient.connected) {
+              return; // Already connected
+            }
+            const errMsg = err instanceof Error ? err.message : String(err);
+            if (errMsg.includes('already in progress') || errMsg.includes('already connected')) {
+              return; // Connection in progress, ignore
+            }
+            throw err; // Re-throw other errors
+          }),
+        ]);
+        console.log('[Conversation] Pre-connection completed');
+      } catch (error) {
+        console.warn('[Conversation] Pre-connection warning (non-fatal):', error);
+        // Don't throw - pre-connection is optional
+      }
     }
   }
 

@@ -117,7 +117,7 @@
         const reply = extractReplyFromJson(data);
         const natural = getNaturalFallback(message);
         const wouldUseFallback = typeof reply !== 'string';
-        const fallbackUsed = wouldUseFallback ? (natural || "I heard you. I'm still getting set up — please try again in a moment.") : null;
+        const fallbackUsed = wouldUseFallback ? (natural || "I heard you, sir. Still getting set up — please try again in a moment.") : null;
 
         let html = '';
         html += `<p><strong>Status:</strong> ${res.status} ${res.statusText}</p>`;
@@ -141,6 +141,8 @@
         diagEl.textContent = `Fetch failed: ${err.message}. This may indicate CORS blocking the request from the browser.`;
       }
     });
+
+    // escapeHtml is now imported from debug.js
   </script>
 </body>
 </html>

@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>n8n Response Debug Tool</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #1a1a1a;
+      color: #e0e0e0;
+    }
+    h1 {
+      color: #FFB800;
+      border-bottom: 2px solid #FFB800;
+      padding-bottom: 10px;
+    }
+    .section {
+      background: #2a2a2a;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+      border: 1px solid #444;
+    }
+    button {
+      background: #FFB800;
+      color: #000;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      margin: 10px 5px;
+    }
+    button:hover {
+      background: #FFD700;
+    }
+    button:disabled {
+      background: #666;
+      cursor: not-allowed;
+    }
+    .result {
+      background: #1a1a1a;
+      border: 1px solid #444;
+      border-radius: 6px;
+      padding: 15px;
+      margin: 10px 0;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      max-height: 600px;
+      overflow-y: auto;
+    }
+    .success {
+      border-left: 4px solid #00FF00;
+    }
+    .error {
+      border-left: 4px solid #FF4444;
+    }
+    .warning {
+      border-left: 4px solid #FFB800;
+    }
+    .info {
+      border-left: 4px solid #4488FF;
+    }
+    .diagnostic {
+      background: #2a2a2a;
+      padding: 10px;
+      margin: 5px 0;
+      border-radius: 4px;
+      border-left: 3px solid #FFB800;
+    }
+    .key-value {
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      gap: 10px;
+      margin: 5px 0;
+      padding: 5px;
+    }
+    .key {
+      font-weight: bold;
+      color: #FFB800;
+    }
+    .value {
+      color: #e0e0e0;
+    }
+    code {
+      background: #1a1a1a;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+    }
+    .loading {
+      color: #FFB800;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔍 n8n Response Debug Tool</h1>
+  
+  <div class="section">
+    <h2>Test n8n Webhook</h2>
+    <p>This tool will test your n8n webhook and analyze the response structure to identify why replies might not be extracted.</p>
+    <button id="testBtn">Run Test</button>
+    <button id="clearBtn">Clear Results</button>
+  </div>
+
+  <div id="results"></div>
+
+  <script type="module">
+    // Wait for JARVIS to be available
+    async function waitForJARVIS() {
+      let attempts = 0;
+      while (attempts < 50) {
+        if (window.JARVIS && window.JARVIS.testN8nWebhook) {
+          return true;
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
+        attempts++;
+      }
+      return false;
+    }
+
+    function formatValue(value, maxDepth = 3, currentDepth = 0) {
+      if (currentDepth >= maxDepth) return '...';
+      if (value === null) return 'null';
+      if (value === undefined) return 'undefined';
+      if (typeof value === 'string') return `"${value}"`;
+      if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+      if (Array.isArray(value)) {
+        if (value.length === 0) return '[]';
+        return `[${value.length} items] ${JSON.stringify(value.slice(0, 2), null, 2)}${value.length > 2 ? '...' : ''}`;
+      }
+      if (typeof value === 'object') {
+        const keys = Object.keys(value);
+        if (keys.length === 0) return '{}';
+        const preview = {};
+        for (const key of keys.slice(0, 5)) {
+          preview[key] = typeof value[key] === 'object' ? `[${typeof value[key]}]` : value[key];
+        }
+        return JSON.stringify(preview, null, 2) + (keys.length > 5 ? '...' : '');
+      }
+      return String(value);
+    }
+
+    function createResultHTML(result) {
+      const isSuccess = result.success;
+      const hasReply = result.hasReply;
+      const isEmpty = result.isEmptyResponse;
+      
+      let html = `<div class="result ${isSuccess ? 'success' : hasReply ? 'warning' : 'error'}">`;
+      
+      // Status
+      html += `<h3>${isSuccess ? '✅ Test PASSED' : hasReply ? '⚠️ Response Received But Issues Found' : '❌ Test FAILED'}</h3>`;
+      
+      // Basic info
+      html += `<div class="key-value">
+        <span class="key">Status:</span>
+        <span class="value">${result.status} ${result.statusText || ''}</span>
+      </div>`;
+      
+      html += `<div class="key-value">
+        <span class="key">Has Reply:</span>
+        <span class="value">${hasReply ? '✅ Yes' : '❌ No'}</span>
+      </div>`;
+      
+      if (result.reply) {
+        html += `<div class="key-value">
+          <span class="key">Extracted Reply:</span>
+          <span class="value">"${result.reply}"</span>
+        </div>`;
+      }
+      
+      html += `<div class="key-value">
+        <span class="key">Response Keys:</span>
+        <span class="value">${result.dataKeys === '(empty)' ? '<em>empty</em>' : result.dataKeys.join(', ')}</span>
+      </div>`;
+      
+      // Found expected keys
+      if (result.foundKeysWithValues && result.foundKeysWithValues.length > 0) {
+        html += `<div class="diagnostic">
+          <strong>Found Expected Keys:</strong>
+          <ul>`;
+        result.foundKeysWithValues.forEach(k => {
+          html += `<li><code>${k.key}</code>: ${formatValue(k.value)} (${k.type}${k.isEmpty ? ', empty' : ''})</li>`;
+        });
+        html += `</ul></div>`;
+      } else if (result.expectedKeys) {
+        html += `<div class="diagnostic">
+          <strong>Expected Keys (none found):</strong> ${result.expectedKeys.join(', ')}
+        </div>`;
+      }
+      
+      // Response structure
+      if (result.extractionDebug) {
+        html += `<div class="diagnostic">
+          <strong>Response Structure:</strong>
+          <ul>
+            <li>Type: ${result.extractionDebug.responseType}</li>
+            <li>Is Array: ${result.extractionDebug.isArray ? 'Yes' : 'No'}</li>
+            ${result.extractionDebug.arrayLength !== null ? `<li>Array Length: ${result.extractionDebug.arrayLength}</li>` : ''}
+            ${result.extractionDebug.firstItemType ? `<li>First Item Type: ${result.extractionDebug.firstItemType}</li>` : ''}
+          </ul>
+        </div>`;
+      }
+      
+      // Full response body
+      html += `<div class="diagnostic">
+        <strong>Full Response Body:</strong>
+        <pre style="background: #1a1a1a; padding: 10px; border-radius: 4px; overflow-x: auto;">${JSON.stringify(result.body, null, 2)}</pre>
+      </div>`;
+      
+      // Diagnostics
+      if (result.diagnostics && result.diagnostics.length > 0) {
+        html += `<div class="diagnostic">
+          <strong>Diagnostics:</strong>
+          <ul>`;
+        result.diagnostics.forEach(d => {
+          html += `<li>${d}</li>`;
+        });
+        html += `</ul></div>`;
+      }
+      
+      html += `</div>`;
+      return html;
+    }
+
+    const testBtn = document.getElementById('testBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const resultsDiv = document.getElementById('results');
+
+    testBtn.addEventListener('click', async () => {
+      testBtn.disabled = true;
+      testBtn.textContent = 'Testing...';
+      resultsDiv.innerHTML = '<div class="loading">Waiting for JARVIS to be available...</div>';
+
+      const jarvisAvailable = await waitForJARVIS();
+      if (!jarvisAvailable) {
+        resultsDiv.innerHTML = '<div class="result error"><h3>❌ Error</h3><p>JARVIS is not available. Please open this page from the main JARVIS app.</p></div>';
+        testBtn.disabled = false;
+        testBtn.textContent = 'Run Test';
+        return;
+      }
+
+      try {
+        resultsDiv.innerHTML = '<div class="loading">Running test...</div>';
+        const result = await window.JARVIS.testN8nWebhook({ verbose: false });
+        resultsDiv.innerHTML = createResultHTML(result);
+      } catch (error) {
+        resultsDiv.innerHTML = `<div class="result error"><h3>❌ Error</h3><p>${error.message}</p><pre>${error.stack}</pre></div>`;
+      } finally {
+        testBtn.disabled = false;
+        testBtn.textContent = 'Run Test';
+      }
+    });
+
+    clearBtn.addEventListener('click', () => {
+      resultsDiv.innerHTML = '';
+    });
+
+    // Auto-run if JARVIS is already available
+    if (window.JARVIS && window.JARVIS.testN8nWebhook) {
+      testBtn.click();
+    }
+  </script>
+</body>
+</html>

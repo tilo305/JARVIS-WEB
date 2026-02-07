@@ -25,6 +25,10 @@ export class CartesiaTTSClient {
   private _disconnecting = false;
   private contextConfigs = new Map<string, Partial<TTSConfig>>();
   private activeContexts = new Set<string>();
+  // Keep-alive for connection persistence
+  private keepAliveIntervalId: ReturnType<typeof setInterval> | null = null;
+  private keepAliveTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  private lastPongTime: number = 0;
   
   // Callbacks
   private onAudioCallback?: TTSAudioCallback;
@@ -88,7 +92,18 @@ export class CartesiaTTSClient {
         console.log('[TTS] Connected to Cartesia TTS WebSocket');
         this.isConnected = true;
         this.reconnectAttempts = 0;
+        this.lastPongTime = Date.now();
+        this.startKeepAlive();
         resolve();
+      });
+
+      // Handle pong frames for keep-alive (ws library emits 'pong' event)
+      this.ws.on('pong', () => {
+        this.lastPongTime = Date.now();
+        if (this.keepAliveTimeoutId) {
+          clearTimeout(this.keepAliveTimeoutId);
+          this.keepAliveTimeoutId = null;
+        }
       });
 
       this.ws.on('message', (data: WebSocket.Data) => {
@@ -107,9 +122,13 @@ export class CartesiaTTSClient {
 
       this.ws.on('close', (code, reason) => {
         clearTimeout(timeout);
+        this.stopKeepAlive();
         console.log('[TTS] WebSocket closed', { code, reason: reason?.toString() });
         this.isConnected = false;
-        if (!this._disconnecting) this.attemptReconnect();
+        // Only reconnect if we want to persist connections and not intentionally disconnecting
+        if (!this._disconnecting && CARTESIA_CONFIG.WS.PERSIST_CONNECTIONS) {
+          this.attemptReconnect();
+        }
       });
     });
   }
@@ -258,14 +277,22 @@ export class CartesiaTTSClient {
 
   /**
    * Stream multiple text chunks with continuations
+   * Optimized for low latency: sends chunks immediately without batching delays
    */
   streamTextChunks(
     chunks: string[],
     contextId: string
   ): void {
+    // Send all chunks immediately without waiting - optimal for streaming latency
+    // Each chunk is sent synchronously to minimize delay between chunks
     chunks.forEach((chunk, index) => {
       const isContinue = index < chunks.length - 1;
-      this.sendText(chunk, contextId, isContinue);
+      try {
+        this.sendText(chunk, contextId, isContinue);
+      } catch (error) {
+        console.error(`[TTS] Error sending chunk ${index + 1}/${chunks.length}:`, error);
+        // Continue sending remaining chunks even if one fails
+      }
     });
   }
 
@@ -317,6 +344,80 @@ export class CartesiaTTSClient {
   }
 
   /**
+   * Start keep-alive mechanism to maintain connection
+   */
+  private startKeepAlive(): void {
+    this.stopKeepAlive();
+    
+    if (!CARTESIA_CONFIG.WS.KEEP_ALIVE_INTERVAL_MS || CARTESIA_CONFIG.WS.KEEP_ALIVE_INTERVAL_MS <= 0) {
+      return; // Keep-alive disabled
+    }
+
+    this.keepAliveIntervalId = setInterval(() => {
+      if (!this.ws || this.ws.readyState !== 1) { // Not OPEN
+        this.stopKeepAlive();
+        return;
+      }
+
+      // Check if we haven't received a pong in too long
+      const timeSinceLastPong = Date.now() - this.lastPongTime;
+      if (timeSinceLastPong > CARTESIA_CONFIG.WS.KEEP_ALIVE_TIMEOUT_MS * 2) {
+        console.warn('[TTS] Keep-alive timeout - connection may be dead');
+        this.stopKeepAlive();
+        // Don't force reconnect if we're intentionally disconnecting
+        if (!this._disconnecting) {
+          this.attemptReconnect();
+        }
+        return;
+      }
+
+      // Send ping (WebSocket ping frame - ws library supports this)
+      try {
+        if (typeof (this.ws as any).ping === 'function') {
+          (this.ws as any).ping();
+          // Set timeout to detect if pong doesn't arrive within expected time
+          if (this.keepAliveTimeoutId) {
+            clearTimeout(this.keepAliveTimeoutId);
+          }
+          const pingTime = Date.now();
+          this.keepAliveTimeoutId = setTimeout(() => {
+            this.keepAliveTimeoutId = null;
+            // Check if pong arrived (lastPongTime should be >= pingTime if pong arrived)
+            if (this.lastPongTime < pingTime) {
+              console.warn('[TTS] Pong timeout - connection may be dead');
+              this.stopKeepAlive();
+              if (!this._disconnecting) {
+                this.attemptReconnect();
+              }
+            }
+          }, CARTESIA_CONFIG.WS.KEEP_ALIVE_TIMEOUT_MS);
+        } else {
+          // Fallback: some WebSocket implementations don't expose ping
+          // The connection will be kept alive by regular traffic
+          this.lastPongTime = Date.now(); // Update on ping send as fallback
+        }
+      } catch (err) {
+        console.error('[TTS] Keep-alive ping failed:', err);
+        this.stopKeepAlive();
+      }
+    }, CARTESIA_CONFIG.WS.KEEP_ALIVE_INTERVAL_MS);
+  }
+
+  /**
+   * Stop keep-alive mechanism
+   */
+  private stopKeepAlive(): void {
+    if (this.keepAliveIntervalId !== null) {
+      clearInterval(this.keepAliveIntervalId);
+      this.keepAliveIntervalId = null;
+    }
+    if (this.keepAliveTimeoutId !== null) {
+      clearTimeout(this.keepAliveTimeoutId);
+      this.keepAliveTimeoutId = null;
+    }
+  }
+
+  /**
    * Attempt to reconnect
    */
   private attemptReconnect(): void {
@@ -347,6 +448,7 @@ export class CartesiaTTSClient {
    */
   disconnect(): void {
     this._disconnecting = true;
+    this.stopKeepAlive();
     
     // Clear reconnect timer
     if (this.reconnectTimerId !== null) {
@@ -379,6 +481,7 @@ export class CartesiaTTSClient {
     this.contextStartTimes.clear();
     this.firstByteTimes.clear();
     this.reconnectAttempts = 0;
+    this.lastPongTime = 0;
   }
 
   /**

@@ -21,22 +21,26 @@ export const VAD_CONFIG = {
 
   // redemptionMs: Time of silence before considering speech "ended".
   // Higher = more patient, don't cut off users who pause (Heuristic S7).
-  // 1200ms balances turn-taking with live real-time responsiveness
-  redemptionMs: 1200,
+  // Optimized to 900ms for lower latency while still being patient enough for natural pauses
+  redemptionMs: 900,
 
   // preSpeechPadMs: Audio to include before detected speech start (ms).
   // Ensures we capture utterance onset (e.g. "I want...").
-  preSpeechPadMs: 800,
+  // Optimized to 600ms for faster response while still capturing speech onset
+  preSpeechPadMs: 600,
 
   // minSpeechMs: Minimum duration to count as valid speech.
   // Avoids processing very short noise/false triggers.
-  minSpeechMs: 400,
+  // Reduced to 300ms for faster detection of valid speech
+  minSpeechMs: 300,
 
   // positiveSpeechThreshold: Probability [0–1] to enter "speaking" state.
-  positiveSpeechThreshold: 0.3,
+  // Optimized to 0.28 for slightly more sensitive detection (lower latency)
+  positiveSpeechThreshold: 0.28,
 
   // negativeSpeechThreshold: Probability [0–1] to exit "speaking" state.
-  negativeSpeechThreshold: 0.25,
+  // Optimized to 0.22 for slightly more sensitive end detection (lower latency)
+  negativeSpeechThreshold: 0.22,
 
   // submitUserSpeechOnPause: If true, pause() triggers onSpeechEnd.
   // Useful when user clicks stop mic mid-utterance.
@@ -44,7 +48,7 @@ export const VAD_CONFIG = {
 
   // silenceAfterSpeechToStopMicMs: After user stops speaking (onSpeechEnd), wait this
   // many ms of silence. Then stop mic and send buffered transcript to agent.
-  // 2.5s balances responsiveness with allowing brief pauses (see debug/SILENCE-AND-CONVERSATION-TIMER-FIXES.md).
+  // Optimized to 2500ms for faster turn-taking while still allowing natural pauses
   silenceAfterSpeechToStopMicMs: 2500,
 
   // maxListeningMs: Maximum time the mic can stay on in one session (ms). After this,

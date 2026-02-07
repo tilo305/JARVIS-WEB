@@ -23,6 +23,10 @@ export class CartesiaSTTClient {
   private reconnectTimerId: ReturnType<typeof setTimeout> | null = null;
   private _disconnecting = false;
   private currentRequestId: string | null = null;
+  // Keep-alive for connection persistence
+  private keepAliveIntervalId: ReturnType<typeof setInterval> | null = null;
+  private keepAliveTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  private lastPongTime: number = 0;
   
   // Callbacks
   private onTranscriptCallback?: STTTranscriptCallback;
@@ -96,7 +100,18 @@ export class CartesiaSTTClient {
         this.isConnected = true;
         this.isConfigured = true; // Configured via URL params, no need for configure()
         this.reconnectAttempts = 0;
+        this.lastPongTime = Date.now();
+        this.startKeepAlive();
         resolve();
+      });
+
+      // Handle pong frames for keep-alive (ws library emits 'pong' event)
+      this.ws.on('pong', () => {
+        this.lastPongTime = Date.now();
+        if (this.keepAliveTimeoutId) {
+          clearTimeout(this.keepAliveTimeoutId);
+          this.keepAliveTimeoutId = null;
+        }
       });
 
       this.ws.on('message', (data: WebSocket.Data) => {
@@ -116,10 +131,14 @@ export class CartesiaSTTClient {
 
       this.ws.on('close', (code, reason) => {
         clearTimeout(timeout);
+        this.stopKeepAlive();
         console.log('[STT] WebSocket closed', { code, reason: reason?.toString() });
         this.isConnected = false;
         this.isConfigured = false;
-        if (!this._disconnecting) this.attemptReconnect();
+        // Only reconnect if we want to persist connections and not intentionally disconnecting
+        if (!this._disconnecting && CARTESIA_CONFIG.WS.PERSIST_CONNECTIONS) {
+          this.attemptReconnect();
+        }
       });
     });
   }
@@ -214,6 +233,7 @@ export class CartesiaSTTClient {
    * cArTeSiA dOcS: Send binary WebSocket messages containing raw audio data
    * Audio should be PCM s16le format at 16000 Hz sample rate
    * Send in small chunks (e.g., 100ms intervals) for optimal latency
+   * Optimized: Handles backpressure to prevent queue buildup
    */
   sendAudio(audioBuffer: ArrayBuffer): void {
     if (!this.isConnected || !this.ws || !this.isConfigured) {
@@ -225,6 +245,14 @@ export class CartesiaSTTClient {
       throw new Error(`STT WebSocket not open (readyState: ${this.ws.readyState})`);
     }
 
+    // Backpressure handling: skip chunks if buffer is too full (256KB threshold)
+    // This prevents memory buildup and maintains low latency
+    const MAX_BUFFERED_AMOUNT = 256 * 1024; // 256KB
+    if (this.ws && this.ws.bufferedAmount > MAX_BUFFERED_AMOUNT) {
+      console.warn(`[STT] Skipping audio chunk due to backpressure (bufferedAmount: ${this.ws.bufferedAmount} bytes)`);
+      return; // Drop this chunk to maintain real-time performance
+    }
+
     // Generate request ID if starting new request
     if (!this.currentRequestId) {
       this.currentRequestId = this.generateRequestId();
@@ -233,7 +261,14 @@ export class CartesiaSTTClient {
 
     // cArTeSiA dOcS: Send binary WebSocket messages containing raw audio data
     // matching the encoding/sample_rate specified in connection URL
-    this.ws.send(Buffer.from(audioBuffer), { binary: true });
+    // Optimize: Use Buffer directly if audioBuffer is already a Buffer, otherwise convert
+    // This avoids unnecessary conversion overhead for optimal latency
+    if (audioBuffer instanceof Buffer) {
+      this.ws.send(audioBuffer, { binary: true });
+    } else {
+      // Convert ArrayBuffer to Buffer for Node.js WebSocket (ws library)
+      this.ws.send(Buffer.from(audioBuffer), { binary: true });
+    }
   }
 
   /**
@@ -343,10 +378,85 @@ export class CartesiaSTTClient {
   }
 
   /**
+   * Start keep-alive mechanism to maintain connection
+   */
+  private startKeepAlive(): void {
+    this.stopKeepAlive();
+    
+    if (!CARTESIA_CONFIG.WS.KEEP_ALIVE_INTERVAL_MS || CARTESIA_CONFIG.WS.KEEP_ALIVE_INTERVAL_MS <= 0) {
+      return; // Keep-alive disabled
+    }
+
+    this.keepAliveIntervalId = setInterval(() => {
+      if (!this.ws || this.ws.readyState !== 1) { // Not OPEN
+        this.stopKeepAlive();
+        return;
+      }
+
+      // Check if we haven't received a pong in too long
+      const timeSinceLastPong = Date.now() - this.lastPongTime;
+      if (timeSinceLastPong > CARTESIA_CONFIG.WS.KEEP_ALIVE_TIMEOUT_MS * 2) {
+        console.warn('[STT] Keep-alive timeout - connection may be dead');
+        this.stopKeepAlive();
+        // Don't force reconnect if we're intentionally disconnecting
+        if (!this._disconnecting) {
+          this.attemptReconnect();
+        }
+        return;
+      }
+
+      // Send ping (WebSocket ping frame - ws library supports this)
+      try {
+        if (typeof (this.ws as any).ping === 'function') {
+          (this.ws as any).ping();
+          // Set timeout to detect if pong doesn't arrive within expected time
+          if (this.keepAliveTimeoutId) {
+            clearTimeout(this.keepAliveTimeoutId);
+          }
+          const pingTime = Date.now();
+          this.keepAliveTimeoutId = setTimeout(() => {
+            this.keepAliveTimeoutId = null;
+            // Check if pong arrived (lastPongTime should be >= pingTime if pong arrived)
+            if (this.lastPongTime < pingTime) {
+              console.warn('[STT] Pong timeout - connection may be dead');
+              this.stopKeepAlive();
+              if (!this._disconnecting) {
+                this.attemptReconnect();
+              }
+            }
+          }, CARTESIA_CONFIG.WS.KEEP_ALIVE_TIMEOUT_MS);
+        } else {
+          // Fallback: some WebSocket implementations don't expose ping
+          // The connection will be kept alive by regular traffic
+          this.lastPongTime = Date.now(); // Update on ping send as fallback
+        }
+      } catch (err) {
+        console.error('[STT] Keep-alive ping failed:', err);
+        this.stopKeepAlive();
+      }
+    }, CARTESIA_CONFIG.WS.KEEP_ALIVE_INTERVAL_MS);
+  }
+
+  /**
+   * Stop keep-alive mechanism
+   */
+  private stopKeepAlive(): void {
+    if (this.keepAliveIntervalId !== null) {
+      clearInterval(this.keepAliveIntervalId);
+      this.keepAliveIntervalId = null;
+    }
+    if (this.keepAliveTimeoutId !== null) {
+      clearTimeout(this.keepAliveTimeoutId);
+      this.keepAliveTimeoutId = null;
+    }
+  }
+
+  /**
    * Disconnect from WebSocket
    */
   disconnect(): void {
     this._disconnecting = true;
+    this.stopKeepAlive();
     
     // Clear reconnect timer
     if (this.reconnectTimerId !== null) {
@@ -387,6 +497,7 @@ export class CartesiaSTTClient {
     this.currentRequestId = null;
     this.requestStartTimes.clear();
     this.reconnectAttempts = 0;
+    this.lastPongTime = 0;
   }
 
   /**

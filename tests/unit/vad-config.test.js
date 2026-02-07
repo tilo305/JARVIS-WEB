@@ -16,21 +16,21 @@ describe('VAD_CONFIG', () => {
       expect(VAD_CONFIG.redemptionMs).toBeDefined();
       expect(typeof VAD_CONFIG.redemptionMs).toBe('number');
       expect(VAD_CONFIG.redemptionMs).toBeGreaterThan(0);
-      expect(VAD_CONFIG.redemptionMs).toBe(1200);
+      expect(VAD_CONFIG.redemptionMs).toBe(900); // Optimized for lower latency
     });
 
     it('should have preSpeechPadMs as non-negative number', () => {
       expect(VAD_CONFIG.preSpeechPadMs).toBeDefined();
       expect(typeof VAD_CONFIG.preSpeechPadMs).toBe('number');
       expect(VAD_CONFIG.preSpeechPadMs).toBeGreaterThanOrEqual(0);
-      expect(VAD_CONFIG.preSpeechPadMs).toBe(800);
+      expect(VAD_CONFIG.preSpeechPadMs).toBe(600); // Optimized for faster response
     });
 
     it('should have minSpeechMs as positive number', () => {
       expect(VAD_CONFIG.minSpeechMs).toBeDefined();
       expect(typeof VAD_CONFIG.minSpeechMs).toBe('number');
       expect(VAD_CONFIG.minSpeechMs).toBeGreaterThan(0);
-      expect(VAD_CONFIG.minSpeechMs).toBe(400);
+      expect(VAD_CONFIG.minSpeechMs).toBe(300); // Optimized for faster detection
     });
 
     it('should have positiveSpeechThreshold in [0,1]', () => {
@@ -38,7 +38,7 @@ describe('VAD_CONFIG', () => {
       expect(typeof VAD_CONFIG.positiveSpeechThreshold).toBe('number');
       expect(VAD_CONFIG.positiveSpeechThreshold).toBeGreaterThanOrEqual(0);
       expect(VAD_CONFIG.positiveSpeechThreshold).toBeLessThanOrEqual(1);
-      expect(VAD_CONFIG.positiveSpeechThreshold).toBe(0.3);
+      expect(VAD_CONFIG.positiveSpeechThreshold).toBe(0.28); // Optimized for lower latency
     });
 
     it('should have negativeSpeechThreshold in [0,1]', () => {
@@ -46,7 +46,7 @@ describe('VAD_CONFIG', () => {
       expect(typeof VAD_CONFIG.negativeSpeechThreshold).toBe('number');
       expect(VAD_CONFIG.negativeSpeechThreshold).toBeGreaterThanOrEqual(0);
       expect(VAD_CONFIG.negativeSpeechThreshold).toBeLessThanOrEqual(1);
-      expect(VAD_CONFIG.negativeSpeechThreshold).toBe(0.25);
+      expect(VAD_CONFIG.negativeSpeechThreshold).toBe(0.22); // Optimized for lower latency
     });
 
     it('should have submitUserSpeechOnPause as boolean', () => {
@@ -97,7 +97,7 @@ describe('VAD_CONFIG', () => {
     it('should have silenceAfterSpeechToStopMicMs for fallback path', () => {
       expect(VAD_CONFIG.silenceAfterSpeechToStopMicMs).toBeDefined();
       expect(typeof VAD_CONFIG.silenceAfterSpeechToStopMicMs).toBe('number');
-      expect(VAD_CONFIG.silenceAfterSpeechToStopMicMs).toBe(2500);
+      expect(VAD_CONFIG.silenceAfterSpeechToStopMicMs).toBe(2500); // Optimized for faster turn-taking
     });
 
     it('should have silenceClosingDelayAfterTtsMs (delay before 10s countdown)', () => {

@@ -15,111 +15,23 @@ import { BidirectionalConversation } from '../bidirectional-conversation.js';
 
 /**
  * Example transcript processor - calls n8n webhook for LLM
- * Uses proper payload structure with session_id, timestamp, timezone, etc. for consistency.
  */
 import { N8N_WEBHOOK_URL } from '../config.js';
 
-// Session ID for this example session (persists for the lifetime of the process)
-const exampleSessionId = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
-
-/**
- * Build n8n payload with all required fields (matching browser payload structure)
- */
-function buildN8nPayload(message: string, source: 'voice' | 'text' = 'voice'): Record<string, unknown> {
-  const now = new Date().toISOString();
-  const messageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
-  
-  // Get timezone (Node.js compatible)
-  let timezone = 'UTC';
-  try {
-    timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || timezone;
-  } catch {
-    // Fallback to UTC if Intl is not available
-  }
-
-  return {
-    message: message.trim(),
-    session_id: exampleSessionId,
-    sessionId: exampleSessionId,
-    timestamp: now,
-    timezone,
-    location: timezone,
-    message_id: messageId,
-    messageId,
-    source,
-    attachments: [],
-  };
-}
-
-/**
- * Extract reply from n8n response (checks multiple possible keys)
- */
-function extractReplyFromJson(data: Record<string, unknown>): string | null {
-  if (!data || typeof data !== 'object') return null;
-  
-  const keys = ['output', 'reply', 'result', 'text', 'message', 'response', 'answer', 'content', 'body', 'responseText'];
-  for (const key of keys) {
-    const value = data[key];
-    if (typeof value === 'string') return value;
-  }
-  
-  // Check if it's an array (n8n item format)
-  if (Array.isArray(data) && data.length > 0) {
-    const first = data[0];
-    if (typeof first === 'string') return first;
-    if (first && typeof first === 'object') {
-      const nested = extractReplyFromJson(first as Record<string, unknown>);
-      if (nested) return nested;
-      // Check n8n item format: { json: { output: "..." } }
-      if ('json' in first && typeof first.json === 'object') {
-        const fromJson = extractReplyFromJson(first.json as Record<string, unknown>);
-        if (fromJson) return fromJson;
-      }
-    }
-  }
-  
-  return null;
-}
-
 async function processTranscript(userText: string): Promise<string> {
   try {
-    const payload = buildN8nPayload(userText, 'voice');
     const res = await fetch(N8N_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ message: userText }),
     });
-    
-    if (!res.ok) {
-      console.error(`[processTranscript] n8n returned status ${res.status}`);
-      return "Sorry, I couldn't reach the assistant.";
-    }
-    
-    const contentType = res.headers.get('content-type') || '';
-    let data: Record<string, unknown> = {};
-    
-    if (contentType.includes('application/json')) {
-      data = (await res.json()) as Record<string, unknown>;
-    } else {
-      const text = await res.text();
-      if (text.trim()) {
-        try {
-          data = JSON.parse(text) as Record<string, unknown>;
-        } catch {
-          data = { output: text.trim() };
-        }
-      }
-    }
-    
-    const reply = extractReplyFromJson(data);
-    if (typeof reply === 'string' && reply.trim()) {
-      return reply;
-    }
-    
-    return `I heard you say: "${userText}". Configure your n8n workflow to return a reply in one of these keys: output, reply, result, text, message, response, answer, content.`;
+    const data = (await res.json()) as Record<string, unknown>;
+    const reply = (data?.output ?? data?.reply ?? data?.result ?? data?.text ?? data?.message) as string | undefined;
+    if (typeof reply === 'string') return reply;
+    return `I heard you say: "${userText}", sir. Configure your n8n workflow to return a reply.`;
   } catch (err) {
     console.error('[processTranscript] n8n error:', err);
-    return "Sorry, I couldn't reach the assistant.";
+    return "Sorry, sir. I couldn't reach the assistant.";
   }
 }
 

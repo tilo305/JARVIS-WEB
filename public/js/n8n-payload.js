@@ -98,6 +98,7 @@ export function getClientLocation() {
 /**
  * Natural fallback replies when n8n doesn't return a proper reply.
  * Single source of truth for app.js and fallback-revert-debug.html.
+ * Follows JARVIS system prompt: British, always "sir", warm and conversational.
  * @param {string} [userMessage] - Raw user message
  * @returns {string|null} - Fallback reply or null
  */
@@ -105,10 +106,10 @@ export function getNaturalFallback(userMessage) {
   const m = (userMessage || '').trim().toLowerCase().replace(/[!?.,]+$/, '');
   if (!m) return null;
   const greetings = ['hello', 'hi', 'hey', 'hi there', 'hello there', 'good morning', 'good afternoon', 'good evening', 'greetings', 'howdy'];
-  if (greetings.some((g) => m === g || m.startsWith(g + ' '))) return "Hello! How can I assist you today?";
-  if (m === 'goodbye' || m === 'bye' || m === 'see you') return "Goodbye. I'll be here when you need me.";
-  if (m === 'thanks' || m === 'thank you' || m === 'thanks!') return "You're welcome.";
-  if (m === 'yes' || m === 'no') return "Understood.";
+  if (greetings.some((g) => m === g || m.startsWith(g + ' '))) return "Good morning, sir. How can I assist you today?";
+  if (m === 'goodbye' || m === 'bye' || m === 'see you') return "Goodbye, sir. I'll be here when you need me.";
+  if (m === 'thanks' || m === 'thank you' || m === 'thanks!') return "You're welcome, sir.";
+  if (m === 'yes' || m === 'no') return "Understood, sir.";
   return null;
 }
 

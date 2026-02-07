@@ -2,6 +2,7 @@
  * STT Capture AudioWorklet Processor
  * Captures microphone audio, resamples 48kHz→16kHz, converts Float32→Int16,
  * buffers ~100ms chunks for optimal Cartesia STT latency.
+ * Optimized for minimal latency: zero-copy transfers, efficient buffering.
  * @see aUdiO dOcS.md
  */
 const SAMPLE_RATE_OUT = 16000;
@@ -15,46 +16,74 @@ class STTCaptureProcessor extends AudioWorkletProcessor {
     const ctxRate = typeof sampleRate !== 'undefined' ? sampleRate : (globalThis.sampleRate ?? 48000);
     this.contextSampleRate = ctxRate;
     this.resampleRatio = this.contextSampleRate / SAMPLE_RATE_OUT;
-    this.buffer = [];
+    // Use TypedArray for efficient buffering (O(1) access, no splice overhead)
+    this.buffer = new Int16Array(SAMPLES_PER_CHUNK * 2); // Pre-allocate 2x chunk size
+    this.bufferLength = 0;
   }
 
-  floatToInt16(float32Array) {
-    const int16 = new Int16Array(float32Array.length);
-    for (let i = 0; i < float32Array.length; i++) {
-      const s = Math.max(-1, Math.min(1, float32Array[i]));
-      int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-    }
-    return int16;
-  }
-
-  resampleTo16k(float32Array) {
+  /**
+   * Combined resample and convert in single pass for optimal performance
+   * Directly converts Float32 → Int16 while resampling, avoiding intermediate allocations
+   */
+  resampleAndConvertToInt16(float32Array) {
     const outLength = Math.floor(float32Array.length / this.resampleRatio);
-    const out = new Float32Array(outLength);
+    const int16 = new Int16Array(outLength);
+    
     for (let i = 0; i < outLength; i++) {
       const srcIdx = i * this.resampleRatio;
       const idx = Math.floor(srcIdx);
       const frac = srcIdx - idx;
       const nextIdx = Math.min(idx + 1, float32Array.length - 1);
-      out[i] = float32Array[idx] * (1 - frac) + float32Array[nextIdx] * frac;
+      
+      // Linear interpolation
+      const s = float32Array[idx] * (1 - frac) + float32Array[nextIdx] * frac;
+      // Clamp and convert to Int16 in one step
+      const clamped = Math.max(-1, Math.min(1, s));
+      int16[i] = clamped < 0 ? clamped * 0x8000 : clamped * 0x7FFF;
     }
-    return out;
+    
+    return int16;
   }
 
   process(inputs, _outputs, _parameters) {
     const input = inputs[0]?.[0];
     if (!input || input.length === 0) return true;
 
-    const resampled = this.resampleTo16k(input);
-    const int16 = this.floatToInt16(resampled);
-    for (let i = 0; i < int16.length; i++) {
-      this.buffer.push(int16[i]);
+    // Combined resample + convert in single pass (reduces allocations)
+    const int16Chunk = this.resampleAndConvertToInt16(input);
+    
+    // Efficiently append to buffer (grow if needed)
+    const neededLength = this.bufferLength + int16Chunk.length;
+    if (neededLength > this.buffer.length) {
+      // Grow buffer by 2x when needed (amortized O(1) growth)
+      const newBuffer = new Int16Array(Math.max(neededLength, this.buffer.length * 2));
+      newBuffer.set(this.buffer.subarray(0, this.bufferLength), 0);
+      this.buffer = newBuffer;
     }
+    
+    // Append new chunk
+    this.buffer.set(int16Chunk, this.bufferLength);
+    this.bufferLength += int16Chunk.length;
 
-    while (this.buffer.length >= SAMPLES_PER_CHUNK) {
-      const taken = this.buffer.splice(0, SAMPLES_PER_CHUNK);
-      const chunk = new Int16Array(taken);
-      this.port.postMessage({ type: 'audio', data: chunk.buffer }, [chunk.buffer]);
+    // Send complete chunks immediately (zero-copy via transferable)
+    while (this.bufferLength >= SAMPLES_PER_CHUNK) {
+      // Create chunk view (zero-copy)
+      const chunk = this.buffer.subarray(0, SAMPLES_PER_CHUNK);
+      // Create new ArrayBuffer for transfer (required for transferable)
+      const chunkBuffer = new Int16Array(SAMPLES_PER_CHUNK);
+      chunkBuffer.set(chunk);
+      
+      // Send with transferable ArrayBuffer for zero-copy transfer
+      this.port.postMessage({ type: 'audio', data: chunkBuffer.buffer }, [chunkBuffer.buffer]);
+      
+      // Efficiently shift buffer (copy remaining data)
+      const remaining = this.bufferLength - SAMPLES_PER_CHUNK;
+      if (remaining > 0) {
+        this.buffer.copyWithin(0, SAMPLES_PER_CHUNK, this.bufferLength);
+      }
+      this.bufferLength = remaining;
     }
+    
     return true;
   }
 }

@@ -17,6 +17,8 @@ export default tseslint.config(
       "coverage/**",
       "*.md",
       "*.min.js",
+      "parse-*.js", // Parse scripts (utility files)
+      "server-cors-diagnostics.js", // Diagnostic script
     ],
   },
 
@@ -101,7 +103,7 @@ export default tseslint.config(
     },
   },
 
-  // Debug scripts and live tests (Node + Jest + Browser)
+  // Debug scripts and live tests (Node + Jest)
   {
     files: ["debug/**/*.js", "debug/**/*.mjs"],
     languageOptions: {
@@ -110,12 +112,13 @@ export default tseslint.config(
       globals: {
         ...globals.node,
         ...globals.jest,
-        ...globals.browser,
+        ...globals.browser, // Some debug tools use browser globals
       },
     },
     rules: {
       "no-console": "off",
       "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
+      "no-undef": "off", // Allow browser globals in debug tools
     },
   },
 

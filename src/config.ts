@@ -41,5 +41,15 @@ export const CARTESIA_CONFIG = {
     RECONNECT_DELAY: 1000,
     MAX_RECONNECT_ATTEMPTS: 5,
     TIMEOUT_MS: 180000, // 3 minutes
+    // Keep-alive settings for optimal latency
+    KEEP_ALIVE_INTERVAL_MS: 30000, // Send ping every 30s to keep connection alive
+    KEEP_ALIVE_TIMEOUT_MS: 10000, // Wait 10s for pong before considering connection dead
+    // Connection persistence: keep connections open between requests
+    PERSIST_CONNECTIONS: true, // Don't close connections when idle
+    // Pre-connection: establish connections early for zero-latency first request
+    PRE_CONNECT: true, // Pre-connect STT/TTS on initialization
+    // Compression: Disabled for optimal latency (permessage-deflate adds overhead)
+    // Binary audio data (PCM) doesn't compress well and compression adds latency
+    // Both Node.js 'ws' library and browser WebSocket disable compression by default
   }
 } as const;

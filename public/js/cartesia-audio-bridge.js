@@ -4,21 +4,17 @@
  *
  * AudioWorklet pipeline (integrated, bridged, connected):
  * - Mic: one getUserMedia MediaStream → same AudioContext for all capture.
- * - Wake word: MediaStream → wake-word-processor.js (AudioWorklet) → 16kHz Int16 frames
- *   → OpenWakeWordManager → WebSocket → Python openWakeWord server → onWakeWordDetected → UI + STT activation.
  * - STT: MediaStream → stt-capture-processor.js (AudioWorklet) → 16kHz Int16 chunks
  *   → _sendChunkToSTT() → Cartesia STT WebSocket → onTranscript → app.js → n8n backend.
  * - TTS: Cartesia TTS WebSocket → playTTSChunk() → tts-playback-processor.js (AudioWorklet) → destination.
  * - VAD (MicVAD): getStream() = same mediaStream; gates _sttStreaming and onSpeechStart/End.
  * - Paths: audioWorkletBasePath from app (e.g. /audio/) for all processor modules.
- * @see aUdiO dOcS.md, cArTeSiA dOcS.md, docs/OPENWAKEWORD.md, wAkE wOrD dOcS.md
+ * @see aUdiO dOcS.md, cArTeSiA dOcS.md
  */
 import { decodeBase64PCM } from './audio-utils.js';
 import { MicVAD } from '@ricky0123/vad-web';
 import { VAD_CONFIG } from './vad-config.js';
-import { OpenWakeWordManager } from './openwakeword-manager.js';
 import { DEBUG } from './debug.js';
-import { logWakeWordError } from './wake-word-console.js';
 
 const CARTESIA_VERSION = '2025-04-16'; // Must match src/config.ts API_VERSION
 const DEFAULT_API_KEY = '';
@@ -34,8 +30,8 @@ export class CartesiaAudioBridge {
     this.apiKey = options.apiKey ?? DEFAULT_API_KEY;
     this.voiceId = options.voiceId || DEFAULT_VOICE_ID;
     this.language = options.language || 'en';
-    /** sonic-turbo: 40ms first byte; sonic-3: 90ms (more emotive, better quality) */
-    this.ttsModel = options.ttsModel || 'sonic-3';
+    /** sonic-turbo: 40ms first byte (optimal latency); sonic-3: 90ms (more emotive, better quality) */
+    this.ttsModel = options.ttsModel || 'sonic-turbo'; // Default to optimal latency
 
     this.audioContext = null;
     this.sttNode = null;
@@ -45,19 +41,13 @@ export class CartesiaAudioBridge {
     this.sttWs = null;
     this.ttsWs = null;
     this.vad = null;
-    this.wakeWordManager = null;
-    this._wakeWordActive = false;
-    this._lastWakeWordDetectionTime = 0; // Cooldown period tracking
-    this._wakeWordCooldownMs = 3000; // 3 seconds cooldown (per wAkE wOrD dOcS.md)
-    /** Single-flight: avoid concurrent init attempts */
-    this._initWakeWordPromise = null;
     this.contextIdCounter = 0;
     this._ttsDoneResolvers = new Map();
     this._ttsConnectPromise = null;
     this._sttConnectPromise = null;
     this._sttStreaming = false;
     this._preSpeechBuffer = [];
-    this._preSpeechMaxChunks = Math.ceil((VAD_CONFIG.preSpeechPadMs || 800) / STT_CHUNK_MS);
+    this._preSpeechMaxChunks = Math.ceil((VAD_CONFIG.preSpeechPadMs || 600) / STT_CHUNK_MS);
 
     this.onTranscript = options.onTranscript || (() => {});
     this.onTTSChunk = options.onTTSChunk || (() => {});
@@ -65,11 +55,9 @@ export class CartesiaAudioBridge {
     this.onSpeechStart = options.onSpeechStart || (() => {});
     this.onSpeechEnd = options.onSpeechEnd || (() => {});
     this.onVADMisfire = options.onVADMisfire || (() => {});
-    /** Called when wake word is detected (if wake word is enabled) */
-    this.onWakeWordDetected = options.onWakeWordDetected || (() => {});
     /** Called when STT is stopped (user or programmatic) so UI can sync mic button */
     this.onSTTStopped = options.onSTTStopped || (() => {});
-    /** Called when STT becomes active (either immediately or after wake word detection) */
+    /** Called when STT becomes active */
     this.onSTTStarted = options.onSTTStarted || (() => {});
     /** Partial transcript (live real-time) */
     this.onPartialTranscript = options.onPartialTranscript || (() => {});
@@ -99,8 +87,10 @@ export class CartesiaAudioBridge {
     /** Audio recording: buffer for capturing audio chunks during STT */
     this._recordedAudioChunks = [];
     this._isRecordingAudio = false;
-    /** Counter for tracking chunks sent to STT (for debugging VAD payload flow) */
-    this._sttChunkSendCount = 0;
+    /** Connection health monitoring: interval for proactive reconnection */
+    this._connectionHealthInterval = null;
+    this._lastSTTActivity = 0;
+    this._lastTTSActivity = 0;
   }
 
   /** Set mic input gain (0.5–3). Use when STT is active to boost quiet mics. */
@@ -213,58 +203,6 @@ export class CartesiaAudioBridge {
     return this._sttActive === true;
   }
 
-  /** Whether wake word detection is enabled and waiting for wake word */
-  isWakeWordWaiting() {
-    return this.options.wakeWordEnabled && 
-           this.wakeWordManager && 
-           this.wakeWordManager.isEnabled() && 
-           !this._wakeWordActive && 
-           !this._sttActive;
-  }
-
-  /** Whether wake word detection is enabled */
-  isWakeWordEnabled() {
-    return this.options.wakeWordEnabled && 
-           this.wakeWordManager && 
-           this.wakeWordManager.isEnabled();
-  }
-
-  /**
-   * Get wake word performance metrics (per wAkE wOrD dOcS.md Section 10)
-   * @returns {Object|null} Metrics object or null if wake word not initialized
-   */
-  getWakeWordMetrics() {
-    if (!this.wakeWordManager) {
-      return null;
-    }
-    return this.wakeWordManager.getMetrics();
-  }
-
-  /**
-   * Reset wake word performance metrics
-   */
-  resetWakeWordMetrics() {
-    if (this.wakeWordManager) {
-      this.wakeWordManager.resetMetrics();
-    }
-  }
-
-  /**
-   * Set wake word cooldown period (in milliseconds)
-   * Prevents re-triggering within the specified time window
-   * @param {number} cooldownMs Cooldown period in milliseconds (default: 3000)
-   */
-  setWakeWordCooldown(cooldownMs) {
-    if (typeof cooldownMs !== 'number' || cooldownMs < 0) {
-      DEBUG.error('Invalid wake word cooldown value', { cooldownMs });
-      return;
-    }
-    this._wakeWordCooldownMs = cooldownMs;
-    if (this.wakeWordManager) {
-      this.wakeWordManager.setCooldownMs(cooldownMs);
-    }
-    DEBUG.trace('Wake word cooldown period set', { cooldownMs });
-  }
 
   /**
    * Start the 10s "agent silence" timer. Call when the agent finishes speaking (TTS done).
@@ -355,292 +293,16 @@ export class CartesiaAudioBridge {
     }
   }
 
-  /**
-   * Initialize wake word for always-listening mode (independent of STT)
-   * This allows wake word to be active even when STT is not running
-   */
-  /**
-   * Initialize wake word detection for always-listening mode
-   * @returns {Promise<{success: boolean, reason?: string}>} Promise that always resolves with result
-   */
-  /** True when openWakeWord is configured. */
-  _hasWakeWordConfig() {
-    return !!(this.options.useOpenWakeWord && this.options.openWakeWordWsUrl);
-  }
-
-  async initWakeWord() {
-    if (!this.options.wakeWordEnabled || !this._hasWakeWordConfig()) {
-      return { success: false, reason: 'Wake word not enabled or missing config (set VITE_USE_OPENWAKEWORD=true and VITE_OPENWAKEWORD_WS_URL)' };
-    }
-    if (this.wakeWordManager) {
-      DEBUG.trace('Wake word already initialized, ensuring it\'s enabled');
-      // Re-enable wake word if it was disabled (e.g., after STT stopped)
-      if (!this.wakeWordManager.isEnabled()) {
-        this.wakeWordManager.setEnabled(true);
-        DEBUG.trace('Wake word re-enabled for always-listening mode');
-      }
-      return { success: true, reason: 'Already initialized' };
-    }
-
-    // Single-flight: if init is already in progress, wait for it
-    if (this._initWakeWordPromise) {
-      try {
-        return await this._initWakeWordPromise;
-      } catch (e) {
-        return { success: false, reason: e?.message || String(e) };
-      }
-    }
-
-    const internalPromise = this._initOpenWakeWord();
-    this._initWakeWordPromise = internalPromise;
-    internalPromise.catch(() => {}).finally(() => { this._initWakeWordPromise = null; });
-
-    try {
-      return await internalPromise;
-    } catch (err) {
-      const errorMsg = err?.message || String(err) || 'Unknown error';
-      DEBUG.error('Wake word initialization failed', err);
-      if (this.options.wakeWordEnabled) {
-        const msg = `Wake word unavailable: ${errorMsg}. You can still use the microphone button to activate.`;
-        logWakeWordError(msg, err);
-        this.onError(msg);
-      }
-      return { success: false, reason: errorMsg, gracefulDegradation: true };
-    }
-  }
-
-  /**
-   * Request microphone permission and start wake word only (no STT until "Jarvis" is said).
-   * Call this from a user gesture (e.g. "Start listening" button) when on-load init failed due to permission.
-   * After this succeeds, wake word listens with no further clicks; saying the wake word activates STT.
-   * @returns {Promise<{success: boolean, reason?: string}>}
-   */
-  async ensureWakeWordListening() {
-    if (!this.options.wakeWordEnabled || !this._hasWakeWordConfig()) {
-      return { success: false, reason: 'Wake word not enabled or missing config (set VITE_USE_OPENWAKEWORD=true and VITE_OPENWAKEWORD_WS_URL)' };
-    }
-    if (this.wakeWordManager && this.wakeWordManager.isEnabled()) {
-      return { success: true, reason: 'Already listening' };
-    }
-    // Create AudioContext BEFORE any await — user gesture must be in the call stack.
-    // Otherwise: "The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture."
-    if (!this.audioContext || this.audioContext.state === 'closed') {
-      await this.init();
-    }
-    if (!this.mediaStream) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
-        });
-        this.mediaStream = stream;
-        DEBUG.trace('ensureWakeWordListening: getUserMedia OK');
-      } catch (gumErr) {
-        DEBUG.error('ensureWakeWordListening: getUserMedia failed', gumErr);
-        const msg = CartesiaAudioBridge.getMicrophoneErrorMessage(gumErr);
-        return { success: false, reason: msg };
-      }
-    }
-    return await this.initWakeWord();
-  }
-
-  /**
-   * Initialize wake word using openWakeWord backend (Python WebSocket server).
-   * @private
-   * @returns {Promise<{success: boolean, reason?: string}>}
-   */
-  async _initOpenWakeWord() {
-    await this.init();
-    if (!this.mediaStream) {
-      try {
-        this.mediaStream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-        });
-        DEBUG.trace('initWakeWord (openWakeWord): getUserMedia OK');
-      } catch (gumErr) {
-        DEBUG.error('initWakeWord (openWakeWord): getUserMedia failed', gumErr);
-        const msg = CartesiaAudioBridge.getMicrophoneErrorMessage(gumErr);
-        return { success: false, reason: `Microphone permission needed: ${msg}` };
-      }
-    }
-    this.wakeWordManager = new OpenWakeWordManager({
-      wsUrl: this.options.openWakeWordWsUrl,
-      cooldownMs: this._wakeWordCooldownMs,
-      onWakeWordDetected: (keywordIndex) => this._onWakeWordDetected(keywordIndex),
-      onError: (error) => {
-        // The manager already logs via logWakeWordError, so we don't log again here
-        // This prevents duplicate error messages in the console
-        // We just notify the bridge so it can update UI state
-        if (this.options.wakeWordEnabled) {
-          this.onError(error);
-        }
-      },
-    });
-    const result = await this.wakeWordManager.initialize(
-      this.audioContext,
-      this.mediaStream,
-      this.options.audioWorkletBasePath
-    );
-    if (!result) {
-      return { success: false, reason: 'OpenWakeWord initialization returned null' };
-    }
-    this.wakeWordManager.setEnabled(true);
-    DEBUG.trace('Wake word initialized (openWakeWord)');
-    // OPTIMIZATION: Pre-connect STT WebSocket for minimal latency
-    if (!this.sttWs || this.sttWs.readyState !== WebSocket.OPEN) {
-      try {
-        await this.connectSTTWebSocket();
-        DEBUG.trace('Wake word: STT WebSocket pre-connected');
-      } catch (err) {
-        DEBUG.warn('Wake word: STT pre-connect failed (will retry on detection)', err);
-      }
-    }
-    // OPTIMIZATION: Pre-connect TTS WebSocket for optimal bidirectional flow latency
-    // This ensures TTS is ready immediately when transcript is received, reducing end-to-end latency
-    // Note: We only pre-connect the WebSocket here; audio graph setup happens in connectTTS() when needed
-    if (this.apiKey && (!this.ttsWs || this.ttsWs.readyState !== WebSocket.OPEN)) {
-      // Skip if already connecting (avoid race condition with connectTTS())
-      if (this.ttsWs && this.ttsWs.readyState === WebSocket.CONNECTING) {
-        DEBUG.trace('Wake word: TTS WebSocket already connecting, skipping pre-connect');
-      } else if (this._ttsConnectPromise) {
-        DEBUG.trace('Wake word: TTS connection promise exists, skipping pre-connect');
-      } else {
-        try {
-          // Use a lightweight pre-connection that just establishes the WebSocket
-          // The full connectTTS() will handle audio graph setup when TTS is actually needed
-          const url = new URL(TTS_ENDPOINT);
-          url.searchParams.set('api_key', this.apiKey);
-          url.searchParams.set('cartesia_version', CARTESIA_VERSION);
-          
-          // Clean up existing connection if any
-          if (this.ttsWs) {
-            try {
-              this.ttsWs.onopen = null;
-              this.ttsWs.onerror = null;
-              this.ttsWs.onclose = null;
-              this.ttsWs.onmessage = null;
-              if (this.ttsWs.readyState !== WebSocket.CLOSED) {
-                this.ttsWs.close(1000, 'reconnect');
-              }
-            } catch {
-              // Ignore cleanup errors
-            }
-          }
-          
-          this.ttsWs = new WebSocket(url.toString());
-          this.ttsWs.binaryType = 'arraybuffer';
-          
-          // Set up basic message handler (will be replaced by full handler in connectTTS() when audio graph is set up)
-          // Mark it so connectTTS() knows to replace it
-          this.ttsWs.onmessage = function preConnectHandler(e) {
-            try {
-              if (typeof e.data === 'string') {
-                const msg = JSON.parse(e.data);
-                if (msg.type === 'error') {
-                  DEBUG.error('TTS WebSocket error message (pre-connect)', msg);
-                }
-              }
-            } catch (err) {
-              // Ignore parsing errors during pre-connect - full handler will be set in connectTTS()
-              DEBUG.trace('TTS WebSocket message during pre-connect (will be handled by connectTTS)', { error: err });
-            }
-          };
-          // Mark the handler so connectTTS() can detect and replace it
-          this.ttsWs.onmessage._isPreConnectHandler = true;
-          
-          // Create promise to track connection state (prevents race conditions with connectTTS())
-          this._ttsConnectPromise = new Promise((resolve, reject) => {
-            let settled = false;
-            const timeout = setTimeout(() => {
-              if (!settled && this.ttsWs && this.ttsWs.readyState !== WebSocket.OPEN) {
-                settled = true;
-                this._ttsConnectPromise = null;
-                reject(new Error('TTS WebSocket pre-connect timeout'));
-              }
-            }, 5000);
-            
-            this.ttsWs.onopen = () => {
-              if (!settled) {
-                settled = true;
-                clearTimeout(timeout);
-                this._ttsConnectPromise = null; // Clear promise on success
-                DEBUG.trace('Wake word: TTS WebSocket pre-connected for optimal bidirectional latency');
-                resolve();
-              }
-            };
-            
-            this.ttsWs.onerror = () => {
-              if (!settled) {
-                settled = true;
-                clearTimeout(timeout);
-                this._ttsConnectPromise = null; // Clear promise on error
-                reject(new Error('TTS WebSocket pre-connect failed'));
-              }
-            };
-            
-            this.ttsWs.onclose = (ev) => {
-              if (!settled) {
-                settled = true;
-                clearTimeout(timeout);
-                this._ttsConnectPromise = null; // Clear promise on close
-                if (ev.code !== 1000) {
-                  reject(new Error(`TTS WebSocket closed during pre-connect (code: ${ev.code})`));
-                } else {
-                  resolve(); // Normal closure
-                }
-              }
-            };
-          });
-          
-          // Wait for connection (non-blocking - don't fail wake word init if this fails)
-          await this._ttsConnectPromise.catch((err) => {
-            // Clear promise on error so connectTTS() can retry
-            this._ttsConnectPromise = null;
-            throw err;
-          });
-        } catch (err) {
-          DEBUG.warn('Wake word: TTS pre-connect failed (will retry when needed)', err);
-          // Don't fail wake word init if TTS pre-connect fails - connectTTS() will handle it on demand
-          // This is non-critical since TTS is only needed after STT completes
-          this._ttsConnectPromise = null; // Ensure promise is cleared
-        }
-      }
-    }
-    if (!this.sttNode && this.mediaStream && this.audioContext) {
-      try {
-        const source = this.audioContext.createMediaStreamSource(this.mediaStream);
-        this.sttGainNode = this.audioContext.createGain();
-        this.sttGainNode.gain.value = this._inputGain;
-        this.sttAnalyserNode = this.audioContext.createAnalyser();
-        this.sttAnalyserNode.fftSize = 256;
-        const basePath = this.options.audioWorkletBasePath || './audio/';
-        const processorPath = basePath.endsWith('/') ? `${basePath}stt-capture-processor.js` : `${basePath}/stt-capture-processor.js`;
-        const absolutePath = processorPath.startsWith('http') ? processorPath : new URL(processorPath, window.location.origin).href;
-        await this.audioContext.audioWorklet.addModule(absolutePath);
-        this.sttNode = new AudioWorkletNode(this.audioContext, 'stt-capture-processor');
         source.connect(this.sttGainNode);
         this.sttGainNode.connect(this.sttNode);
         this.sttGainNode.connect(this.sttAnalyserNode);
         this._preSpeechBuffer = [];
         this._sttStreaming = false;
-        let _preSetupChunkCount = 0;
         this.sttNode.port.onmessage = (e) => {
           try {
             if (!e?.data || e.data.type !== 'audio' || !e.data.data) return;
-            _preSetupChunkCount++;
             const buf = e.data.data;
             if (!(buf instanceof ArrayBuffer)) return;
-            if (_preSetupChunkCount <= 3 || _preSetupChunkCount % 50 === 0) {
-              DEBUG.trace('VAD: Audio chunk received (pre-setup)', { 
-                chunk: _preSetupChunkCount, 
-                size: buf.byteLength,
-                streaming: this._sttStreaming,
-                bufferSize: this._preSpeechBuffer.length 
-              });
-            }
             if (this._isRecordingAudio) {
               try { this._recordedAudioChunks.push(new Uint8Array(buf)); } catch (err) { void err; }
             }
@@ -651,15 +313,15 @@ export class CartesiaAudioBridge {
               if (this._preSpeechBuffer.length > this._preSpeechMaxChunks) this._preSpeechBuffer.shift();
             }
           } catch (err) {
-            DEBUG.error('STT processor message (openWakeWord pre-set)', { error: err });
+            DEBUG.error('STT processor message error', { error: err });
           }
         };
         this.sttNode.port.onerror = (err) => {
-          DEBUG.error('STT AudioWorklet processor error (openWakeWord pre-set)', { error: err });
+          DEBUG.error('STT AudioWorklet processor error', { error: err });
         };
-        DEBUG.trace('Wake word: STT audio graph and handler pre-set');
+        DEBUG.trace('STT audio graph and handler pre-set');
       } catch (err) {
-        DEBUG.warn('Wake word: STT graph pre-setup failed', err);
+        DEBUG.warn('STT graph pre-setup failed', err);
       }
     }
     // OPTIMIZATION: Pre-start VAD for low latency
@@ -675,25 +337,13 @@ export class CartesiaAudioBridge {
           submitUserSpeechOnPause: VAD_CONFIG.submitUserSpeechOnPause,
           baseAssetPath: VAD_CONFIG.baseAssetPath,
           onnxWASMBasePath: VAD_CONFIG.onnxWASMBasePath,
-          getStream: () => {
-            const stream = Promise.resolve(this.mediaStream);
-            DEBUG.trace('VAD getStream() called', { 
-              hasStream: !!this.mediaStream, 
-              streamId: this.mediaStream?.id,
-              tracks: this.mediaStream?.getTracks()?.length 
-            });
-            return stream;
-          },
+          getStream: () => Promise.resolve(this.mediaStream),
           onSpeechStart: () => {
             if (this._sttActive) {
-              DEBUG.trace('VAD onSpeechStart (wake word pre-setup) - enabling STT streaming');
-              // Always clear the silence stop timer when user speaks again - this allows conversations to go back and forth
               this._clearSilenceStopTimer();
-              this._hadTranscriptFromPreviousSegment = false;
               this._clearMaxListeningTimer();
               this._recordedAudioChunks = [];
               this._isRecordingAudio = true;
-              this._sttChunkSendCount = 0; // Reset chunk counter for new speech segment
               this._sttStreaming = true;
               this._flushPreSpeechBuffer();
               this.onSpeechStart();
@@ -701,16 +351,12 @@ export class CartesiaAudioBridge {
           },
           onSpeechEnd: async () => {
             if (this._sttActive) {
-              DEBUG.trace('VAD onSpeechEnd (wake word pre-setup) - sending finalize', {
-                chunksSent: this._sttChunkSendCount
-              });
               this._sttStreaming = false;
               this._isRecordingAudio = false;
               this.onSpeechEnd();
               if (this.sttWs && this.sttWs.readyState === WebSocket.OPEN) {
                 try {
                   this.sttWs.send('finalize');
-                  DEBUG.trace('VAD: Sent finalize to STT (wake word pre-setup)', { totalChunksSent: this._sttChunkSendCount });
                 } catch (err) {
                   DEBUG.error('Error sending finalize to STT', err);
                 }
@@ -730,9 +376,9 @@ export class CartesiaAudioBridge {
         };
         this.vad = await MicVAD.new(vadOptions);
         await this.vad.start();
-        DEBUG.trace('Wake word (openWakeWord): VAD pre-started for low latency');
+        DEBUG.trace('VAD pre-started for low latency');
       } catch (err) {
-        DEBUG.warn('Wake word (openWakeWord): Failed to pre-start VAD (will start on detection)', err);
+        DEBUG.warn('Failed to pre-start VAD', err);
       }
     }
     return { success: true };
@@ -921,11 +567,6 @@ export class CartesiaAudioBridge {
       this.sttWs.onopen = () => {
         settle(() => {
           DEBUG.trace('STT WebSocket open');
-          /* eslint-disable no-console */
-          if (typeof console !== 'undefined' && console.log) {
-            console.log('[JARVIS] STT WebSocket connected successfully');
-          }
-          /* eslint-enable no-console */
           resolve();
         });
       };
@@ -933,6 +574,8 @@ export class CartesiaAudioBridge {
         if (typeof e.data !== 'string') return;
         try {
           const msg = JSON.parse(e.data);
+          // Update last activity timestamp for connection health monitoring
+          this._lastSTTActivity = Date.now();
           if (msg.type === 'transcript') {
             const text = (msg.text != null ? String(msg.text) : '').trim();
             if (text) {
@@ -945,7 +588,7 @@ export class CartesiaAudioBridge {
               this._pendingFinalTranscript = { text, request_id: msg.request_id || '' };
               /* eslint-disable no-console -- pipeline diagnostic: transcript ready */
               if (typeof console !== 'undefined' && console.log) {
-                console.log('[JARVIS Wake Word] STT final transcript received — will send to agent when mic stops', { preview: text.slice(0, 60) });
+                console.log('[JARVIS] STT final transcript received — will send to agent when mic stops', { preview: text.slice(0, 60) });
               }
               /* eslint-enable no-console */
             }
@@ -963,12 +606,7 @@ export class CartesiaAudioBridge {
       this.sttWs.onerror = (err) => {
         settle(() => {
           DEBUG.error('STT WebSocket error', err);
-          /* eslint-disable no-console */
-          if (typeof console !== 'undefined' && console.error) {
-            console.error('[JARVIS] STT WebSocket connection error', err);
-          }
-          /* eslint-enable no-console */
-          reject(new Error('STT WebSocket connection failed. Please check your API key and internet connection.'));
+          reject(new Error('STT WebSocket error'));
         });
       };
       this.sttWs.onclose = (ev) => {
@@ -990,29 +628,7 @@ export class CartesiaAudioBridge {
   }
 
   _sendChunkToSTT(arrayBuffer) {
-    // Verify STT node exists (safeguard)
-    if (!this.sttNode && this._sttActive) {
-      DEBUG.error('_sendChunkToSTT: STT node not initialized but STT is active');
-      this.onError('STT audio node not available. Please try clicking the mic button again.');
-      return;
-    }
-    if (!this.sttWs || this.sttWs.readyState !== WebSocket.OPEN || !this._sttStreaming) {
-      if (this._sttStreaming && (!this.sttWs || this.sttWs.readyState !== WebSocket.OPEN)) {
-        DEBUG.warn('STT WebSocket not open, cannot send chunk', { 
-          hasWs: !!this.sttWs, 
-          readyState: this.sttWs?.readyState 
-        });
-        // Attempt to reconnect if connection was lost
-        if (this.sttWs && this.sttWs.readyState === WebSocket.CLOSED && this._sttActive) {
-          DEBUG.trace('STT WebSocket closed, attempting reconnection...');
-          this.connectSTTWebSocket().catch((err) => {
-            DEBUG.error('STT WebSocket reconnection failed', err);
-            this.onError('STT connection lost. Please try again.');
-          });
-        }
-      }
-      return;
-    }
+    if (!this.sttWs || this.sttWs.readyState !== WebSocket.OPEN || !this._sttStreaming) return;
     // MDN: bufferedAmount = bytes not yet transmitted; apply backpressure to avoid memory/CPU issues
     const backpressureLimit = 256 * 1024; // 256 KB
     if (this.sttWs.bufferedAmount > backpressureLimit) {
@@ -1020,38 +636,15 @@ export class CartesiaAudioBridge {
       return;
     }
     try {
-      this._sttChunkSendCount++;
-      if (this._sttChunkSendCount <= 3 || this._sttChunkSendCount % 50 === 0) {
-        DEBUG.trace('VAD: Sending chunk to STT WebSocket', { 
-          chunk: this._sttChunkSendCount, 
-          size: arrayBuffer.byteLength,
-          bufferedAmount: this.sttWs.bufferedAmount 
-        });
-      }
       this.sttWs.send(arrayBuffer);
     } catch (err) {
       DEBUG.error('Error sending STT chunk', { error: err, readyState: this.sttWs?.readyState });
       // If send fails, the WebSocket is likely closed - stop streaming
       this._sttStreaming = false;
-      // Attempt to reconnect if connection was lost
-      if (this.sttWs && this.sttWs.readyState === WebSocket.CLOSED && this._sttActive) {
-        DEBUG.trace('STT WebSocket send failed, attempting reconnection...');
-        this.connectSTTWebSocket().catch((reconnectErr) => {
-          DEBUG.error('STT WebSocket reconnection failed', reconnectErr);
-          this.onError('STT connection lost. Please try again.');
-        });
-      }
     }
   }
 
   _flushPreSpeechBuffer() {
-    const bufferSize = this._preSpeechBuffer.length;
-    if (bufferSize > 0) {
-      DEBUG.trace('VAD: Flushing pre-speech buffer', { 
-        chunks: bufferSize,
-        totalBytes: this._preSpeechBuffer.reduce((sum, buf) => sum + (buf.byteLength || 0), 0)
-      });
-    }
     for (const buf of this._preSpeechBuffer) {
       // Record pre-speech buffer chunks if recording is enabled
       if (this._isRecordingAudio && buf instanceof ArrayBuffer) {
@@ -1068,7 +661,6 @@ export class CartesiaAudioBridge {
 
   /**
    * @param {Object} [options]
-   * @param {boolean} [options.skipWakeWordWait] - If true, start listening immediately (e.g. when user clicked mic button). Otherwise when wake word is enabled we wait for wake word before activating STT.
    */
   async startSTT(options = {}) {
     if (this._sttActive) return;
@@ -1081,8 +673,20 @@ export class CartesiaAudioBridge {
     try {
       await this.init();
       DEBUG.trace('startSTT: init OK');
-      await this.connectSTTWebSocket();
-      DEBUG.trace('startSTT: STT WebSocket connected');
+      
+      // Pre-connect TTS in parallel for zero-latency first TTS request (optimal latency)
+      const connectPromises = [this.connectSTTWebSocket()];
+      if (this.apiKey) {
+        // Pre-connect TTS WebSocket in parallel - don't await, let it connect in background
+        connectPromises.push(
+          this.connectTTS().catch((err) => {
+            // Non-fatal: TTS will connect on-demand if pre-connection fails
+            DEBUG.trace('TTS pre-connection failed (non-fatal)', { error: err });
+          })
+        );
+      }
+      await Promise.all(connectPromises);
+      DEBUG.trace('startSTT: STT WebSocket connected, TTS pre-connected');
 
       let stream;
       try {
@@ -1100,27 +704,7 @@ export class CartesiaAudioBridge {
       this.mediaStream = stream;
       DEBUG.trace('startSTT: getUserMedia OK, stream tracks:', stream.getTracks().length);
 
-      // Initialize wake word with the SAME stream as mic (same entry point as mic: one gesture, one stream).
-      // initWakeWord() is the single code path; it uses this.mediaStream we just set.
-      if (this.options.wakeWordEnabled && this._hasWakeWordConfig()) {
-        try {
-          const result = await this.initWakeWord();
-          if (result?.success) {
-            DEBUG.trace('startSTT: Wake word initialized/re-enabled with mic stream');
-          } else if (result?.reason) {
-            DEBUG.trace('startSTT: Wake word init failed (STT continues without)', { reason: result.reason });
-          }
-        } catch (wakeWordErr) {
-          DEBUG.error('Wake word initialization failed in startSTT', wakeWordErr);
-          if (this.options.wakeWordEnabled) {
-            const msg = `Wake word initialization failed: ${wakeWordErr?.message || wakeWordErr}. You can still use the mic button to talk.`;
-            logWakeWordError(msg, wakeWordErr);
-            this.onError(msg);
-          }
-        }
-      }
-
-      // Reuse existing STT AudioWorklet graph when wake word pre-set it (same mic stream, no duplicate nodes)
+      // Reuse existing STT AudioWorklet graph if already set up
       const sttGraphExists = this.sttNode && this.sttGainNode && this.sttAnalyserNode;
       if (!sttGraphExists) {
         const source = this.audioContext.createMediaStreamSource(stream);
@@ -1151,18 +735,13 @@ export class CartesiaAudioBridge {
           try {
             if (!e || !e.data || e.data.type !== 'audio' || !e.data.data) return;
             _audioChunkCount++;
+            if (DEBUG.enabled && _audioChunkCount <= 3) {
+              DEBUG.trace('stt-capture: audio chunk received', { chunk: _audioChunkCount, streaming: this._sttStreaming });
+            }
             const buf = e.data.data;
             if (!(buf instanceof ArrayBuffer)) {
               DEBUG.error('STT processor sent invalid data type', { type: typeof buf, isArrayBuffer: buf instanceof ArrayBuffer });
               return;
-            }
-            if (_audioChunkCount <= 3 || _audioChunkCount % 50 === 0) {
-              DEBUG.trace('VAD: Audio chunk received', { 
-                chunk: _audioChunkCount, 
-                size: buf.byteLength,
-                streaming: this._sttStreaming,
-                bufferSize: this._preSpeechBuffer.length 
-              });
             }
             if (this._isRecordingAudio) {
               try {
@@ -1190,7 +769,7 @@ export class CartesiaAudioBridge {
       } else {
         this.sttGainNode.gain.value = this._inputGain;
         if (this.sttAnalyserNode) this.sttAnalyserNode.smoothingTimeConstant = 0.5;
-        DEBUG.trace('startSTT: reusing existing STT audio graph (AudioWorklet + wake word pre-setup)');
+        DEBUG.trace('startSTT: reusing existing STT audio graph (AudioWorklet pre-setup)');
       }
 
       this._preSpeechBuffer = [];
@@ -1207,19 +786,11 @@ export class CartesiaAudioBridge {
         submitUserSpeechOnPause: VAD_CONFIG.submitUserSpeechOnPause,
         baseAssetPath: VAD_CONFIG.baseAssetPath,
         onnxWASMBasePath: VAD_CONFIG.onnxWASMBasePath,
-        getStream: () => {
-          const streamPromise = Promise.resolve(stream);
-          DEBUG.trace('VAD getStream() called (startSTT)', { 
-            hasStream: !!stream, 
-            streamId: stream?.id,
-            tracks: stream?.getTracks()?.length 
-          });
-          return streamPromise;
-        },
+        getStream: () => Promise.resolve(stream),
         onSpeechStart: () => {
           DEBUG.trace('VAD onSpeechStart - enabling STT streaming');
-          // Always clear the silence stop timer when user speaks again - this allows conversations to go back and forth
-          this._clearSilenceStopTimer();
+          // Only clear the silence stop timer if we had real speech in the previous segment; otherwise noise can keep resetting it and the mic never stops
+          if (this._hadTranscriptFromPreviousSegment) this._clearSilenceStopTimer();
           this._hadTranscriptFromPreviousSegment = false;
           this._clearSilenceClosingTimer();
           this._pendingFinalTranscript = null;
@@ -1228,7 +799,6 @@ export class CartesiaAudioBridge {
           // Clear previous recording and start new one
           this._recordedAudioChunks = [];
           this._isRecordingAudio = true;
-          this._sttChunkSendCount = 0; // Reset chunk counter for new speech segment
           this.onSpeechStart();
           this._bargeIn();
           this._sttStreaming = true;
@@ -1236,9 +806,7 @@ export class CartesiaAudioBridge {
           this._flushPreSpeechBuffer();
         },
         onSpeechEnd: () => {
-          DEBUG.trace('VAD onSpeechEnd - sending finalize, starting silence-after-speech mic stop timer', {
-            chunksSent: this._sttChunkSendCount
-          });
+          DEBUG.trace('VAD onSpeechEnd - sending finalize, starting silence-after-speech mic stop timer');
           this.onSpeechEnd();
           this._sttStreaming = false;
           // Stop recording audio when speech ends
@@ -1247,12 +815,11 @@ export class CartesiaAudioBridge {
           if (this.sttWs?.readyState === WebSocket.OPEN) {
             try {
               this.sttWs.send('finalize');
-              DEBUG.trace('VAD: Sent finalize to STT', { totalChunksSent: this._sttChunkSendCount });
             } catch (err) {
               DEBUG.error('Error sending finalize to STT', { error: err });
             }
           }
-          const stopMs = VAD_CONFIG.silenceAfterSpeechToStopMicMs ?? 2500;
+          const stopMs = VAD_CONFIG.silenceAfterSpeechToStopMicMs ?? 3500;
           this._clearSilenceStopTimer();
           if (stopMs > 0) {
             this._silenceStopTimer = setTimeout(() => {
@@ -1265,18 +832,6 @@ export class CartesiaAudioBridge {
       };
 
       try {
-        // Clean up existing VAD instance if present (e.g., from wake word pre-start)
-        if (this.vad) {
-          try {
-            this.vad.pause();
-            if (typeof this.vad.destroy === 'function') {
-              this.vad.destroy();
-            }
-          } catch (cleanupErr) {
-            DEBUG.warn('Error cleaning up existing VAD before creating new instance', cleanupErr);
-          }
-          this.vad = null;
-        }
         this.vad = await MicVAD.new(vadOptions);
         if (!this.vad) {
           throw new Error('VAD initialization returned null');
@@ -1308,24 +863,8 @@ export class CartesiaAudioBridge {
         }
         throw new Error(`VAD initialization failed: ${vadErr?.message || vadErr}`);
       }
-      // If user explicitly started STT (e.g. mic button), skip wake-word wait and listen immediately.
-      // Otherwise when wake word is enabled, wait for wake word before activating STT.
-      const skipWakeWordWait = options.skipWakeWordWait === true;
-      if (!skipWakeWordWait && this.options.wakeWordEnabled && this.wakeWordManager && this.wakeWordManager.isEnabled()) {
-        DEBUG.trace('startSTT: Wake word enabled and active, waiting for wake word before activating STT');
-        // Don't activate STT yet - wait for wake word to trigger it
-        this._wakeWordActive = false;
-        // Ensure wake word is enabled
-        this.wakeWordManager.setEnabled(true);
-      } else {
-        // Normal flow: activate STT immediately (wake word not enabled or not active)
-        // Disable wake word during STT to prevent re-triggering
-        if (this.wakeWordManager && this.wakeWordManager.isEnabled()) {
-          this.wakeWordManager.setEnabled(false);
-          DEBUG.trace('startSTT: Wake word disabled during STT to prevent re-triggering');
-        }
-        
-        this._sttActive = true;
+      // Activate STT immediately
+      this._sttActive = true;
         this._hadTranscriptFromPreviousSegment = false;
         const maxMs = VAD_CONFIG.maxListeningMs ?? 0;
         if (maxMs > 0) {
@@ -1336,6 +875,8 @@ export class CartesiaAudioBridge {
           }, maxMs);
         }
         DEBUG.trace('startSTT: VAD started, pipeline active');
+        // Start connection health monitoring for proactive reconnection
+        this._startConnectionHealthMonitoring();
         // Notify that STT is now active
         this.onSTTStarted();
       }
@@ -1350,246 +891,6 @@ export class CartesiaAudioBridge {
     }
   }
 
-  /**
-   * Handle wake word detection - activate STT pipeline
-   * Implements cooldown period to prevent re-triggering
-   */
-  async _onWakeWordDetected(keywordIndex) {
-    // Check cooldown period to prevent re-triggering (per best practices)
-    const now = Date.now();
-    if (now - this._lastWakeWordDetectionTime < this._wakeWordCooldownMs) {
-      DEBUG.trace('Wake word detected but in cooldown period', { 
-        keywordIndex,
-        timeSinceLastDetection: now - this._lastWakeWordDetectionTime,
-        cooldownMs: this._wakeWordCooldownMs
-      });
-      return;
-    }
-    
-    if (this._wakeWordActive) {
-      DEBUG.trace('Wake word detected but already active', { keywordIndex });
-      return;
-    }
-    
-    DEBUG.trace('Wake word detected! Activating STT pipeline (optimized)', { keywordIndex });
-    /* eslint-disable no-console -- pipeline diagnostic: STT activation */
-    if (typeof console !== 'undefined' && console.log) {
-      console.log('[JARVIS Wake Word] Wake word triggered — activating STT pipeline');
-    }
-    /* eslint-enable no-console */
-    this._lastWakeWordDetectionTime = now;
-    this._wakeWordActive = true;
-    this.onWakeWordDetected(keywordIndex);
-    
-    // OPTIMIZED: Everything should already be pre-setup, just activate immediately
-    if (!this._sttActive) {
-      try {
-        // Ensure STT WebSocket is connected (should already be pre-connected)
-        if (!this.sttWs || this.sttWs.readyState !== WebSocket.OPEN) {
-          DEBUG.trace('Wake word: STT WebSocket not pre-connected, connecting now (fallback)...');
-          await this.connectSTTWebSocket();
-        }
-        
-        // Ensure audio graph is set up (should already be pre-setup)
-        if (!this.sttNode) {
-          DEBUG.trace('Wake word: STT audio graph not pre-setup, setting up now (fallback)...');
-          // Fallback: setup audio graph if pre-setup failed
-          if (!this.mediaStream) {
-            const stream = await navigator.mediaDevices.getUserMedia({
-              audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true,
-              },
-            });
-            this.mediaStream = stream;
-          }
-          
-          const source = this.audioContext.createMediaStreamSource(this.mediaStream);
-          this.sttGainNode = this.audioContext.createGain();
-          this.sttGainNode.gain.value = this._inputGain;
-          this.sttAnalyserNode = this.audioContext.createAnalyser();
-          this.sttAnalyserNode.fftSize = 256;
-          
-          const basePath = this.options.audioWorkletBasePath || './audio/';
-          const processorPath = basePath.endsWith('/') 
-            ? `${basePath}stt-capture-processor.js`
-            : `${basePath}/stt-capture-processor.js`;
-          const sttAbsolute = processorPath.startsWith('http') ? processorPath : new URL(processorPath, window.location.origin).href;
-          try {
-            await this.audioContext.audioWorklet.addModule(sttAbsolute);
-          } catch (err) {
-            if (err.message && !err.message.includes('already been added')) {
-              throw err;
-            }
-          }
-          this.sttNode = new AudioWorkletNode(this.audioContext, 'stt-capture-processor');
-          source.connect(this.sttGainNode);
-          this.sttGainNode.connect(this.sttNode);
-          this.sttGainNode.connect(this.sttAnalyserNode);
-          let _wakeWordChunkCount = 0;
-          this.sttNode.port.onmessage = (e) => {
-            try {
-              if (!e || !e.data || e.data.type !== 'audio' || !e.data.data) return;
-              _wakeWordChunkCount++;
-              const buf = e.data.data;
-              if (!(buf instanceof ArrayBuffer)) {
-                DEBUG.error('STT processor sent invalid data type', { type: typeof buf, isArrayBuffer: buf instanceof ArrayBuffer });
-                return;
-              }
-              if (_wakeWordChunkCount <= 3 || _wakeWordChunkCount % 50 === 0) {
-                DEBUG.trace('VAD: Audio chunk received (wake word fallback)', { 
-                  chunk: _wakeWordChunkCount, 
-                  size: buf.byteLength,
-                  streaming: this._sttStreaming,
-                  bufferSize: this._preSpeechBuffer.length 
-                });
-              }
-              if (this._isRecordingAudio) {
-                try {
-                  this._recordedAudioChunks.push(new Uint8Array(buf));
-                } catch (err) {
-                  DEBUG.error('Failed to record audio chunk', { error: err });
-                }
-              }
-              if (this._sttStreaming) {
-                this._sendChunkToSTT(buf);
-              } else {
-                this._preSpeechBuffer.push(buf);
-                if (this._preSpeechBuffer.length > this._preSpeechMaxChunks) {
-                  this._preSpeechBuffer.shift();
-                }
-              }
-            } catch (err) {
-              DEBUG.error('Error handling STT AudioWorklet message', { error: err, data: e?.data });
-            }
-          };
-          
-          this.sttNode.port.onerror = (err) => {
-            DEBUG.error('STT AudioWorklet processor error', { error: err });
-            this.onError('STT AudioWorklet processor error. Check console for details.');
-          };
-        }
-        
-        // Ensure VAD is started (should already be pre-started)
-        if (!this.vad) {
-          DEBUG.trace('Wake word: VAD not pre-started, starting now (fallback)...');
-          const vadOptions = {
-            model: VAD_CONFIG.model,
-            redemptionMs: VAD_CONFIG.redemptionMs,
-            preSpeechPadMs: VAD_CONFIG.preSpeechPadMs,
-            minSpeechMs: VAD_CONFIG.minSpeechMs,
-            positiveSpeechThreshold: VAD_CONFIG.positiveSpeechThreshold,
-            negativeSpeechThreshold: VAD_CONFIG.negativeSpeechThreshold,
-            submitUserSpeechOnPause: VAD_CONFIG.submitUserSpeechOnPause,
-            baseAssetPath: VAD_CONFIG.baseAssetPath,
-            onnxWASMBasePath: VAD_CONFIG.onnxWASMBasePath,
-            getStream: () => {
-            const stream = Promise.resolve(this.mediaStream);
-            DEBUG.trace('VAD getStream() called', { 
-              hasStream: !!this.mediaStream, 
-              streamId: this.mediaStream?.id,
-              tracks: this.mediaStream?.getTracks()?.length 
-            });
-            return stream;
-          },
-            onSpeechStart: () => {
-              DEBUG.trace('VAD onSpeechStart (wake word fallback) - enabling STT streaming');
-              // Always clear the silence stop timer when user speaks again - this allows conversations to go back and forth
-              this._clearSilenceStopTimer();
-              this._hadTranscriptFromPreviousSegment = false;
-              this._clearMaxListeningTimer();
-              this._recordedAudioChunks = [];
-              this._isRecordingAudio = true;
-              this._sttChunkSendCount = 0; // Reset chunk counter for new speech segment
-              this._sttStreaming = true;
-              this._flushPreSpeechBuffer();
-              this.onSpeechStart();
-            },
-            onSpeechEnd: async () => {
-              DEBUG.trace('VAD onSpeechEnd (wake word fallback) - sending finalize', {
-                chunksSent: this._sttChunkSendCount
-              });
-              this._sttStreaming = false;
-              this._isRecordingAudio = false;
-              this.onSpeechEnd();
-              if (this.sttWs && this.sttWs.readyState === WebSocket.OPEN) {
-                try {
-                  this.sttWs.send('finalize');
-                  DEBUG.trace('VAD: Sent finalize to STT (wake word fallback)', { totalChunksSent: this._sttChunkSendCount });
-                } catch (err) {
-                  DEBUG.error('Error sending finalize to STT', err);
-                }
-              }
-              const silenceMs = VAD_CONFIG.silenceAfterSpeechToStopMicMs ?? 2500;
-              this._silenceStopTimer = setTimeout(() => {
-                this._silenceStopTimer = null;
-                this._stopSTTAndSendTranscript();
-              }, silenceMs);
-            },
-            onVADMisfire: () => {
-              this.onVADMisfire();
-            },
-          };
-          
-          this.vad = await MicVAD.new(vadOptions);
-          await this.vad.start();
-        }
-        
-        // OPTIMIZED: Activate STT pipeline immediately (everything is pre-setup)
-        this._sttActive = true;
-        this._hadTranscriptFromPreviousSegment = false;
-        
-        // OPTIMIZED: Flush pre-speech buffer immediately (captures audio during wake word detection)
-        // This ensures we don't lose any audio that occurred during the wake word detection
-        this._flushPreSpeechBuffer();
-        
-        // OPTIMIZED: Start streaming immediately (VAD will gate if no speech detected)
-        // This allows immediate capture without waiting for VAD detection
-        this._sttStreaming = true;
-        
-        const maxMs = VAD_CONFIG.maxListeningMs ?? 0;
-        if (maxMs > 0) {
-          this._maxListeningTimer = setTimeout(() => {
-            this._maxListeningTimer = null;
-            DEBUG.trace('Max listening time reached - stopping mic');
-            this._stopSTTAndSendTranscript();
-          }, maxMs);
-        }
-        
-        DEBUG.trace('STT pipeline activated after wake word (optimized)', { 
-          sttActive: this._sttActive,
-          vadStarted: !!this.vad,
-          sttWsReady: this.sttWs?.readyState === WebSocket.OPEN,
-          preSpeechBufferSize: this._preSpeechBuffer.length,
-          immediateStreaming: true
-        });
-        /* eslint-disable no-console -- pipeline diagnostic: STT ready */
-        if (typeof console !== 'undefined' && console.log) {
-          console.log('[JARVIS Wake Word] STT active — say your command, then wait for silence to send to agent');
-        }
-        /* eslint-enable no-console */
-        // Disable wake word during STT to prevent re-triggering
-        if (this.wakeWordManager) {
-          this.wakeWordManager.setEnabled(false);
-          DEBUG.trace('Wake word disabled during STT to prevent re-triggering');
-        }
-        
-        // Notify that STT is now active (for UI to update mic button state)
-        this.onSTTStarted();
-      } catch (err) {
-        DEBUG.error('Failed to activate STT pipeline after wake word', err);
-        const msg = `Failed to start listening after wake word: ${err.message}`;
-        logWakeWordError(msg, err);
-        this.onError(msg);
-        this._wakeWordActive = false;
-        // Re-enable wake word if activation failed
-        if (this.wakeWordManager) {
-          this.wakeWordManager.setEnabled(true);
-        }
-      }
-    }
-  }
 
   _clearSilenceStopTimer() {
     if (this._silenceStopTimer) {
@@ -1605,6 +906,27 @@ export class CartesiaAudioBridge {
     }
   }
 
+  /**
+   * Pause silence timers during TTS to prevent them from interfering with barge-in.
+   * Timers are already cleared on speech start, but this provides explicit control.
+   */
+  pauseSilenceTimersForBargeIn() {
+    this._clearSilenceStopTimer();
+    this._clearSilenceClosingTimer();
+    DEBUG.trace('Silence timers paused for barge-in');
+  }
+
+  /**
+   * Resume silence timers after TTS completes.
+   * Restarts the agent silence timer if STT is still active.
+   */
+  resumeSilenceTimersAfterTTS() {
+    if (this._sttActive) {
+      this.startAgentSilenceTimer();
+      DEBUG.trace('Silence timers resumed after TTS');
+    }
+  }
+
   /** Stop STT and send any buffered transcript to the agent (used by silence-after-speech timer and max-listening timer). */
   _stopSTTAndSendTranscript() {
     const pending = this._pendingFinalTranscript;
@@ -1612,29 +934,17 @@ export class CartesiaAudioBridge {
     const fallback = (this._lastTranscriptText || '').trim();
     this._lastTranscriptText = '';
     this._hadTranscriptFromPreviousSegment = false;
-    const wasWakeWordTriggered = this._wakeWordActive;
     this.stopSTT();
     const textToSend = (pending && String(pending.text || '').trim()) || fallback || '';
     if (textToSend) {
       DEBUG.trace('Stopping mic - sending transcript to agent', { 
         fromFinal: !!pending, 
         preview: textToSend.slice(0, 50),
-        wakeWordTriggered: wasWakeWordTriggered,
         willSendPayload: true
       });
-      /* eslint-disable no-console -- pipeline diagnostic: sending to agent */
-      if (typeof console !== 'undefined' && console.log) {
-        console.log('[JARVIS Wake Word] Sending transcript to agent', { preview: textToSend.slice(0, 50) });
-      }
-      /* eslint-enable no-console */
       this.onTranscript(textToSend, true, pending?.request_id || '');
     } else {
-      DEBUG.trace('Stopping mic - no transcript to send', { wakeWordTriggered: wasWakeWordTriggered });
-      /* eslint-disable no-console -- pipeline diagnostic: no transcript after wake word */
-      if (wasWakeWordTriggered && typeof console !== 'undefined' && console.warn) {
-        console.warn('[JARVIS Wake Word] Wake word fired but no transcript to send — try speaking clearly after "Jarvis"');
-      }
-      /* eslint-enable no-console */
+      DEBUG.trace('Stopping mic - no transcript to send');
     }
   }
 
@@ -1650,14 +960,28 @@ export class CartesiaAudioBridge {
   }
 
   _bargeIn() {
+    // Optimize barge-in: immediate cancellation for optimal responsiveness
+    // Clear audio buffer first (most important for user experience)
     this.clearTTSBuffer();
+    
+    // Cancel all active TTS contexts immediately
     const ctxIds = [...this._ttsDoneResolvers.keys()];
-    ctxIds.forEach((id) => {
-      this.cancelTTS(id);
-      const r = this._ttsDoneResolvers.get(id);
-      if (r) r.reject(new Error('Barge-in: user spoke'));
-      this._ttsDoneResolvers.delete(id);
-    });
+    if (this.ttsWs?.readyState === WebSocket.OPEN && ctxIds.length > 0) {
+      // Batch cancel all contexts in single operation for efficiency
+      for (const id of ctxIds) {
+        try {
+          this.ttsWs.send(JSON.stringify({ context_id: id, cancel: true }));
+        } catch (err) {
+          DEBUG.error('Error cancelling TTS context during barge-in', { error: err, contextId: id });
+        }
+      }
+    }
+    
+    // Reject all pending resolvers
+    for (const [id, resolver] of this._ttsDoneResolvers.entries()) {
+      resolver.reject(new Error('Barge-in: user spoke'));
+    }
+    this._ttsDoneResolvers.clear();
   }
 
   stopSTT() {
@@ -1669,6 +993,8 @@ export class CartesiaAudioBridge {
     this._hadTranscriptFromPreviousSegment = false;
     // Stop recording audio
     this._isRecordingAudio = false;
+    // Stop connection health monitoring
+    this._stopConnectionHealthMonitoring();
     const wasActive = this._sttActive;
     this._sttActive = false;
     if (this.vad) {
@@ -1687,13 +1013,10 @@ export class CartesiaAudioBridge {
     }
     this._sttStreaming = false;
     this._preSpeechBuffer = [];
-    // Only stop media stream tracks if wake word is not enabled (for always-listening)
-    // If wake word is enabled, keep the stream alive for always-listening mode
-    if (this.mediaStream && !this.options.wakeWordEnabled) {
+    // Stop media stream tracks
+    if (this.mediaStream) {
       this.mediaStream.getTracks().forEach((t) => t.stop());
       this.mediaStream = null;
-    } else if (this.mediaStream && this.options.wakeWordEnabled) {
-      DEBUG.trace('stopSTT: Keeping media stream alive for wake word always-listening');
     }
     this.stopLevelMeter();
     // Disconnect audio nodes in reverse order of connection
@@ -1731,7 +1054,7 @@ export class CartesiaAudioBridge {
         this.sttWs.onclose = null;
         this.sttWs.onmessage = null;
         // Send done message if open
-        if (this.sttWs && this.sttWs.readyState === WebSocket.OPEN) {
+        if (this.sttWs.readyState === WebSocket.OPEN) {
           try { 
             this.sttWs.send('done'); 
           } catch { 
@@ -1739,7 +1062,7 @@ export class CartesiaAudioBridge {
           }
         }
         // Close with normal code 1000 so server can distinguish from errors (MDN WebSocket close)
-        if (this.sttWs && this.sttWs.readyState !== WebSocket.CLOSED) {
+        if (this.sttWs.readyState !== WebSocket.CLOSED) {
           this.sttWs.close(1000, 'client disconnect');
         }
       } catch (err) {
@@ -1749,98 +1072,13 @@ export class CartesiaAudioBridge {
         this.sttWs = null;
       }
     }
-    // Clean up wake word manager only if wake word is not enabled for always-listening
-    // If wake word is enabled, keep it running for always-listening mode
-    if (this.wakeWordManager && !this.options.wakeWordEnabled) {
-      try {
-        this.wakeWordManager.release();
-      } catch (err) {
-        DEBUG.error('Error releasing wake word manager', err);
-      } finally {
-        this.wakeWordManager = null;
-      }
-    } else if (this.wakeWordManager && this.options.wakeWordEnabled) {
-      // Keep wake word listening for always-listening mode
-      // Re-enable it if it was disabled during STT cleanup
-      DEBUG.trace('stopSTT: Keeping wake word active for always-listening mode');
-      // Ensure wake word is still enabled after STT stops
-      if (!this.wakeWordManager.isEnabled()) {
-        this.wakeWordManager.setEnabled(true);
-        DEBUG.trace('stopSTT: Re-enabled wake word for always-listening');
-      }
-      // Keep media stream alive for wake word (don't stop tracks)
-      // Only stop tracks if we're completely shutting down (not just stopping STT)
-    }
-    this._wakeWordActive = false;
     if (wasActive) this.onSTTStopped();
   }
 
   async connectTTS() {
     if (!this.apiKey) throw new Error('CARTESIA_API_KEY is required.');
     await this.init();
-    // Ensure TTS node exists after init (safeguard for edge cases)
-    if (!this.ttsNode && this.audioContext && this.audioContext.state === 'running') {
-      try {
-        const basePath = this.options.audioWorkletBasePath || './audio/';
-        const ttsPath = basePath.endsWith('/') 
-          ? `${basePath}tts-playback-processor.js`
-          : `${basePath}/tts-playback-processor.js`;
-        const ttsAbsolute = ttsPath.startsWith('http') ? ttsPath : new URL(ttsPath, window.location.origin).href;
-        try {
-          await this.audioContext.audioWorklet.addModule(ttsAbsolute);
-        } catch (err) {
-          if (err.message && !err.message.includes('already been added')) {
-            throw err;
-          }
-          DEBUG.trace('TTS processor already loaded, continuing...');
-        }
-        this.ttsNode = new AudioWorkletNode(this.audioContext, 'tts-playback-processor');
-        this.ttsNode.connect(this.audioContext.destination);
-        DEBUG.trace('TTS AudioWorkletNode created and connected in connectTTS (safeguard)');
-        this.ttsNode.port.onerror = (err) => {
-          DEBUG.error('TTS AudioWorklet processor error', { error: err });
-          this.onError('TTS AudioWorklet processor error. Check console for details.');
-        };
-      } catch (err) {
-        DEBUG.error('Failed to create TTS AudioWorkletNode in connectTTS', { error: err });
-        throw new Error(`Failed to create TTS AudioWorkletNode. ${err.message || err}`);
-      }
-    }
-    // If WebSocket is already open, ensure message handler is set up, then return
-    if (this.ttsWs?.readyState === WebSocket.OPEN) {
-      // Ensure message handler is set up (may have been set by pre-connection with basic handler)
-      if (!this.ttsWs.onmessage || this.ttsWs.onmessage._isPreConnectHandler) {
-        this.ttsWs.onmessage = (e) => {
-          if (typeof e.data !== 'string') return;
-          try {
-            const msg = JSON.parse(e.data);
-            if (msg.type === 'chunk' && msg.data) {
-              const pcm = decodeBase64PCM(msg.data);
-              this.playTTSChunk(pcm);
-              this.onTTSChunk(msg);
-            } else if (msg.type === 'done' && msg.context_id) {
-              const r = this._ttsDoneResolvers.get(msg.context_id);
-              if (r) {
-                this._ttsDoneResolvers.delete(msg.context_id);
-                r.resolve();
-              }
-            } else if ((msg.type === 'error' || msg.error) && msg.context_id) {
-              const r = this._ttsDoneResolvers.get(msg.context_id);
-              if (r) {
-                this._ttsDoneResolvers.delete(msg.context_id);
-                r.reject(new Error(msg.error || 'TTS error'));
-              }
-              this.onError(msg.error || 'TTS error');
-            }
-          } catch (err) {
-            DEBUG.error('Error parsing TTS WebSocket message', { error: err });
-            this.onError(typeof err === 'string' ? err : (err?.message || 'TTS message parse error'));
-          }
-        };
-        DEBUG.trace('TTS WebSocket message handler set up (was pre-connected)');
-      }
-      return Promise.resolve(); // Already connected and handler set up
-    }
+    if (this.ttsWs?.readyState === WebSocket.OPEN) return;
     if (this._ttsConnectPromise) return this._ttsConnectPromise;
 
     // Prevent multiple simultaneous connection attempts
@@ -1898,24 +1136,12 @@ export class CartesiaAudioBridge {
 
       this.ttsWs.onopen = () => {
         settle(() => {
-          DEBUG.trace('TTS WebSocket open');
-          /* eslint-disable no-console */
-          if (typeof console !== 'undefined' && console.log) {
-            console.log('[JARVIS] TTS WebSocket connected successfully');
-          }
-          /* eslint-enable no-console */
           resolve();
         });
       };
-      this.ttsWs.onerror = (err) => {
+      this.ttsWs.onerror = () => {
         settle(() => {
-          DEBUG.error('TTS WebSocket error', err);
-          /* eslint-disable no-console */
-          if (typeof console !== 'undefined' && console.error) {
-            console.error('[JARVIS] TTS WebSocket connection error', err);
-          }
-          /* eslint-enable no-console */
-          reject(new Error('TTS WebSocket connection failed. Please check your API key and internet connection.'));
+          reject(new Error('TTS WebSocket error'));
         });
       };
       this.ttsWs.onclose = (ev) => { 
@@ -1935,6 +1161,8 @@ export class CartesiaAudioBridge {
         if (typeof e.data !== 'string') return;
         try {
           const msg = JSON.parse(e.data);
+          // Update last activity timestamp for connection health monitoring
+          this._lastTTSActivity = Date.now();
           if (msg.type === 'chunk' && msg.data) {
             const pcm = decodeBase64PCM(msg.data);
             this.playTTSChunk(pcm);
@@ -1953,10 +1181,7 @@ export class CartesiaAudioBridge {
             }
             this.onError(msg.error || 'TTS error');
           }
-        } catch (err) {
-          DEBUG.error('Error parsing TTS WebSocket message', { error: err });
-          this.onError(typeof err === 'string' ? err : (err?.message || 'TTS message parse error'));
-        }
+        } catch (err) { this.onError(err); }
       };
     });
     return this._ttsConnectPromise;
@@ -1965,9 +1190,6 @@ export class CartesiaAudioBridge {
   playTTSChunk(pcmInt16) {
     if (!this.ttsNode) {
       DEBUG.error('playTTSChunk: TTS node not initialized');
-      // Don't attempt recovery here - it's async and would cause issues
-      // The node should be created in connectTTS() before speakText() is called
-      this.onError('TTS node not available. Please try again.');
       return;
     }
     try {
@@ -2035,73 +1257,115 @@ export class CartesiaAudioBridge {
   }
 
   async speakText(transcript, contextId = null, isContinue = false) {
-    // Ensure TTS WebSocket is connected
-    try {
-      await this.connectTTS();
-    } catch (connectErr) {
-      DEBUG.error('TTS WebSocket connection failed in speakText', connectErr);
-      throw new Error(`Failed to connect TTS WebSocket: ${connectErr?.message || connectErr}`);
-    }
-    
+    // Ensure TTS is connected (may already be pre-connected for optimal latency)
+    await this.connectTTS();
     const ctxId = contextId || `ctx_${++this.contextIdCounter}_${Date.now()}`;
 
     // Check WebSocket readyState before sending
     if (!this.ttsWs || this.ttsWs.readyState !== WebSocket.OPEN) {
-      const state = this.ttsWs?.readyState ?? 'null';
-      const stateNames = { 0: 'CONNECTING', 1: 'OPEN', 2: 'CLOSING', 3: 'CLOSED' };
-      DEBUG.error('TTS WebSocket not open before sending', { 
-        readyState: state, 
-        stateName: stateNames[state] || 'UNKNOWN',
-        hasWs: !!this.ttsWs 
-      });
-      throw new Error(`TTS WebSocket not open (readyState: ${stateNames[state] || state})`);
+      throw new Error(`TTS WebSocket not open (readyState: ${this.ttsWs?.readyState ?? 'null'})`);
     }
 
+    // Optimize: Send immediately for minimal latency (removed requestAnimationFrame delay)
+    // Immediate send reduces latency by ~16ms compared to requestAnimationFrame
     try {
+      // Use optimal low-latency configuration per cArTeSiA dOcS.md
+      // Note: sample_rate 44100 for quality (8000 Hz is lower latency but lower quality)
+      // For ultra-low latency, consider 8000 Hz, but 44100 provides better quality
       this.ttsWs.send(
         JSON.stringify({
-          model_id: this.ttsModel,
+          model_id: this.ttsModel, // sonic-turbo for 40ms, sonic-3 for 90ms (more emotive)
           transcript,
           voice: { mode: 'id', id: this.voiceId },
           language: this.language,
           context_id: ctxId,
           output_format: {
-            container: 'raw',
-            encoding: 'pcm_s16le',
-            sample_rate: 44100,
+            container: 'raw', // No container overhead
+            encoding: 'pcm_s16le', // Recommended for best performance
+            sample_rate: 44100, // Quality vs latency tradeoff (8000 Hz for lower latency)
           },
           add_timestamps: true,
           continue: isContinue,
-          max_buffer_delay_ms: 0,
+          max_buffer_delay_ms: 0, // No server buffering - optimal for streaming
         })
       );
+      
+      if (isContinue) {
+        return Promise.resolve();
+      } else {
+        return new Promise((resolve, reject) => {
+          this._ttsDoneResolvers.set(ctxId, { resolve, reject });
+        });
+      }
     } catch (err) {
       DEBUG.error('Error sending TTS request', { error: err, readyState: this.ttsWs?.readyState });
       throw new Error(`Failed to send TTS request: ${err.message || err}`);
     }
-
-    if (isContinue) return Promise.resolve();
-    return new Promise((resolve, reject) => {
-      this._ttsDoneResolvers.set(ctxId, { resolve, reject });
-    });
   }
 
   async streamTextChunks(chunks, contextId = null) {
     const ctxId = contextId || `ctx_${++this.contextIdCounter}_${Date.now()}`;
-    for (let i = 0; i < chunks.length; i++) {
-      await this.speakText(chunks[i], ctxId, i < chunks.length - 1);
+    
+    // Optimize: Ensure TTS is connected once before sending all chunks (if not already connected)
+    // This prevents each chunk from waiting for connection individually, reducing latency
+    if (!this.ttsWs || this.ttsWs.readyState !== WebSocket.OPEN) {
+      await this.connectTTS();
     }
+    
+    // Optimize: Send all chunks in parallel for minimal latency
+    // This reduces total latency from sum(chunk_latencies) to max(chunk_latencies)
+    // Since TTS is pre-connected, speakText() will send immediately without connection delay
+    const promises = chunks.map((chunk, i) => {
+      const isContinue = i < chunks.length - 1;
+      return this.speakText(chunk, ctxId, isContinue).catch((err) => {
+        // Log but don't throw - continue sending remaining chunks
+        DEBUG.error(`Error sending TTS chunk ${i + 1}/${chunks.length}`, { error: err });
+        return null; // Return null to indicate failure but continue
+      });
+    });
+    
+    // Wait for all chunks to be sent (parallel execution for optimal latency)
+    await Promise.all(promises);
     return ctxId;
   }
 
   cancelTTS(contextId) {
-    if (this.ttsWs?.readyState === WebSocket.OPEN) {
-      try {
-        this.ttsWs.send(JSON.stringify({ context_id: contextId, cancel: true }));
-      } catch (err) {
-        DEBUG.error('Error sending TTS cancel', { error: err, contextId });
+    // Optimize barge-in: cancel all active contexts immediately for optimal responsiveness
+    if (contextId) {
+      // Cancel specific context
+      if (this.ttsWs?.readyState === WebSocket.OPEN) {
+        try {
+          // Use immediate send (no requestAnimationFrame) for barge-in - speed is critical
+          this.ttsWs.send(JSON.stringify({ context_id: contextId, cancel: true }));
+        } catch (err) {
+          DEBUG.error('Error sending TTS cancel', { error: err, contextId });
+        }
       }
+      // Clear resolver for this context
+      const resolver = this._ttsDoneResolvers.get(contextId);
+      if (resolver) {
+        resolver.reject(new Error('TTS cancelled (barge-in)'));
+        this._ttsDoneResolvers.delete(contextId);
+      }
+    } else {
+      // Cancel all active contexts (barge-in optimization)
+      const ctxIds = [...this._ttsDoneResolvers.keys()];
+      if (this.ttsWs?.readyState === WebSocket.OPEN) {
+        for (const id of ctxIds) {
+          try {
+            this.ttsWs.send(JSON.stringify({ context_id: id, cancel: true }));
+          } catch (err) {
+            DEBUG.error('Error sending TTS cancel for context', { error: err, contextId: id });
+          }
+        }
+      }
+      // Reject all pending resolvers
+      for (const [id, resolver] of this._ttsDoneResolvers.entries()) {
+        resolver.reject(new Error('TTS cancelled (barge-in)'));
+      }
+      this._ttsDoneResolvers.clear();
     }
+    // Clear audio buffer immediately for optimal barge-in responsiveness
     this.clearTTSBuffer();
   }
 
@@ -2143,14 +1407,14 @@ export class CartesiaAudioBridge {
         this.sttWs.onerror = null;
         this.sttWs.onclose = null;
         this.sttWs.onmessage = null;
-        if (this.sttWs && this.sttWs.readyState === WebSocket.OPEN) {
+        if (this.sttWs.readyState === WebSocket.OPEN) {
           try {
             this.sttWs.send('done');
           } catch {
             // ignore
           }
         }
-        if (this.sttWs && this.sttWs.readyState !== WebSocket.CLOSED) {
+        if (this.sttWs.readyState !== WebSocket.CLOSED) {
           this.sttWs.close(1000, 'pagehide');
         }
       } catch (err) {
@@ -2159,18 +1423,82 @@ export class CartesiaAudioBridge {
         this.sttWs = null;
       }
     }
-    if (this.wakeWordManager && typeof this.wakeWordManager.release === 'function') {
-      this.wakeWordManager.release().catch((err) => {
-        DEBUG.error('Error releasing wake word for bfcache', err);
-      });
-      this.wakeWordManager = null;
-    }
     DEBUG.trace('closeAllWebSocketsForBfcache: all WebSockets closed');
+  }
+
+  /**
+   * Start connection health monitoring for proactive reconnection
+   * Checks WebSocket health every 30 seconds and reconnects if dead
+   * @private
+   */
+  _startConnectionHealthMonitoring() {
+    this._stopConnectionHealthMonitoring();
+    // Check connection health every 30 seconds
+    this._connectionHealthInterval = setInterval(() => {
+      this._checkConnectionHealth();
+    }, 30000);
+    // Initialize activity timestamps
+    this._lastSTTActivity = Date.now();
+    this._lastTTSActivity = Date.now();
+  }
+
+  /**
+   * Stop connection health monitoring
+   * @private
+   */
+  _stopConnectionHealthMonitoring() {
+    if (this._connectionHealthInterval) {
+      clearInterval(this._connectionHealthInterval);
+      this._connectionHealthInterval = null;
+    }
+  }
+
+  /**
+   * Check connection health and proactively reconnect if dead
+   * @private
+   */
+  _checkConnectionHealth() {
+    const now = Date.now();
+    const STT_TIMEOUT = 120000; // 2 minutes without activity = dead
+    const TTS_TIMEOUT = 120000; // 2 minutes without activity = dead
+
+    // Check STT connection health
+    if (this._sttActive && this.sttWs) {
+      const sttDead = this.sttWs.readyState !== WebSocket.OPEN ||
+        (now - this._lastSTTActivity > STT_TIMEOUT);
+      if (sttDead) {
+        DEBUG.trace('STT connection appears dead, reconnecting...', {
+          readyState: this.sttWs.readyState,
+          lastActivity: now - this._lastSTTActivity
+        });
+        // Reconnect STT in background (non-blocking)
+        this.connectSTTWebSocket().catch((err) => {
+          DEBUG.error('STT reconnection failed', { error: err });
+        });
+      }
+    }
+
+    // Check TTS connection health (only if we have API key)
+    if (this.apiKey && this.ttsWs) {
+      const ttsDead = this.ttsWs.readyState !== WebSocket.OPEN ||
+        (now - this._lastTTSActivity > TTS_TIMEOUT);
+      if (ttsDead) {
+        DEBUG.trace('TTS connection appears dead, reconnecting...', {
+          readyState: this.ttsWs.readyState,
+          lastActivity: now - this._lastTTSActivity
+        });
+        // Reconnect TTS in background (non-blocking)
+        this.connectTTS().catch((err) => {
+          DEBUG.trace('TTS reconnection failed (non-fatal)', { error: err });
+        });
+      }
+    }
   }
 
   destroy() {
     this.stopSTT();
     this.disconnectTTS();
+    this._stopConnectionHealthMonitoring();
     if (this.ttsNode) {
       try {
         this.ttsNode.disconnect();
@@ -2179,12 +1507,6 @@ export class CartesiaAudioBridge {
         DEBUG.error('Error disconnecting TTS node in destroy', { error: err });
       }
       this.ttsNode = null;
-    }
-    if (this.wakeWordManager && typeof this.wakeWordManager.release === 'function') {
-      this.wakeWordManager.release().catch((err) => {
-        DEBUG.error('Error releasing WakeWordManager in destroy', { error: err });
-      });
-      this.wakeWordManager = null;
     }
     if (this.mediaStream) {
       try {
