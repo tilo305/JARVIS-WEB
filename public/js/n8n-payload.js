@@ -1,12 +1,12 @@
 /**
  * Shared n8n webhook payload builder and reply extraction — single source of truth for all n8n requests.
- * Used by: chat UI (app.js), live tests, fallback-revert-debug.
+ * Used by: chat UI (app.js), debug tools (check-n8n-webhook, open-app-debug-send), live tests, fallback-revert-debug.
  * Ensures session_id, timezone, location, and all fields are always sent; reply parsing handles arrays and n8n item format.
  */
 'use strict';
 
 /** Keys checked (in order) for reply text in n8n webhook JSON response */
-export const N8N_REPLY_KEYS = ['output', 'reply', 'result', 'text', 'message', 'response', 'answer', 'content', 'body', 'responseText'];
+export const N8N_REPLY_KEYS = ['output', 'reply', 'result', 'text', 'message', 'response', 'answer', 'content'];
 
 /**
  * Extract reply string from n8n webhook JSON response.
@@ -35,14 +35,9 @@ export function extractReplyFromJson(data) {
   }
   for (const v of Object.values(data)) {
     if (typeof v === 'string') return v;
-    if (v && typeof v === 'object') {
-      if (Array.isArray(v) && v.length) {
-        const fromArr = extractReplyFromJson(v);
-        if (fromArr) return fromArr;
-      } else {
-        const nested = extractReplyFromJson(v);
-        if (nested) return nested;
-      }
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      const nested = extractReplyFromJson(v);
+      if (nested) return nested;
     }
   }
   return null;
@@ -123,30 +118,20 @@ export function getNaturalFallback(userMessage) {
  * - source: 'voice' | 'text'
  * - attachments: array of { name, type, size, data? } — data is base64 file content when present
  * - locale, language: browser locale/language
- * - wakeWordTriggered: boolean — true when voice input was triggered by wake word (vs mic button)
- *
- * Agentic Design Patterns (optional, for n8n workflow branching):
- * - conversationHistory: recent user/assistant turns (Memory pattern)
- * - intent: classified intent for routing (Routing pattern)
- * - agenticHints: { planMode, refineMode } for n8n workflow selection
- * - contextEnrichment: viewport, userAgent hints (Context Engineering)
  *
  * @param {string} message - User message text
  * @param {Object} [options] - Optional overrides
- * @param {string} [options.source='text'] - 'voice' | 'text' — voice is used for both mic button and wake word (same payload)
+ * @param {string} [options.source='text'] - 'voice' | 'text'
  * @param {string} [options.sessionId] - Override session ID (auto-generated if omitted)
  * @param {Array} [options.attachments] - File attachments
- * @param {boolean} [options.wakeWordTriggered] - true if voice input was triggered by wake word (vs mic button)
- * @param {Array<{role: string, content: string}>} [options.conversationHistory] - Recent turns (Memory)
- * @param {string} [options.intent] - Classified intent (Routing)
- * @param {Object} [options.agenticHints] - planMode, refineMode, etc.
- * @param {Object} [options.contextEnrichment] - Extra context (Context Engineering)
+ * @param {Array} [options.conversationHistory] - Previous conversation messages for context
  * @returns {Object} Full payload object
  */
 export function buildN8nPayload(message, options = {}) {
   const source = options.source ?? 'text';
   const sessionId = options.sessionId ?? `sess_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
   const rawAttachments = options.attachments ?? [];
+  const conversationHistory = options.conversationHistory ?? [];
 
   const attachments = rawAttachments.map((f) => {
     if (f instanceof File) return { name: f.name, type: f.type, size: f.size };
@@ -163,7 +148,7 @@ export function buildN8nPayload(message, options = {}) {
   const messageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
   const { timezone, locale, language } = getClientLocation();
 
-  const payload = {
+  return {
     message: (message || '').trim(),
     session_id: sessionId,
     sessionId,
@@ -174,28 +159,9 @@ export function buildN8nPayload(message, options = {}) {
     messageId,
     source,
     attachments,
+    conversation_history: conversationHistory,
+    conversationHistory,
     locale: locale || undefined,
     language: language || undefined,
   };
-
-  // Wake word indicator — distinguish wake word from mic button
-  if (options.wakeWordTriggered === true) {
-    payload.wakeWordTriggered = true;
-  }
-
-  // Agentic Design Patterns — optional fields for n8n
-  if (Array.isArray(options.conversationHistory) && options.conversationHistory.length > 0) {
-    payload.conversationHistory = options.conversationHistory;
-  }
-  if (options.intent) {
-    payload.intent = options.intent;
-  }
-  if (options.agenticHints && typeof options.agenticHints === 'object') {
-    payload.agenticHints = options.agenticHints;
-  }
-  if (options.contextEnrichment && typeof options.contextEnrichment === 'object') {
-    payload.contextEnrichment = options.contextEnrichment;
-  }
-
-  return payload;
 }

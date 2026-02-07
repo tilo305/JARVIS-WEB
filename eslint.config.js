@@ -19,6 +19,8 @@ export default tseslint.config(
       "*.min.js",
       "parse-*.js", // Parse scripts (utility files)
       "server-cors-diagnostics.js", // Diagnostic script
+      "check-js-files.mjs", // Utility script
+      "validate-json.mjs", // Utility script
     ],
   },
 
@@ -52,7 +54,7 @@ export default tseslint.config(
 
   // Node.js files (server.js, vite.config.js, scripts)
   {
-    files: ["server.js", "vite.config.js", "scripts/**/*.mjs"],
+    files: ["server.js", "vite.config.js", "scripts/**/*.mjs", "scripts/**/*.js"],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "module",
@@ -62,6 +64,7 @@ export default tseslint.config(
     },
     rules: {
       "no-console": "off",
+      "no-undef": "off", // Node.js globals are available
     },
   },
 

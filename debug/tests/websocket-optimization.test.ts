@@ -62,6 +62,7 @@ class MockWebSocket extends EventEmitter {
 // Use factory function to avoid hoisting issues
 jest.mock('ws', () => {
   // Import EventEmitter here to avoid hoisting issues
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { EventEmitter } = require('events');
   
   class MockWebSocket extends EventEmitter {
@@ -135,6 +136,10 @@ describe('WebSocket Optimizations', () => {
       sttClient = new CartesiaSTTClient();
     });
 
+    afterEach(() => {
+      sttClient.disconnect();
+    });
+
     it('should send binary data without unnecessary Buffer conversion', async () => {
       await sttClient.connect();
       
@@ -171,6 +176,10 @@ describe('WebSocket Optimizations', () => {
 
     beforeEach(() => {
       ttsClient = new CartesiaTTSClient();
+    });
+
+    afterEach(() => {
+      ttsClient.disconnect();
     });
 
     it('should send text immediately without requestAnimationFrame delay', async () => {

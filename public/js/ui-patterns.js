@@ -552,6 +552,7 @@ export class SmartDefaults {
     try {
       localStorage.setItem(this.storageKey, JSON.stringify(this.defaults));
     } catch (err) {
+      // eslint-disable-next-line no-console -- Error logging for localStorage failures
       console.warn('[SmartDefaults] Failed to save:', err);
     }
   }

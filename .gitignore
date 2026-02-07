@@ -5,9 +5,21 @@ coverage/
 *.pcm
 *.wav
 *.log
-.env
 .DS_Store
 *.tsbuildinfo
+
+# Security: Never commit sensitive files
+.env
+.env.local
+.env.production
+.env.development
+.env.*.local
+*.key
+*.pem
+*.cert
+*.crt
+secrets/
+credentials/
 
 # Debug logs (websocket metrics, etc.)
 debug/logs/*.json

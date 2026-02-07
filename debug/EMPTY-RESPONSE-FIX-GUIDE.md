@@ -135,9 +135,17 @@ Webhook → AI Agent → [other nodes] (Respond not connected) ❌
 
 Run in browser console:
 ```javascript
-// Copy and paste: debug/tools/diagnose-empty-n8n-response.js
-// Or run:
-diagnoseEmptyN8nResponse()
+// Test webhook connection
+const result = await JARVIS.testN8nWebhook();
+console.log('Success:', result.success);
+console.log('Has Reply:', result.hasReply);
+console.log('Is Empty:', result.isEmptyResponse);
+console.log('Body:', result.body);
+```
+
+Or use Node.js (no CORS):
+```bash
+npm run debug:n8n
 ```
 
 This will:

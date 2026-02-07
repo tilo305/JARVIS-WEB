@@ -10,6 +10,10 @@ import type {
   STTErrorCallback,
 } from './types.js';
 
+// Type guard for WebSocket with ping method
+// The ws library's WebSocket has a ping method, but we check for it at runtime
+type WebSocketWithPing = WebSocket & { ping?: () => void };
+
 /**
  * Cartesia STT WebSocket Client
  * cArTeSiA dOcS.md: 100ms chunks, ink-whisper, pcm_s16le 16kHz, process is_final:false immediately.
@@ -407,8 +411,9 @@ export class CartesiaSTTClient {
 
       // Send ping (WebSocket ping frame - ws library supports this)
       try {
-        if (typeof (this.ws as any).ping === 'function') {
-          (this.ws as any).ping();
+        const wsWithPing = this.ws as WebSocketWithPing;
+        if (typeof wsWithPing.ping === 'function') {
+          wsWithPing.ping();
           // Set timeout to detect if pong doesn't arrive within expected time
           if (this.keepAliveTimeoutId) {
             clearTimeout(this.keepAliveTimeoutId);

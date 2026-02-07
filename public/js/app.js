@@ -21,12 +21,28 @@ import {
   safeFilename,
 } from './file-creator.js';
 import { DEBUG, escapeHtml } from './debug.js';
+import { 
+  ValidationError, 
+  NetworkError, 
+  TimeoutError, 
+  ConfigurationError
+} from './utils/error-handling.js';
+import { debounce, memoize } from './utils/performance.js';
+import { 
+  validateFile, 
+  sanitizeFilename, 
+  sanitizeWebhookResponse,
+  rateLimiter,
+  isValidUrl 
+} from './security.js';
+import { PerformanceMonitor } from './utils/debug.js';
 
 const chatContainer = document.getElementById('chatContainer');
 const textInput = document.getElementById('textInput');
 const btnSend = document.getElementById('btnSend');
 const btnMic = document.getElementById('btnMic');
 const btnPaperclip = document.getElementById('btnPaperclip');
+const btnStopVoice = document.getElementById('btnStopVoice');
 const btnExportPdf = document.getElementById('btnExportPdf');
 const fileInput = document.getElementById('fileInput');
 const statusEl = document.getElementById('status');
@@ -58,7 +74,8 @@ if (!btnSend || !btnMic || !btnPaperclip || !textInput || !fileInput) {
 }
 
 /** Config: Vite env when built, or window.JARVIS_CONFIG for static HTML (e.g. public/index.html) */
-function getConfig() {
+// Memoized config getter (config doesn't change during runtime - JavaScript Handbook pattern)
+const getConfig = memoize(() => {
   const env = typeof import.meta !== 'undefined' ? import.meta.env : {};
   const win = typeof window !== 'undefined' ? window : {};
   const cfg = win.JARVIS_CONFIG || {};
@@ -67,11 +84,15 @@ function getConfig() {
     voiceId: env.VITE_CARTESIA_VOICE_ID || cfg.voiceId || '',
     n8nWebhookUrl: env.VITE_N8N_WEBHOOK_URL || cfg.n8nWebhookUrl || 'https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4',
   };
-}
+});
+
 const { apiKey, voiceId, n8nWebhookUrl } = getConfig();
 
 /** Session ID for n8n workflow continuity (persists for page lifetime) */
 const sessionId = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+
+/** Conversation history for context (maintains conversation flow) */
+const conversationHistory = [];
 
 /** Flag to suppress onSTTStopped callback during STT restart (prevents mic flicker) */
 let _isRestartingSTT = false;
@@ -79,9 +100,9 @@ let _isRestartingSTT = false;
 /** Flag to prevent multiple concurrent mic button clicks */
 let _micClickInProgress = false;
 
-/** Build payload with app's session ID */
+/** Build payload with app's session ID and conversation history */
 function buildPayload(message, options) {
-  return buildN8nPayload(message, { ...options, sessionId });
+  return buildN8nPayload(message, { ...options, sessionId, conversationHistory });
 }
 
 // Optimized: Use requestAnimationFrame for smooth UI updates (reduces layout thrashing)
@@ -131,12 +152,20 @@ function syncMicButton(recording = false, disabled = false) {
 function appendMessage(role, content, attachments = []) {
   if (!chatContainer) return null;
   
+  // Format timestamp for display
+  const now = new Date();
+  const timestamp = now.toLocaleTimeString('en-US', { 
+    hour12: true, 
+    hour: 'numeric', 
+    minute: '2-digit'
+  });
+  
   // Use DocumentFragment for batch DOM operations (reduces reflows)
   const fragment = document.createDocumentFragment();
   const wrap = document.createElement('div');
   wrap.className = 'message ' + role;
   const label = role === 'user' ? 'You' : 'JARVIS';
-  wrap.innerHTML = `<div class="label">${escapeHtml(label)}</div><div class="content">${escapeHtml(content)}</div>`;
+  wrap.innerHTML = `<div class="label">${escapeHtml(label)}</div><div class="timestamp">${escapeHtml(timestamp)}</div><div class="content">${escapeHtml(content)}</div>`;
   if (attachments.length) {
     const attDiv = document.createElement('div');
     attDiv.className = 'attachments';
@@ -202,16 +231,40 @@ const MAX_ATTACHMENT_SIZE = 15 * 1024 * 1024; // 15 MB
 
 /**
  * Read File objects to base64 for sending in JSON payload.
+ * Implements comprehensive security validation based on OWASP file upload guidelines.
  * Skips files over MAX_ATTACHMENT_SIZE. Returns array of { name, type, size, data }.
  */
 async function filesToAttachmentPayload(files) {
   const results = [];
   for (const f of files) {
     if (!(f instanceof File)) continue;
+    
+    // Comprehensive security validation
+    const validation = await validateFile(f, { 
+      checkMagicBytes: true, 
+      strictMimeType: true 
+    });
+    
+    if (!validation.valid) {
+      DEBUG.error('attachment validation failed', { 
+        name: f.name, 
+        error: validation.error,
+        type: f.type,
+        size: f.size 
+      });
+      // Show user-friendly error
+      if (typeof window !== 'undefined' && window.alert) {
+        window.alert(`File "${f.name}" rejected: ${validation.error}`);
+      }
+      continue;
+    }
+    
+    // Size check (redundant but kept for backward compatibility)
     if (f.size > MAX_ATTACHMENT_SIZE) {
       DEBUG.trace('attachment skipped (too large)', { name: f.name, size: f.size });
       continue;
     }
+    
     try {
       const base64 = await new Promise((resolve, reject) => {
         const r = new FileReader();
@@ -222,7 +275,15 @@ async function filesToAttachmentPayload(files) {
         r.onerror = () => reject(r.error);
         r.readAsDataURL(f);
       });
-      results.push({ name: f.name, type: f.type, size: f.size, data: base64 });
+      
+      // Sanitize filename before sending
+      const sanitizedName = sanitizeFilename(f.name);
+      results.push({ 
+        name: sanitizedName, 
+        type: f.type, 
+        size: f.size, 
+        data: base64 
+      });
     } catch (err) {
       DEBUG.error('attachment read failed', { name: f.name, err });
     }
@@ -235,10 +296,19 @@ async function filesToAttachmentPayload(files) {
  * Sends full payload: message, session_id, sessionId, timestamp, timezone, location,
  * message_id, messageId, source, attachments, locale, language.
  * @returns {{ reply: string, data: Object }} - reply text and raw response for files
+ * 
+ * Enhanced with Result pattern and custom error classes from JavaScript Handbook
  */
 async function getLLMReply(userText, options = {}) {
   const payload = buildPayload(userText, options);
-  if (!payload.message) return { reply: "I didn't catch that. Try again?", data: {} };
+  
+  // Validation with custom error class
+  if (!payload.message) {
+    const error = new ValidationError("I didn't catch that. Try again?");
+    DEBUG.error('getLLMReply: empty message', error);
+    return { reply: error.message, data: {} };
+  }
+  
   DEBUG.trace('n8n: sending payload', { 
     message: payload.message.slice(0, 50), 
     source: payload.source, 
@@ -246,6 +316,7 @@ async function getLLMReply(userText, options = {}) {
     hasAttachments: !!(payload.attachments && payload.attachments.length),
     attachmentCount: payload.attachments?.length || 0
   });
+  
   // Enhanced logging for payload verification
   if (DEBUG.enabled) {
     DEBUG.trace('n8n: full payload structure', {
@@ -256,94 +327,149 @@ async function getLLMReply(userText, options = {}) {
       attachments: payload.attachments?.map(a => ({ name: a.name, type: a.type, hasData: !!a.data })) || []
     });
   }
+  
+  // Configuration validation with custom error class
   if (!n8nWebhookUrl || typeof n8nWebhookUrl !== 'string' || !n8nWebhookUrl.trim()) {
-    DEBUG.error('n8n webhook URL is missing or invalid', { n8nWebhookUrl });
+    const error = new ConfigurationError('N8N webhook URL is not set', 'n8nWebhookUrl');
+    DEBUG.error('n8n webhook URL is missing or invalid', { n8nWebhookUrl, error });
     return { reply: "Configuration error, sir. N8N webhook URL is not set. Please check your configuration.", data: {} };
   }
+  
+  // URL validation to prevent SSRF attacks
+  if (!isValidUrl(n8nWebhookUrl)) {
+    const error = new ConfigurationError('N8N webhook URL is invalid or uses dangerous protocol', 'n8nWebhookUrl');
+    DEBUG.error('n8n webhook URL validation failed', { n8nWebhookUrl, error });
+    return { reply: "Configuration error, sir. N8N webhook URL is invalid. Please check your configuration.", data: {} };
+  }
+  
+  // Rate limiting to prevent abuse
+  const rateLimitKey = `n8n-${sessionId}`;
+  if (!rateLimiter.isAllowed(rateLimitKey)) {
+    DEBUG.error('n8n webhook rate limit exceeded', { rateLimitKey });
+    return { reply: "Rate limit exceeded, sir. Please wait a moment before trying again.", data: {} };
+  }
+  
+  const controller = new AbortController();
   let timeoutId;
+  
   try {
-    const controller = new AbortController();
-    timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-    const payloadJson = JSON.stringify(payload);
-    DEBUG.trace('n8n: sending POST request', { 
-      source: payload.source, 
-      payloadSize: payloadJson.length,
-      url: n8nWebhookUrl 
-    });
-    // Always log payload send (not just in debug mode) for verification
-    // eslint-disable-next-line no-console -- intentional: user needs to verify payloads are sent
-    console.log(`[JARVIS] Sending ${payload.source} payload to n8n:`, {
-      source: payload.source,
-      message: payload.message.slice(0, 100),
-      hasAttachments: !!(payload.attachments && payload.attachments.length),
-      attachmentCount: payload.attachments?.length || 0,
-      sessionId: payload.sessionId
-    });
-    const res = await fetch(n8nWebhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: payloadJson,
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-    const contentType = res.headers.get('content-type') || '';
-    let data = {};
-    if (contentType.includes('application/json')) {
-      data = await res.json().catch(() => ({}));
-    } else {
-      const text = await res.text().catch(() => '');
-      if (text.trim()) {
-        try {
-          data = JSON.parse(text);
-        } catch {
-          data = { output: text.trim() };
+    // Performance monitoring with Performance API
+    const { result: responseData, duration } = await PerformanceMonitor.measureAsync(
+      `n8n Request (${payload.source})`,
+      async () => {
+        const payloadJson = JSON.stringify(payload);
+        DEBUG.trace('n8n: sending POST request', { 
+          source: payload.source, 
+          payloadSize: payloadJson.length,
+          url: n8nWebhookUrl 
+        });
+        
+        // Always log payload send (not just in debug mode) for verification
+        // eslint-disable-next-line no-console -- intentional: user needs to verify payloads are sent
+        console.log(`[JARVIS] Sending ${payload.source} payload to n8n:`, {
+          source: payload.source,
+          message: payload.message.slice(0, 100),
+          hasAttachments: !!(payload.attachments && payload.attachments.length),
+          attachmentCount: payload.attachments?.length || 0,
+          sessionId: payload.sessionId
+        });
+        
+        const res = await fetch(n8nWebhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payloadJson,
+          signal: controller.signal,
+        });
+        
+        if (!res.ok) {
+          throw new NetworkError(`HTTP ${res.status}: ${res.statusText}`);
         }
+        
+        const contentType = res.headers.get('content-type') || '';
+        let data = {};
+        if (contentType.includes('application/json')) {
+          data = await res.json().catch(() => ({}));
+        } else {
+          const text = await res.text().catch(() => '');
+          if (text.trim()) {
+            try {
+              data = JSON.parse(text);
+            } catch {
+              data = { output: text.trim() };
+            }
+          }
+        }
+        
+        return { data, status: res.status, statusText: res.statusText };
       }
-    }
-    const reply = extractReplyFromJson(data);
+    );
+    
+    if (timeoutId) clearTimeout(timeoutId);
+    
+    const { data, status, statusText } = responseData;
+    
+    // Sanitize webhook response to prevent XSS attacks
+    const sanitizedData = sanitizeWebhookResponse(data);
+    const reply = extractReplyFromJson(sanitizedData);
+    
     DEBUG.trace('n8n: response received', { 
-      status: res.status, 
-      statusText: res.statusText,
+      status, 
+      statusText,
       source: payload.source,
       hasReply: !!reply, 
       replyPreview: typeof reply === 'string' ? reply.slice(0, 50) : '',
-      responseKeys: Object.keys(data)
+      responseKeys: Object.keys(data),
+      duration: `${duration.toFixed(2)}ms`
     });
+    
     // Always log response receipt (not just in debug mode) for verification
     // eslint-disable-next-line no-console -- intentional: user needs to verify responses are received
-    console.log(`[JARVIS] Received ${payload.source} response from n8n:`, {
+    console.log(`[JARVIS] Received ${payload.source} response from n8n (${duration.toFixed(2)}ms):`, {
       source: payload.source,
-      status: res.status,
+      status,
       hasReply: !!reply,
       replyPreview: typeof reply === 'string' ? reply.slice(0, 100) : 'No reply extracted'
     });
-    if (typeof reply === 'string') return { reply, data };
+    
+    if (typeof reply === 'string') {
+      return { reply, data };
+    }
+    
     // No reply extracted — log so we can diagnose fallback
     const hasNatural = !!getNaturalFallback(payload.message);
     if (!hasNatural) {
       // eslint-disable-next-line no-console -- intentional: user needs to see why fallback was used
-      console.warn('[JARVIS] n8n fallback: no reply in response. Status:', res.status, 'Body:', JSON.stringify(data).slice(0, 300));
+      console.warn('[JARVIS] n8n fallback: no reply in response. Status:', status, 'Body:', JSON.stringify(data).slice(0, 300));
     }
     if (DEBUG.enabled && typeof reply !== 'string') {
       DEBUG.trace('n8n: response body (no reply extracted)', data);
     }
-    if (res.ok && (Object.keys(data).length === 0 || !extractReplyFromJson(data))) {
+    if (status >= 200 && status < 300 && (Object.keys(data).length === 0 || !extractReplyFromJson(data))) {
       DEBUG.error('n8n: empty or no reply in response body. In n8n, set Webhook node Respond to "Using Respond to Webhook Node". See debug/N8N-RESPOND-TO-WEBHOOK-FIX.md');
     }
     const natural = getNaturalFallback(payload.message);
     const fallback = natural || "I heard you, sir. Still getting set up — please try again in a moment.";
     DEBUG.trace('n8n: using fallback (no reply in response)', { natural: !!natural, fallbackPreview: fallback.slice(0, 50) });
     return { reply: natural ? natural : fallback, data };
+    
   } catch (err) {
     if (timeoutId) clearTimeout(timeoutId);
+    
+    // Enhanced error handling with custom error classes
     if (err.name === 'AbortError') {
-      DEBUG.error('n8n webhook timeout after 30s', { url: n8nWebhookUrl, message: payload.message.slice(0, 50) });
+      const error = new TimeoutError('Request timed out after 30s', 30000);
+      DEBUG.error('n8n webhook timeout after 30s', { url: n8nWebhookUrl, message: payload.message.slice(0, 50), error });
       return { reply: "Request timed out, sir. The assistant is taking too long to respond. Please try again.", data: {} };
+    } else if (err instanceof NetworkError) {
+      DEBUG.error('n8n webhook network error', { url: n8nWebhookUrl, error: err });
+      return { reply: "Network error, sir. Could not reach the assistant. Check your connection and CORS settings.", data: {} };
     } else if (err.message && (err.message.includes('CORS') || err.message.includes('Failed to fetch'))) {
-      DEBUG.error('n8n webhook CORS or network error', { url: n8nWebhookUrl, err: err.message });
+      const error = new NetworkError('CORS or network error', err);
+      DEBUG.error('n8n webhook CORS or network error', { url: n8nWebhookUrl, error });
       return { reply: "Network error, sir. Could not reach the assistant. Check your connection and CORS settings.", data: {} };
     } else {
-      DEBUG.error('n8n webhook error', { url: n8nWebhookUrl, err });
+      const error = new NetworkError('Failed to reach assistant', err);
+      DEBUG.error('n8n webhook error', { url: n8nWebhookUrl, error });
       return { reply: "Sorry, sir. I couldn't reach the assistant. Please try again.", data: {} };
     }
   }
@@ -352,31 +478,57 @@ async function getLLMReply(userText, options = {}) {
 /**
  * Process file specs from n8n response: create blobs and trigger downloads.
  * Types: pdf (title + content), image (base64), text (content). Audio files come from uploads (see attachment UI).
+ * Implements security validation and sanitization.
  */
 async function processFileSpecs(files) {
   if (!Array.isArray(files) || !files.length) return;
   for (const spec of files) {
-    const type = (spec.type || '').toLowerCase();
-    const filename = spec.filename || spec.name;
+    // Sanitize file spec to prevent injection attacks
+    const sanitizedSpec = sanitizeWebhookResponse(spec);
+    const type = ((sanitizedSpec.type || '').toLowerCase()).trim();
+    const rawFilename = sanitizedSpec.filename || sanitizedSpec.name || 'file';
+    
+    // Sanitize filename to prevent path traversal
+    const filename = sanitizeFilename(rawFilename);
+    
     try {
       if (type === 'pdf') {
+        // Sanitize content to prevent XSS
+        const title = typeof sanitizedSpec.title === 'string' 
+          ? sanitizeWebhookResponse(sanitizedSpec.title) 
+          : 'Document';
+        const content = typeof sanitizedSpec.content === 'string' 
+          ? sanitizeWebhookResponse(sanitizedSpec.content) 
+          : (typeof sanitizedSpec.text === 'string' ? sanitizeWebhookResponse(sanitizedSpec.text) : '');
+        
         const blob = await createPdfBlob({
-          title: spec.title || 'Document',
-          content: spec.content || spec.text || '',
+          title: String(title),
+          content: String(content),
         });
         downloadBlob(blob, safeFilename(filename, '.pdf'));
-      } else if (type === 'image' && (spec.data || spec.base64)) {
-        const data = spec.data || spec.base64;
-        const mime = spec.mime || spec.contentType || 'image/png';
-        const blob = createImageBlobFromBase64(data, mime);
+      } else if (type === 'image' && (sanitizedSpec.data || sanitizedSpec.base64)) {
+        const data = sanitizedSpec.data || sanitizedSpec.base64;
+        const mime = sanitizedSpec.mime || sanitizedSpec.contentType || 'image/png';
+        
+        // Validate MIME type
+        if (!['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(mime)) {
+          DEBUG.error('invalid image MIME type', { mime, filename });
+          continue;
+        }
+        
+        const blob = createImageBlobFromBase64(String(data), mime);
         downloadBlob(blob, safeFilename(filename, '.png'));
       } else if (type === 'text') {
-        const content = spec.content || spec.text || '';
-        const blob = createTextBlob(content, spec.mime || 'text/plain');
+        const content = typeof sanitizedSpec.content === 'string' 
+          ? sanitizeWebhookResponse(sanitizedSpec.content) 
+          : (typeof sanitizedSpec.text === 'string' ? sanitizeWebhookResponse(sanitizedSpec.text) : '');
+        const blob = createTextBlob(String(content), sanitizedSpec.mime || 'text/plain');
         downloadBlob(blob, safeFilename(filename, '.txt'));
+      } else {
+        DEBUG.warn('unknown file type in file spec', { type, filename });
       }
     } catch (err) {
-      DEBUG.error('file creation failed', { type, err });
+      DEBUG.error('file creation failed', { type, filename, err });
     }
   }
 }
@@ -434,6 +586,9 @@ const bridge = new CartesiaAudioBridge({
     
     try {
       appendMessage('user', trimmed);
+
+      // Add user message to conversation history
+      conversationHistory.push({ role: 'user', content: trimmed });
       setStatus('Processing…', 'listening');
       const audioAttachments = audioBase64 ? [{
         name: 'voice-recording.pcm',
@@ -468,6 +623,9 @@ const bridge = new CartesiaAudioBridge({
       // Safeguard: ensure replyText is a string
       const safeReplyText = typeof replyText === 'string' ? replyText : String(replyText || '');
       appendMessage('assistant', safeReplyText);
+
+      // Add assistant response to conversation history
+      conversationHistory.push({ role: 'assistant', content: safeReplyText });
       const files = extractFilesFromJson(replyData);
       if (apiKey) {
         setStatus('Speaking…', 'speaking');
@@ -655,70 +813,86 @@ let pendingAttachments = [];
 
 if (btnSend) {
   btnSend.addEventListener('click', async () => {
-    DEBUG.trace('btnSend clicked', { hasText: !!textInput.value.trim(), textLength: textInput.value.trim().length });
-    const text = textInput.value.trim();
-    if (!text) {
-      DEBUG.trace('btnSend: empty text, returning early');
-      return;
-    }
-    textInput.value = '';
-    textInput.placeholder = 'Type or speak...';
-    // Reset textarea height after clearing
-    if (textInput.style.height) {
-      textInput.style.height = 'auto';
-    }
-    const attachmentsForPayload = [...pendingAttachments];
-    appendMessage('user', text, attachmentsForPayload.length ? attachmentsForPayload : []);
-    pendingAttachments = [];
-    setStatus('Processing…', 'listening');
     try {
-      const attachmentPayload = await filesToAttachmentPayload(attachmentsForPayload);
-      await addOcrToAttachments(attachmentPayload);
-      DEBUG.trace('btnSend: calling getLLMReply with text source', { 
-        textLength: text.length, 
-        attachmentCount: attachmentPayload.length 
-      });
-      // Optimized: Pre-connect TTS WebSocket while waiting for n8n response (parallel processing)
-      const ttsConnectPromise = apiKey ? bridge.connectTTS().catch(() => {}) : null;
-      
-      const { reply: replyText, data: replyData } = await getLLMReply(text, { source: 'text', attachments: attachmentPayload });
-      
-      // Ensure TTS is connected before speaking (wait for pre-connection if it was started)
-      if (ttsConnectPromise) {
-        try {
-          await ttsConnectPromise;
-        } catch (err) {
-          DEBUG.error('TTS pre-connection failed', err);
-          // Continue anyway - TTS will connect on-demand
-        }
+      DEBUG.trace('btnSend clicked', { hasText: !!textInput.value.trim(), textLength: textInput.value.trim().length });
+      const text = textInput.value.trim();
+      if (!text) {
+        DEBUG.trace('btnSend: empty text, returning early');
+        return;
       }
-      
-      // Safeguard: ensure replyText is a string
-      const safeReplyText = typeof replyText === 'string' ? replyText : String(replyText || '');
-      appendMessage('assistant', safeReplyText);
-      const files = extractFilesFromJson(replyData);
-      if (apiKey) {
-        setStatus('Speaking…', 'speaking');
-        try {
-          // Optimized: TTS WebSocket already connected, zero connection latency
-          // Safeguard: ensure replyText is a string
-          const safeReplyTextForTTS = typeof replyText === 'string' ? replyText : String(replyText || '');
-          if (safeReplyTextForTTS.trim()) {
-            await bridge.speakText(safeReplyTextForTTS);
+      // Interrupt any ongoing TTS immediately when user sends text (barge-in)
+      // This allows text input to interrupt the agent mid-speech, just like voice input does
+      bridge.cancelTTS();
+      textInput.value = '';
+      textInput.placeholder = 'Type or speak...';
+      // Reset textarea height after clearing
+      if (textInput.style.height) {
+        textInput.style.height = 'auto';
+      }
+      const attachmentsForPayload = [...pendingAttachments];
+      appendMessage('user', text, attachmentsForPayload.length ? attachmentsForPayload : []);
+      // Add user message to conversation history
+      conversationHistory.push({ role: 'user', content: text });
+      pendingAttachments = [];
+      setStatus('Processing…', 'listening');
+      try {
+        const attachmentPayload = await filesToAttachmentPayload(attachmentsForPayload);
+        await addOcrToAttachments(attachmentPayload);
+        DEBUG.trace('btnSend: calling getLLMReply with text source', { 
+          textLength: text.length, 
+          attachmentCount: attachmentPayload.length 
+        });
+        // Optimized: Pre-connect TTS WebSocket while waiting for n8n response (parallel processing)
+        const ttsConnectPromise = apiKey ? bridge.connectTTS().catch(() => {}) : null;
+        
+        const { reply: replyText, data: replyData } = await getLLMReply(text, { source: 'text', attachments: attachmentPayload });
+        
+        // Ensure TTS is connected before speaking (wait for pre-connection if it was started)
+        if (ttsConnectPromise) {
+          try {
+            await ttsConnectPromise;
+          } catch (err) {
+            DEBUG.error('TTS pre-connection failed', err);
+            // Continue anyway - TTS will connect on-demand
           }
-          setStatus('Ready');
-          if (files.length) await processFileSpecs(files);
-        } catch (err) {
-          setStatus('Error', 'error');
-          appendMessage('assistant', 'Sorry, sir. Something went wrong. ' + (err?.message || err));
         }
-      } else {
-        setStatus('Ready (no voice: add CARTESIA_API_KEY for TTS)', '');
-        if (files.length) await processFileSpecs(files);
+        
+        // Safeguard: ensure replyText is a string
+        const safeReplyText = typeof replyText === 'string' ? replyText : String(replyText || '');
+        appendMessage('assistant', safeReplyText);
+        // Add assistant response to conversation history
+        conversationHistory.push({ role: 'assistant', content: safeReplyText });
+        const files = extractFilesFromJson(replyData);
+        if (apiKey) {
+          setStatus('Speaking…', 'speaking');
+          try {
+            // Optimized: TTS WebSocket already connected, zero connection latency
+            // Safeguard: ensure replyText is a string
+            const safeReplyTextForTTS = typeof replyText === 'string' ? replyText : String(replyText || '');
+            if (safeReplyTextForTTS.trim()) {
+              await bridge.speakText(safeReplyTextForTTS);
+            }
+            setStatus('Ready');
+            if (files.length) await processFileSpecs(files);
+          } catch (err) {
+            setStatus('Error', 'error');
+            appendMessage('assistant', 'Sorry, sir. Something went wrong. ' + (err?.message || err));
+          }
+        } else {
+          setStatus('Ready (no voice: add CARTESIA_API_KEY for TTS)', '');
+          if (files.length) await processFileSpecs(files);
+        }
+      } catch (err) {
+        setStatus('Error', 'error');
+        appendMessage('assistant', 'Sorry, sir. Something went wrong. ' + (err?.message || err));
       }
     } catch (err) {
+      // Top-level catch to prevent unhandled promise rejections
+      DEBUG.error('btnSend: unhandled error', err);
       setStatus('Error', 'error');
-      appendMessage('assistant', 'Sorry, sir. Something went wrong. ' + (err?.message || err));
+      if (chatContainer) {
+        appendMessage('assistant', 'Sorry, sir. An unexpected error occurred. ' + (err?.message || err));
+      }
     }
   });
 } else {
@@ -735,10 +909,20 @@ if (textInput) {
     textInput.style.height = Math.min(scrollHeight, maxHeight) + 'px';
   }
   
-  textInput.addEventListener('input', autoResizeTextarea);
+  // Debounce auto-resize to avoid excessive calculations (JavaScript Handbook pattern)
+  const debouncedAutoResize = debounce(autoResizeTextarea, 100);
+  
+  textInput.addEventListener('input', debouncedAutoResize);
   textInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      // Only interrupt TTS if there's actual text to send (matches click handler behavior)
+      const text = textInput?.value?.trim();
+      if (text) {
+        // Interrupt any ongoing TTS immediately when user presses Enter (barge-in)
+        // This ensures immediate interruption before the click handler executes
+        bridge.cancelTTS();
+      }
       if (btnSend) btnSend.click();
       // Reset height after sending
       setTimeout(() => {
@@ -747,7 +931,7 @@ if (textInput) {
         }
       }, 0);
     } else {
-      // Allow textarea to resize on Enter+Shift or other keys
+      // Allow textarea to resize on Enter+Shift or other keys (immediate resize for better UX)
       setTimeout(autoResizeTextarea, 0);
     }
   });
@@ -757,37 +941,38 @@ if (textInput) {
 
 if (btnMic) {
   btnMic.addEventListener('click', async () => {
-    // Debounce: prevent multiple concurrent clicks
-    if (_micClickInProgress) {
-      DEBUG.trace('Mic click ignored - operation in progress');
-      return;
-    }
-    
-    DEBUG.trace('Mic clicked', { sttActive: bridge.isSTTActive() });
-    
-    if (bridge.isSTTActive()) {
-      bridge.stopSTT();
-      return;
-    }
-    
-    // Early validation checks (synchronous, don't need flag protection)
-    if (!apiKey) {
-      setStatus('Add CARTESIA_API_KEY (or set window.JARVIS_CONFIG.apiKey)', 'error');
-      return;
-    }
-    const support = CartesiaAudioBridge.checkRecordingSupport();
-    if (!support.supported) {
-      setStatus(support.message || 'Microphone not available', 'error');
-      return;
-    }
-    
-    _micClickInProgress = true;
     try {
-      syncMicButton(false, true);
+      // Debounce: prevent multiple concurrent clicks
+      if (_micClickInProgress) {
+        DEBUG.trace('Mic click ignored - operation in progress');
+        return;
+      }
+      
+      DEBUG.trace('Mic clicked', { sttActive: bridge.isSTTActive() });
+      
+      if (bridge.isSTTActive()) {
+        bridge.stopSTT();
+        return;
+      }
+      
+      // Early validation checks (synchronous, don't need flag protection)
+      if (!apiKey) {
+        setStatus('Add CARTESIA_API_KEY (or set window.JARVIS_CONFIG.apiKey)', 'error');
+        return;
+      }
+      const support = CartesiaAudioBridge.checkRecordingSupport();
+      if (!support.supported) {
+        setStatus(support.message || 'Microphone not available', 'error');
+        return;
+      }
+      
+      _micClickInProgress = true;
       try {
-        setStatus('Connecting…');
-        await bridge.connectTTS().catch(() => {});
-        DEBUG.trace('TTS connected, starting STT…');
+        syncMicButton(false, true);
+        try {
+          setStatus('Connecting…');
+          await bridge.connectTTS().catch(() => {});
+          DEBUG.trace('TTS connected, starting STT…');
         try {
           const saved = typeof localStorage !== 'undefined' && localStorage.getItem(MIC_BOOST_STORAGE_KEY);
           if (saved != null) {
@@ -795,16 +980,23 @@ if (btnMic) {
             if (!Number.isNaN(v)) bridge.setInputGain(Math.max(0.5, Math.min(2, v)));
           }
         } catch { /* ignore */ }
-        await bridge.startSTT();
-        syncMicButton(true, false);
-        setStatus('Listening…', 'listening');
-      } catch (err) {
-        const msg = err?.message || String(err);
-        setStatus(msg.startsWith('Mic ') ? msg : 'Mic: ' + msg, 'error');
-        syncMicButton(false, false);
+          await bridge.startSTT();
+          syncMicButton(true, false);
+          setStatus('Listening…', 'listening');
+        } catch (err) {
+          const msg = err?.message || String(err);
+          setStatus(msg.startsWith('Mic ') ? msg : 'Mic: ' + msg, 'error');
+          syncMicButton(false, false);
+        }
+      } finally {
+        _micClickInProgress = false;
       }
-    } finally {
+    } catch (err) {
+      // Top-level catch to prevent unhandled promise rejections
+      DEBUG.error('btnMic: unhandled error', err);
       _micClickInProgress = false;
+      setStatus('Error', 'error');
+      syncMicButton(false, false);
     }
   });
 } else {
@@ -817,29 +1009,59 @@ if (btnPaperclip && fileInput) {
   DEBUG.error('btnPaperclip or fileInput not found - cannot attach click handler', { btnPaperclip: !!btnPaperclip, fileInput: !!fileInput });
 }
 
+if (btnStopVoice) {
+  btnStopVoice.addEventListener('click', () => {
+    DEBUG.trace('btnStopVoice clicked - stopping agent voice');
+    // Immediately stop any ongoing TTS (kill agent voice)
+    bridge.cancelTTS();
+    setStatus('Voice stopped', '');
+    // Reset status after a brief moment
+    // Only reset if status is still "Voice stopped" (wasn't changed by another operation)
+    setTimeout(() => {
+      if (statusEl) {
+        const currentStatus = statusEl.textContent.trim();
+        // Only reset if status hasn't been changed by another operation
+        if (currentStatus === 'Voice stopped') {
+          setStatus('Ready');
+        }
+      }
+    }, 1500);
+  });
+} else {
+  DEBUG.error('btnStopVoice not found - cannot attach click handler');
+}
+
 if (btnExportPdf) {
   btnExportPdf.addEventListener('click', async () => {
-    if (!chatContainer) return;
-    const messages = chatContainer.querySelectorAll('.message');
-    const lines = [];
-    for (const msg of messages) {
-      const label = msg.querySelector('.label');
-      const content = msg.querySelector('.content');
-      const who = label ? label.textContent.trim() : 'Unknown';
-      const text = content ? content.textContent.trim() : '';
-      if (text) lines.push(`${who}:\n${text}\n`);
-    }
-    const content = lines.join('\n') || 'No messages yet.';
     try {
-      setStatus('Creating PDF…', '');
-      const blob = await createPdfBlob({ title: 'JARVIS Chat', content });
-      downloadBlob(blob, safeFilename('jarvis-chat.pdf', '.pdf'));
-      setStatus('Ready');
+      if (!chatContainer) return;
+      const messages = chatContainer.querySelectorAll('.message');
+      const lines = [];
+      for (const msg of messages) {
+        const label = msg.querySelector('.label');
+        const content = msg.querySelector('.content');
+        const who = label ? label.textContent.trim() : 'Unknown';
+        const text = content ? content.textContent.trim() : '';
+        if (text) lines.push(`${who}:\n${text}\n`);
+      }
+      const content = lines.join('\n') || 'No messages yet.';
+      try {
+        setStatus('Creating PDF…', '');
+        const blob = await createPdfBlob({ title: 'JARVIS Chat', content });
+        downloadBlob(blob, safeFilename('jarvis-chat.pdf', '.pdf'));
+        setStatus('Ready');
+      } catch (err) {
+        DEBUG.error('Export PDF failed', err);
+        setStatus('Error', 'error');
+      }
     } catch (err) {
-      DEBUG.error('Export PDF failed', err);
+      // Top-level catch to prevent unhandled promise rejections
+      DEBUG.error('btnExportPdf: unhandled error', err);
       setStatus('Error', 'error');
     }
   });
+} else {
+  DEBUG.error('btnExportPdf not found - cannot attach click handler');
 }
 
 if (fileInput && textInput) {

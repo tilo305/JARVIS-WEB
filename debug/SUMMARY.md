@@ -35,11 +35,31 @@ Streamlined debugging and validation for JARVIS-WEB. Duplicates and low-value to
 | `debug:live` | LIVE Jest tests |
 | `test:integration` | Cartesia integration tests |
 
-## Removed (Redundant)
+## Removed (Redundant/Orphaned)
 
+### Previously Removed
 - **websocket-debugger.ts** – Duplicate of `cartesia-websocket-live.test.ts`
 - **audio-debugger.ts** – Duplicate of `format-boundary-live.test.js` (tests real code)
 - **error-detector.ts** – ESLint covers this
 - **fix-websocket-errors.ts** – Did not apply fixes, produced false positives
 - **run-all-debug.ts** – Heavy runner, overlapped with Jest
 - **verify-all-working.mjs** – Redundant with run-debug-suite
+
+### Recently Removed (Orphaned Browser Console Scripts)
+- **analyze-n8n-response.js** – Browser console helper, not a standalone tool
+- **console-debug-helper.js** – Browser console paste script
+- **quick-debug-paste.js** – Browser console paste script
+- **debug-n8n-response.html** – Orphaned HTML debug page
+- **diagnose-empty-n8n-response.js** – Browser console helper
+- **test-all-error-capture.js** – Browser console paste script
+- **test-copy-log-n8n-capture.js** – Browser console paste script
+- **test-extract-reply-fix.js** – Old test script, functionality covered by Jest tests
+- **test-n8n-warning-improvements.js** – Old test script, functionality covered by Jest tests
+
+### Recently Removed (Old Test Files)
+- **test-final-verification.js** – Old verification test
+- **test-javascript-handbook-integration.js** – Old integration test
+- **test-latency-optimizations.js** – Old optimization test
+- **test-mic-button-comprehensive.js** – Old mic button test
+- **test-mic-button-fixes.js** – Old mic button test
+- **test-timestamp-in-browser.html** – Old timestamp test page

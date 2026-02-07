@@ -104,14 +104,14 @@ describe('n8n-payload', () => {
 
   describe('getNaturalFallback', () => {
     it('should return greeting reply for hello/hi etc.', () => {
-      expect(getNaturalFallback('hello')).toBe("Hello! How can I assist you today?");
-      expect(getNaturalFallback('Hi there')).toBe("Hello! How can I assist you today?");
-      expect(getNaturalFallback('good morning')).toBe("Hello! How can I assist you today?");
+      expect(getNaturalFallback('hello')).toBe("Good morning, sir. How can I assist you today?");
+      expect(getNaturalFallback('Hi there')).toBe("Good morning, sir. How can I assist you today?");
+      expect(getNaturalFallback('good morning')).toBe("Good morning, sir. How can I assist you today?");
     });
     it('should return goodbye/thanks/yes-no replies', () => {
-      expect(getNaturalFallback('goodbye')).toBe("Goodbye. I'll be here when you need me.");
-      expect(getNaturalFallback('thank you')).toBe("You're welcome.");
-      expect(getNaturalFallback('yes')).toBe("Understood.");
+      expect(getNaturalFallback('goodbye')).toBe("Goodbye, sir. I'll be here when you need me.");
+      expect(getNaturalFallback('thank you')).toBe("You're welcome, sir.");
+      expect(getNaturalFallback('yes')).toBe("Understood, sir.");
     });
     it('should return null for unknown or empty', () => {
       expect(getNaturalFallback('')).toBeNull();

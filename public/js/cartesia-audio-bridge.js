@@ -293,97 +293,11 @@ export class CartesiaAudioBridge {
     }
   }
 
-        source.connect(this.sttGainNode);
-        this.sttGainNode.connect(this.sttNode);
-        this.sttGainNode.connect(this.sttAnalyserNode);
-        this._preSpeechBuffer = [];
-        this._sttStreaming = false;
-        this.sttNode.port.onmessage = (e) => {
-          try {
-            if (!e?.data || e.data.type !== 'audio' || !e.data.data) return;
-            const buf = e.data.data;
-            if (!(buf instanceof ArrayBuffer)) return;
-            if (this._isRecordingAudio) {
-              try { this._recordedAudioChunks.push(new Uint8Array(buf)); } catch (err) { void err; }
-            }
-            if (this._sttStreaming) {
-              this._sendChunkToSTT(buf);
-            } else {
-              this._preSpeechBuffer.push(buf);
-              if (this._preSpeechBuffer.length > this._preSpeechMaxChunks) this._preSpeechBuffer.shift();
-            }
-          } catch (err) {
-            DEBUG.error('STT processor message error', { error: err });
-          }
-        };
-        this.sttNode.port.onerror = (err) => {
-          DEBUG.error('STT AudioWorklet processor error', { error: err });
-        };
-        DEBUG.trace('STT audio graph and handler pre-set');
-      } catch (err) {
-        DEBUG.warn('STT graph pre-setup failed', err);
-      }
-    }
-    // OPTIMIZATION: Pre-start VAD for low latency
-    if (!this.vad && this.mediaStream) {
-      try {
-        const vadOptions = {
-          model: VAD_CONFIG.model,
-          redemptionMs: VAD_CONFIG.redemptionMs,
-          preSpeechPadMs: VAD_CONFIG.preSpeechPadMs,
-          minSpeechMs: VAD_CONFIG.minSpeechMs,
-          positiveSpeechThreshold: VAD_CONFIG.positiveSpeechThreshold,
-          negativeSpeechThreshold: VAD_CONFIG.negativeSpeechThreshold,
-          submitUserSpeechOnPause: VAD_CONFIG.submitUserSpeechOnPause,
-          baseAssetPath: VAD_CONFIG.baseAssetPath,
-          onnxWASMBasePath: VAD_CONFIG.onnxWASMBasePath,
-          getStream: () => Promise.resolve(this.mediaStream),
-          onSpeechStart: () => {
-            if (this._sttActive) {
-              this._clearSilenceStopTimer();
-              this._clearMaxListeningTimer();
-              this._recordedAudioChunks = [];
-              this._isRecordingAudio = true;
-              this._sttStreaming = true;
-              this._flushPreSpeechBuffer();
-              this.onSpeechStart();
-            }
-          },
-          onSpeechEnd: async () => {
-            if (this._sttActive) {
-              this._sttStreaming = false;
-              this._isRecordingAudio = false;
-              this.onSpeechEnd();
-              if (this.sttWs && this.sttWs.readyState === WebSocket.OPEN) {
-                try {
-                  this.sttWs.send('finalize');
-                } catch (err) {
-                  DEBUG.error('Error sending finalize to STT', err);
-                }
-              }
-              const silenceMs = VAD_CONFIG.silenceAfterSpeechToStopMicMs ?? 2500;
-              this._silenceStopTimer = setTimeout(() => {
-                this._silenceStopTimer = null;
-                this._stopSTTAndSendTranscript();
-              }, silenceMs);
-            }
-          },
-          onVADMisfire: () => {
-            if (this._sttActive) {
-              this.onVADMisfire();
-            }
-          },
-        };
-        this.vad = await MicVAD.new(vadOptions);
-        await this.vad.start();
-        DEBUG.trace('VAD pre-started for low latency');
-      } catch (err) {
-        DEBUG.warn('Failed to pre-start VAD', err);
-      }
-    }
-    return { success: true };
-  }
-
+  /**
+   * Initialize AudioContext and audio processors.
+   * Must be called before using STT/TTS.
+   * @returns {Promise<void>}
+   */
   async init() {
     if (this.audioContext) {
       // If AudioContext exists but is suspended, resume it
@@ -401,10 +315,11 @@ export class CartesiaAudioBridge {
       if (!this.ttsNode && this.audioContext.state === 'running') {
         DEBUG.trace('AudioContext exists but TTS node missing, creating TTS node...');
         try {
-          const basePath = this.options.audioWorkletBasePath || './audio/';
-          const ttsPath = basePath.endsWith('/') 
-            ? `${basePath}tts-playback-processor.js`
-            : `${basePath}/tts-playback-processor.js`;
+          let basePath = this.options.audioWorkletBasePath || './audio/';
+          if (!basePath.endsWith('/')) {
+            basePath += '/';
+          }
+          const ttsPath = `${basePath}tts-playback-processor.js`;
           const ttsAbsolute = ttsPath.startsWith('http') ? ttsPath : new URL(ttsPath, window.location.origin).href;
           try {
             await this.audioContext.audioWorklet.addModule(ttsAbsolute);
@@ -660,9 +575,10 @@ export class CartesiaAudioBridge {
   }
 
   /**
-   * @param {Object} [options]
+   * @param {Object} [options] - Reserved for future options
    */
   async startSTT(options = {}) {
+    void options; // Reserved for future options
     if (this._sttActive) return;
     if (!this.apiKey) throw new Error('CARTESIA_API_KEY is required.');
 
@@ -777,6 +693,7 @@ export class CartesiaAudioBridge {
 
       // Only pass MicVAD-supported options; app-only (silenceClosing*, silenceAfterSpeechToStopMicMs) stay in VAD_CONFIG for bridge use
       const vadOptions = {
+        // VAD configuration options
         model: VAD_CONFIG.model,
         redemptionMs: VAD_CONFIG.redemptionMs,
         preSpeechPadMs: VAD_CONFIG.preSpeechPadMs,
@@ -819,7 +736,7 @@ export class CartesiaAudioBridge {
               DEBUG.error('Error sending finalize to STT', { error: err });
             }
           }
-          const stopMs = VAD_CONFIG.silenceAfterSpeechToStopMicMs ?? 3500;
+          const stopMs = VAD_CONFIG.silenceAfterSpeechToStopMicMs ?? 2500;
           this._clearSilenceStopTimer();
           if (stopMs > 0) {
             this._silenceStopTimer = setTimeout(() => {
@@ -865,21 +782,20 @@ export class CartesiaAudioBridge {
       }
       // Activate STT immediately
       this._sttActive = true;
-        this._hadTranscriptFromPreviousSegment = false;
-        const maxMs = VAD_CONFIG.maxListeningMs ?? 0;
-        if (maxMs > 0) {
-          this._maxListeningTimer = setTimeout(() => {
-            this._maxListeningTimer = null;
-            DEBUG.trace('Max listening time reached - stopping mic');
-            this._stopSTTAndSendTranscript();
-          }, maxMs);
-        }
-        DEBUG.trace('startSTT: VAD started, pipeline active');
-        // Start connection health monitoring for proactive reconnection
-        this._startConnectionHealthMonitoring();
-        // Notify that STT is now active
-        this.onSTTStarted();
+      this._hadTranscriptFromPreviousSegment = false;
+      const maxMs = VAD_CONFIG.maxListeningMs ?? 0;
+      if (maxMs > 0) {
+        this._maxListeningTimer = setTimeout(() => {
+          this._maxListeningTimer = null;
+          DEBUG.trace('Max listening time reached - stopping mic');
+          this._stopSTTAndSendTranscript();
+        }, maxMs);
       }
+      DEBUG.trace('startSTT: VAD started, pipeline active');
+      // Start connection health monitoring for proactive reconnection
+      this._startConnectionHealthMonitoring();
+      // Notify that STT is now active
+      this.onSTTStarted();
     } catch (err) {
       // Log with serializable details (Error/DOMException stringify to {} in capture tools)
       const details = err instanceof Error
@@ -978,7 +894,7 @@ export class CartesiaAudioBridge {
     }
     
     // Reject all pending resolvers
-    for (const [id, resolver] of this._ttsDoneResolvers.entries()) {
+    for (const [, resolver] of this._ttsDoneResolvers.entries()) {
       resolver.reject(new Error('Barge-in: user spoke'));
     }
     this._ttsDoneResolvers.clear();
@@ -1173,6 +1089,10 @@ export class CartesiaAudioBridge {
               this._ttsDoneResolvers.delete(msg.context_id);
               r.resolve();
             }
+            // Start the 10s silence timer AFTER the agent finishes speaking (TTS done)
+            // The timer will wait silenceClosingDelayAfterTtsMs first to allow playback to finish,
+            // then start the 10s countdown
+            this.resumeSilenceTimersAfterTTS();
           } else if ((msg.type === 'error' || msg.error) && msg.context_id) {
             const r = this._ttsDoneResolvers.get(msg.context_id);
             if (r) {
@@ -1360,7 +1280,7 @@ export class CartesiaAudioBridge {
         }
       }
       // Reject all pending resolvers
-      for (const [id, resolver] of this._ttsDoneResolvers.entries()) {
+      for (const [, resolver] of this._ttsDoneResolvers.entries()) {
         resolver.reject(new Error('TTS cancelled (barge-in)'));
       }
       this._ttsDoneResolvers.clear();

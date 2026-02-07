@@ -125,7 +125,8 @@ JARVIS.diagnoseEmptyN8nResponse();
 
 **Node.js:**
 - `npm run debug:n8n` - Check webhook (no CORS)
-- `node debug/tools/test-extract-reply-fix.js` - Test extraction
+- `npm run debug:config` - Validate configuration
+- `npm run debug:stt` - Check STT sample rate
 
 **Debug Mode:**
 - Add `?debug=1` to URL

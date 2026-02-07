@@ -498,14 +498,18 @@ JARVIS_DEBUG_SEND_TEST();
 # Check n8n webhook (no CORS)
 npm run debug:n8n
 
-# Test extract reply function
-node debug/tools/test-extract-reply-fix.js
+# Validate configuration
+npm run debug:config
 
-# Analyze n8n response
-node debug/tools/analyze-n8n-response.js
+# Check STT sample rate
+npm run debug:stt
 ```
 
 **Note:** Node tools don't experience CORS. If Node succeeds but browser fails, CORS is likely the issue.
+
+**Removed Tools:** The following tools have been removed as they were browser console helpers or redundant:
+- `test-extract-reply-fix.js` - Functionality covered by Jest tests
+- `analyze-n8n-response.js` - Browser console helper, not a standalone tool
 
 ---
 
