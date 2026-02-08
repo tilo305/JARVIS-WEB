@@ -69,6 +69,7 @@
       color: var(--text);
       margin: 0;
       min-height: 100vh;
+      min-height: 100dvh;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -104,8 +105,14 @@
       50% { opacity: 0.7; }
     }
     .chat-interface {
-      width: 700px;
-      height: 600px;
+      width: min(700px, calc(100vw - 2rem));
+      height: min(600px, calc(100vh - 2rem));
+      height: min(600px, calc(100dvh - 2rem));
+      max-width: 100%;
+      max-height: 100%;
+      min-width: 280px;
+      min-height: 320px;
+      margin: 1rem;
       display: flex;
       flex-direction: column;
       background: rgba(15, 15, 21, 0.7);
@@ -1051,10 +1058,9 @@
     @media (max-width: 768px) {
       .chat-interface {
         width: calc(100vw - 2rem);
-        max-width: 700px;
         height: calc(100vh - 2rem);
-        max-height: 600px;
-        margin: 1rem;
+        max-width: none;
+        max-height: none;
       }
       .header {
         padding: 0.75rem 1rem;
@@ -1086,6 +1092,8 @@
         width: calc(100vw - 1rem);
         height: calc(100vh - 1rem);
         margin: 0.5rem;
+        min-width: 260px;
+        min-height: 300px;
       }
       .header h1 {
         font-size: 1.25rem;

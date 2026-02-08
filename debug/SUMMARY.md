@@ -19,6 +19,7 @@ Streamlined debugging and validation. Duplicates and low-value tools have been r
 - **cartesia-websocket-live.test.ts** — Live Cartesia WebSocket (skips if no API key)
 - **stt-client.test.ts**, **tts-client.test.ts**, **bidirectional-conversation.test.ts** — Unit tests
 - **greeting-time-of-day.test.js**, **timestamp-display.test.js**, **strip-markdown-for-tts.test.js**, **websocket-optimization.test.ts** — Feature tests
+- **chat-layout-fit.test.js** — Chat interface responsive layout (fits viewport when collapsed)
 
 ### Browser
 - **debug-audioworklet.html** — AudioWorklet validation

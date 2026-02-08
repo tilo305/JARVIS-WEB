@@ -1,6 +1,6 @@
 # Debug System Status
 
-**Last updated:** 2026-02-07  
+**Last updated:** 2026-02-08  
 **Status:** Streamlined; only active tools and scripts documented.
 
 ## Tools kept
@@ -9,7 +9,7 @@
 |----------|------|--------|
 | Runner | `run-debug-suite.mjs` | ✅ |
 | Static check | `check-console-errors.js` | ✅ |
-| Tests | Jest tests in `debug/tests/` | ✅ |
+| Tests | Jest tests in `debug/tests/` (incl. `chat-layout-fit.test.js` for responsive UI) | ✅ |
 | Browser pages | `public/debug/*.html` (4 pages) | ✅ |
 
 ## Scripts
