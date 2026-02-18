@@ -5,11 +5,13 @@
 Based on comprehensive research from **Building Secure and Reliable Systems**, **OWASP Top 10**, and other security best practices, the following security improvements have been implemented:
 
 ### 1. ✅ API Key Security
+
 - **Fixed**: Removed hardcoded API key from `public/index.html`
 - **Solution**: API keys must be provided via environment variables or runtime configuration
 - **Impact**: Prevents API key exposure in source code
 
 ### 2. ✅ File Upload Security
+
 - **Implemented**: Comprehensive file validation with defense in depth
 - **Features**:
   - Extension validation (blocks dangerous files)
@@ -20,6 +22,7 @@ Based on comprehensive research from **Building Secure and Reliable Systems**, *
 - **Files**: `src/security/validation.ts`, `public/js/security.js`
 
 ### 3. ✅ Webhook Response Sanitization
+
 - **Implemented**: XSS prevention for all webhook responses
 - **Features**:
   - Recursive sanitization of objects/arrays/strings
@@ -28,6 +31,7 @@ Based on comprehensive research from **Building Secure and Reliable Systems**, *
 - **Impact**: Prevents script injection through LLM responses
 
 ### 4. ✅ Security Headers
+
 - **Implemented**: Comprehensive HTTP security headers
 - **Headers**:
   - Content-Security-Policy (CSP)
@@ -39,6 +43,7 @@ Based on comprehensive research from **Building Secure and Reliable Systems**, *
 - **File**: `server.js`
 
 ### 5. ✅ Input Validation & Sanitization
+
 - **Implemented**: Security utilities for input validation
 - **Functions**:
   - `sanitizeHtml()` - XSS prevention
@@ -47,6 +52,7 @@ Based on comprehensive research from **Building Secure and Reliable Systems**, *
 - **Files**: `src/security/validation.ts`, `public/js/security.js`
 
 ### 6. ✅ Rate Limiting
+
 - **Implemented**: Client-side rate limiting
 - **Features**:
   - Token bucket algorithm
@@ -55,6 +61,7 @@ Based on comprehensive research from **Building Secure and Reliable Systems**, *
 - **Impact**: Prevents API abuse
 
 ### 7. ✅ Server-Side Security
+
 - **Implemented**: Enhanced server security
 - **Features**:
   - Path traversal prevention
@@ -67,27 +74,29 @@ Based on comprehensive research from **Building Secure and Reliable Systems**, *
 ## 📚 Security Resources Used
 
 ### Free & Official Resources
+
 1. **Building Secure and Reliable Systems** (Google)
-   - Available at: https://google.github.io/building-secure-and-reliable-systems/
+   - Available at: <https://google.github.io/building-secure-and-reliable-systems/>
    - Status: ✅ Free, official, legally available
 
 2. **OWASP Top 10** (2021, 2024)
-   - Available at: https://owasp.org/www-project-top-ten/
+   - Available at: <https://owasp.org/www-project-top-ten/>
    - Status: ✅ Free, open-source
 
 3. **OWASP API Security Top 10**
-   - Available at: https://owasp.org/www-project-api-security/
+   - Available at: <https://owasp.org/www-project-api-security/>
    - Status: ✅ Free, open-source
 
 4. **OWASP LLM Top 10**
-   - Available at: https://owasp.org/www-project-large-language-model-applications/
+   - Available at: <https://owasp.org/www-project-large-language-model-applications/>
    - Status: ✅ Free, open-source
 
 5. **OWASP Web Security Testing Guide**
-   - Available at: https://owasp.org/www-project-web-security-testing-guide/
+   - Available at: <https://owasp.org/www-project-web-security-testing-guide/>
    - Status: ✅ Free, open-source
 
 ### Additional Resources (Available via Libraries/Internet Archive)
+
 - **Security Engineering** (Ross Anderson) - Available via Internet Archive
 - **The Tangled Web** (Michal Zalewski) - Available via Internet Archive
 - **Designing Secure Software** (Loren Kohnfelder) - Check library access
@@ -107,25 +116,29 @@ Based on comprehensive research from **Building Secure and Reliable Systems**, *
 ## 📋 Next Steps (Recommended)
 
 ### High Priority
+
 1. Implement WebSocket authentication
 2. Add server-side rate limiting
 3. Configure CORS properly for n8n webhook
 
 ### Medium Priority
+
 4. Add security logging and monitoring
-5. Tighten CSP for production (remove unsafe-inline/unsafe-eval)
-6. Set up dependency vulnerability scanning
+2. Tighten CSP for production (remove unsafe-inline/unsafe-eval)
+3. Set up dependency vulnerability scanning
 
 ### Low Priority
+
 7. Conduct security audit
-8. Add automated security tests
-9. Set up error tracking
+2. Add automated security tests
+3. Set up error tracking
 
 ---
 
 ## 📖 Documentation
 
 For detailed security implementation information, see:
+
 - `docs/SECURITY-IMPLEMENTATION.md` - Comprehensive security guide
 - `README.md` - Updated with security considerations
 

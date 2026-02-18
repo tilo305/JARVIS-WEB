@@ -41,7 +41,7 @@
 #### Recap: Definition of Usability
 
 > The effectiveness, efficiency, and satisfaction with which a specified set of users can achieve a specified set of tasks in a particular environment.
-> 
+>
 > — ISO 9241-11
 
 #### The Reality
@@ -241,7 +241,7 @@ Start and stop conversations. Use a wake word to start a conversation, but don't
 
 #### Heuristic #5 (S5): Pay Attention to Context
 
-Pay attention to what the user said and respect the user's context. 
+Pay attention to what the user said and respect the user's context.
 
 - Leverage user input when it can be used as a parameter to a command
 - Remember what the user has said in the current conversation
@@ -378,4 +378,3 @@ Allow users to exit from errors or a mistaken conversation:
 ---
 
 *Building User Interfaces | Professor Mutlu | Lecture 19: Design Principles for Voice User Interfaces*
-

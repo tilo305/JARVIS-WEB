@@ -8,6 +8,7 @@
 ## Executive Summary
 
 The JavaScript handbook is **highly relevant** to this project. JARVIS-WEB uses modern JavaScript/TypeScript extensively for:
+
 - Real-time WebSocket communication (STT/TTS)
 - Audio processing with AudioWorklet
 - Async/await patterns throughout
@@ -15,6 +16,7 @@ The JavaScript handbook is **highly relevant** to this project. JARVIS-WEB uses 
 - Complex error handling scenarios
 
 **Key Findings:**
+
 - ✅ Project already uses many handbook patterns (async/await, ES6 modules, performance optimizations)
 - ⚠️ Opportunities to apply additional patterns (debouncing, throttling, memoization)
 - ⚠️ Error handling could benefit from handbook's Result/Either patterns
@@ -28,27 +30,33 @@ The JavaScript handbook is **highly relevant** to this project. JARVIS-WEB uses 
 ### ✅ Already Implemented
 
 **ES6 Modules:**
+
 - `import`/`export` used throughout (`app.js`, `cartesia-audio-bridge.js`, TypeScript files)
 - Dynamic imports could be added for code splitting
 
 **Arrow Functions:**
+
 - Extensively used in callbacks, event handlers
 - Example: `app.js` line 752: `textInput.addEventListener('keydown', (e) => { ... })`
 
 **Async/Await:**
+
 - Core pattern for WebSocket operations
 - Example: `cartesia-audio-bridge.js` line 301: `async init()`
 - Example: `app.js` line 242: `async function getLLMReply()`
 
 **Destructuring:**
+
 - Used for config extraction: `app.js` line 71: `const { apiKey, voiceId, n8nWebhookUrl } = getConfig();`
 - Could be expanded for function parameters
 
 **Template Literals:**
+
 - Used for string interpolation
 - Example: `app.js` line 74: `` const sessionId = `sess_${Date.now()}_${Math.random()...}`; ``
 
 **Spread Operator:**
+
 - Used in payload building: `app.js` line 87: `return buildN8nPayload(message, { ...options, sessionId, conversationHistory });`
 
 ### 🔄 Opportunities for Enhancement
@@ -71,18 +79,22 @@ The JavaScript handbook is **highly relevant** to this project. JARVIS-WEB uses 
 ### ✅ Already Implemented
 
 **Promises:**
+
 - WebSocket connections use Promises
 - Example: `cartesia-audio-bridge.js` line 455: `new Promise((resolve, reject) => { ... })`
 
 **Async/Await:**
+
 - Primary pattern for async operations
 - Example: `app.js` line 242: `async function getLLMReply()`
 
 **Promise.all:**
+
 - Used for parallel operations
 - Example: `bidirectional-conversation.ts` line 274: `await Promise.all([this.sttClient.connect(), this.ttsClient.connect()])`
 
 **Error Handling:**
+
 - Try-catch blocks throughout async functions
 - Example: `app.js` line 340: `catch (err) { ... }`
 
@@ -106,17 +118,21 @@ The JavaScript handbook is **highly relevant** to this project. JARVIS-WEB uses 
 ### ✅ Already Implemented
 
 **requestAnimationFrame:**
+
 - Used for UI updates: `app.js` line 100
 - Used for DOM batching: `app.js` line 184
 
 **DocumentFragment:**
+
 - Used for efficient DOM updates: `app.js` line 138
 
 **Memory Management:**
+
 - Audio buffers cleared after use: `app.js` line 436: `bridge.clearRecordedAudio()`
 - WebSocket cleanup on disconnect
 
 **Backpressure Handling:**
+
 - STT WebSocket checks `bufferedAmount`: `cartesia-audio-bridge.js` line 547
 
 ### 🔄 Opportunities for Enhancement
@@ -148,14 +164,17 @@ The JavaScript handbook is **highly relevant** to this project. JARVIS-WEB uses 
 ### ✅ Already Implemented
 
 **Console Methods:**
+
 - `console.log`, `console.error`, `console.warn` used throughout
 - Debug flags: `window.JARVIS_DEBUG`
 
 **Error Handling:**
+
 - Try-catch blocks with detailed error logging
 - Example: `app.js` line 558: `catch (err) { DEBUG.error('onTranscript error', err); }`
 
 **Performance Monitoring:**
+
 - Latency tracking in STT/TTS clients
 - Example: `stt-client.ts` line 197: latency tracking
 
@@ -184,14 +203,17 @@ The JavaScript handbook is **highly relevant** to this project. JARVIS-WEB uses 
 ### ✅ Already Implemented
 
 **Try-Catch:**
+
 - Extensively used throughout async functions
 - Example: `app.js` line 267: `try { ... } catch (err) { ... }`
 
 **Custom Error Messages:**
+
 - User-friendly error messages
 - Example: `app.js` line 344: `"Request timed out, sir..."`
 
 **Error Recovery:**
+
 - Automatic reconnection for WebSockets
 - Example: `stt-client.ts` line 375: `attemptReconnect()`
 
@@ -216,17 +238,21 @@ The JavaScript handbook is **highly relevant** to this project. JARVIS-WEB uses 
 ### ✅ Already Implemented
 
 **Observer Pattern:**
+
 - Callback-based event system
 - Example: `cartesia-audio-bridge.js` line 52: `this.onTranscript = options.onTranscript || (() => {});`
 
 **Module Pattern:**
+
 - ES6 modules used throughout
 - Example: `app.js` line 12: `import { CartesiaAudioBridge } from './cartesia-audio-bridge.js';`
 
 **Factory Pattern:**
+
 - Not explicitly used, but could be useful for creating audio processors
 
 **Singleton Pattern:**
+
 - Not used (which is good - not needed here)
 
 ### 🔄 Opportunities for Enhancement
@@ -246,16 +272,19 @@ The JavaScript handbook is **highly relevant** to this project. JARVIS-WEB uses 
 ### ✅ Already Implemented
 
 **Code Organization:**
+
 - Well-structured modules
 - Clear separation of concerns
 - TypeScript for type safety
 
 **Naming Conventions:**
+
 - camelCase for variables/functions
 - PascalCase for classes
 - SCREAMING_SNAKE_CASE for constants
 
 **Error Handling:**
+
 - Comprehensive try-catch blocks
 - User-friendly error messages
 
@@ -294,25 +323,25 @@ The JavaScript handbook is **highly relevant** to this project. JARVIS-WEB uses 
 
 ### Medium Priority (Nice to Have)
 
-4. **Memoization Utilities**
+1. **Memoization Utilities**
    - Can cache expensive operations
    - Useful for audio processing
 
-5. **Enhanced Debugging Tools**
+2. **Enhanced Debugging Tools**
    - Better console grouping
    - Performance API integration
 
-6. **EventEmitter Pattern**
+3. **EventEmitter Pattern**
    - More flexible event system
    - Better scalability
 
 ### Low Priority (Future Consideration)
 
-7. **Object Pooling**
+1. **Object Pooling**
    - Memory optimization
    - Only needed if memory becomes an issue
 
-8. **Lazy Loading**
+2. **Lazy Loading**
    - Code splitting
    - Only needed if bundle size becomes an issue
 
@@ -328,6 +357,7 @@ The JARVIS-WEB project already implements many best practices from the JavaScrip
 4. **Code Organization:** Standardize patterns across modules
 
 The handbook serves as an excellent reference for:
+
 - Understanding existing code patterns
 - Identifying optimization opportunities
 - Learning advanced JavaScript concepts

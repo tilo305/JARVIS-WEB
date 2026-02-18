@@ -4,10 +4,10 @@
  * Only downloads content that is legally free and open-source
  */
 
-import { writeFile } from 'fs/promises';
-import { join } from 'path';
-import https from 'https';
-import http from 'http';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import https from 'node:https';
+import http from 'node:http';
 
 const BOOKS_DIR = process.cwd();
 

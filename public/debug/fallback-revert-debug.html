@@ -27,6 +27,7 @@
     .ok { color: var(--green); }
     .fail { color: var(--red); }
     .info { color: var(--muted); font-size: 0.85rem; }
+    .n8n-result { margin-top: 1rem; }
     a { color: var(--gold); }
   </style>
 </head>
@@ -45,7 +46,7 @@
     <label>Message to send</label>
     <input type="text" id="testMessage" value="Hello" placeholder="e.g. Hello">
     <button type="button" id="btnTest">Test n8n</button>
-    <div id="n8nResult" style="margin-top: 1rem;"></div>
+    <div id="n8nResult" class="n8n-result"></div>
   </section>
 
   <section>
@@ -141,8 +142,6 @@
         diagEl.textContent = `Fetch failed: ${err.message}. This may indicate CORS blocking the request from the browser.`;
       }
     });
-
-    // escapeHtml is now imported from debug.js
   </script>
 </body>
 </html>

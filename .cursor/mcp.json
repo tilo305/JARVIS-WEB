@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "desktop-commander": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-v",
+        "C:/Users/lazar/Downloads/Everything AI/Github/JARVIS-WEB:/workspace",
+        "mcp/desktop-commander:latest"
+      ]
+    }
+  }
+}

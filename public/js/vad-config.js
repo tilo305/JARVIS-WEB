@@ -74,12 +74,16 @@ export const VAD_CONFIG = {
 
   // Dynamic fillers: spoken by the app when waiting for LLM/n8n (NVIDIA Tokkio pattern).
   // Heuristic S2: Make system status clear — user hears something while the agent processes.
+  // Use actual phrases (dynamic words), not sounds like "um" or "hmm".
   fillerPhrases: [
     'One moment, sir.',
     'Let me think.',
-    'Right.',
-    'Hmm.',
     'Just a moment.',
+    'Checking on that.',
+    'Looking into it.',
+    'Give me a second.',
+    'Working on it.',
+    'Almost there.',
   ],
   fillerTimeDelayMs: 2000,
 

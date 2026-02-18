@@ -17,15 +17,17 @@ This document provides step-by-step instructions for legally obtaining the full 
 
 ## 🌐 Method 1: Internet Archive (Free Borrowing)
 
-### Steps:
-1. Visit https://archive.org
+### Steps
+
+1. Visit <https://archive.org>
 2. Create a free account
 3. Search for the book title
 4. Click "Borrow" (14-day loan period)
 5. Read online or download (if available)
 6. Copy content to your documentation files
 
-### Books Available:
+### Books Available
+
 - **The Web Application Hacker's Handbook** - Usually available
 - **Security Engineering** - May be available (older editions)
 
@@ -33,7 +35,8 @@ This document provides step-by-step instructions for legally obtaining the full 
 
 ## 📖 Method 2: Public Library Digital Access
 
-### Steps:
+### Steps
+
 1. Get a library card from your local public library
 2. Check if they offer digital access to:
    - **O'Reilly Learning Platform** (formerly Safari Books)
@@ -43,7 +46,8 @@ This document provides step-by-step instructions for legally obtaining the full 
 4. Download or read online
 5. Copy content to your documentation files
 
-### Books Available:
+### Books Available
+
 - **Building Secure and Reliable Systems** (O'Reilly)
 - **The Site Reliability Workbook** (O'Reilly)
 - **Secure by Design** (Manning - if library has access)
@@ -53,7 +57,8 @@ This document provides step-by-step instructions for legally obtaining the full 
 
 ## 🎓 Method 3: University/Academic Access
 
-### If You're a Student or Work at a University:
+### If You're a Student or Work at a University
+
 1. Check your university library's digital collection
 2. Access through:
    - **IEEE Xplore**
@@ -67,12 +72,14 @@ This document provides step-by-step instructions for legally obtaining the full 
 
 ## 💰 Method 4: Purchase (Then Copy for Personal Use)
 
-### Steps:
+### Steps
+
 1. Purchase book from official publisher or retailer
 2. For personal reference, you can copy content to your files
 3. **Important**: Only for personal use, not for distribution
 
-### Where to Purchase:
+### Where to Purchase
+
 - **O'Reilly Media**: o'reilly.com
 - **Manning Publications**: manning.com
 - **No Starch Press**: nostarch.com
@@ -83,8 +90,9 @@ This document provides step-by-step instructions for legally obtaining the full 
 
 ## 🔧 Method 5: Free Sample Chapters + Summaries
 
-### For Books with Free Content:
-1. **Manning Publications**: 
+### For Books with Free Content
+
+1. **Manning Publications**:
    - Visit manning.com
    - Check "Free Content Center"
    - Download free chapters
@@ -106,21 +114,24 @@ This document provides step-by-step instructions for legally obtaining the full 
 
 Once you have access to a book:
 
-### For Online Reading:
+### For Online Reading
+
 1. Open the book in your browser
 2. Select all text (Ctrl+A / Cmd+A)
 3. Copy (Ctrl+C / Cmd+C)
 4. Paste into your markdown file
 5. Format as needed
 
-### For PDF Downloads:
+### For PDF Downloads
+
 1. Open PDF
 2. Select all text
 3. Copy to clipboard
 4. Paste into markdown file
 5. Format as needed
 
-### For EPUB/MOBI:
+### For EPUB/MOBI
+
 1. Convert to text using Calibre or similar
 2. Copy content to markdown file
 3. Format as needed
@@ -129,13 +140,15 @@ Once you have access to a book:
 
 ## ⚠️ Legal Considerations
 
-### ✅ Legal:
+### ✅ Legal
+
 - Copying for personal reference/study
 - Borrowing from libraries
 - Using free/open-source content
 - Fair use excerpts with attribution
 
-### ❌ Illegal:
+### ❌ Illegal
+
 - Distributing copyrighted content
 - Sharing with others
 - Commercial use without permission
@@ -156,6 +169,7 @@ Once you have access to a book:
 ## 📝 File Naming Convention
 
 When copying content, use your naming convention:
+
 - `sEcUrItY eNgInEeRiNg.md`
 - `dEsIgNiNg sEcUrE sOfTwArE.md`
 - `sEcUrE bY dEsIgN.md`
@@ -165,10 +179,10 @@ When copying content, use your naming convention:
 
 ## 🔗 Quick Links
 
-- **Internet Archive**: https://archive.org
-- **O'Reilly Free Trial**: https://www.oreilly.com/
-- **Manning Free Content**: https://www.manning.com/freecontent
-- **No Starch Press**: https://nostarch.com
+- **Internet Archive**: <https://archive.org>
+- **O'Reilly Free Trial**: <https://www.oreilly.com/>
+- **Manning Free Content**: <https://www.manning.com/freecontent>
+- **No Starch Press**: <https://nostarch.com>
 
 ---
 

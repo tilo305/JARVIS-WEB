@@ -3,11 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- CSP is set via HTTP header by server.js / Electron. Meta fallback for Vite dev (requires unsafe-inline for HMR). -->
+  <!-- CSP: no strict-dynamic for file:// (Electron built). server.js overrides with nonce-based. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' wss://api.cartesia.ai wss: https: http://localhost http://127.0.0.1 blob:; img-src 'self' data: blob:; media-src 'self' blob:; object-src 'none'; base-uri 'none';">
   <title>JARVIS — Voice &amp; Chat</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%23FF1800' opacity='0.3'/><circle cx='16' cy='16' r='10' fill='none' stroke='%23FFFF00' stroke-width='2'/><circle cx='16' cy='16' r='4' fill='%23FF1C00'/></svg>" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet">
   <!-- Modern UI v2.0 - Enhanced Iron Man Theme with Glassmorphism -->
   <style>
     :root {
@@ -15,6 +18,8 @@
       --bg-panel: #0f0f15;
       --bg-input: #1a1a22;
       --border: #2a2a35;
+      --iron-dark: #0f0f15;
+      --iron-border: #2a2a35;
       /* Yellow */
       --gold: #FFFF00;
       --gold-bright: #FFD700;
@@ -60,12 +65,12 @@
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
       text-rendering: optimizeLegibility;
-      background: var(--bg-deep);
+      background: #000000;
       background-image: 
-        radial-gradient(circle at 20% 30%, rgba(255, 24, 0, 0.2) 0%, transparent 60%),
-        radial-gradient(circle at 80% 70%, rgba(255, 255, 0, 0.25) 0%, transparent 60%),
-        radial-gradient(circle at 50% 50%, rgba(255, 255, 0, 0.15) 0%, transparent 70%),
-        linear-gradient(135deg, rgba(255, 24, 0, 0.12) 0%, rgba(255, 255, 0, 0.1) 50%, rgba(255, 24, 0, 0.08) 100%);
+        radial-gradient(circle at 20% 30%, rgba(255, 24, 0, 0.35) 0%, rgba(204, 0, 0, 0.15) 40%, transparent 65%),
+        radial-gradient(circle at 80% 70%, rgba(255, 255, 0, 0.4) 0%, rgba(255, 200, 0, 0.2) 40%, transparent 65%),
+        radial-gradient(circle at 50% 50%, rgba(255, 255, 0, 0.2) 0%, rgba(255, 24, 0, 0.1) 50%, transparent 70%),
+        linear-gradient(135deg, rgba(255, 24, 0, 0.18) 0%, #000000 25%, rgba(255, 255, 0, 0.15) 50%, #000000 75%, rgba(255, 24, 0, 0.12) 100%);
       color: var(--text);
       margin: 0;
       min-height: 100vh;
@@ -81,21 +86,21 @@
       position: fixed;
       inset: 0;
       background: 
-        repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255, 24, 0, 0.05) 2px, rgba(255, 24, 0, 0.05) 4px),
-        repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(255, 255, 0, 0.05) 2px, rgba(255, 255, 0, 0.05) 4px),
-        repeating-linear-gradient(45deg, transparent, transparent 1px, rgba(255, 255, 0, 0.03) 1px, rgba(255, 255, 0, 0.03) 2px);
+        repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255, 24, 0, 0.08) 2px, rgba(255, 24, 0, 0.08) 4px),
+        repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(255, 255, 0, 0.08) 2px, rgba(255, 255, 0, 0.08) 4px),
+        repeating-linear-gradient(45deg, transparent, transparent 1px, rgba(255, 255, 0, 0.04) 1px, rgba(255, 255, 0, 0.04) 2px);
       pointer-events: none;
       z-index: 0;
-      opacity: 0.5;
+      opacity: 0.6;
     }
     body::after {
       content: '';
       position: fixed;
       inset: 0;
       background: 
-        radial-gradient(ellipse at 30% 40%, rgba(255, 24, 0, 0.06) 0%, transparent 50%),
-        radial-gradient(ellipse at 70% 60%, rgba(255, 255, 0, 0.05) 0%, transparent 50%),
-        radial-gradient(ellipse at 50% 50%, rgba(255, 255, 0, 0.04) 0%, transparent 60%);
+        radial-gradient(ellipse at 30% 40%, rgba(255, 24, 0, 0.12) 0%, transparent 50%),
+        radial-gradient(ellipse at 70% 60%, rgba(255, 255, 0, 0.1) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(255, 255, 0, 0.06) 0%, transparent 60%);
       pointer-events: none;
       z-index: 0;
       animation: backgroundPulse 8s ease-in-out infinite;
@@ -112,7 +117,10 @@
       max-height: 100%;
       min-width: 280px;
       min-height: 320px;
-      margin: 1rem;
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
       display: flex;
       flex-direction: column;
       background: rgba(15, 15, 21, 0.7);
@@ -133,7 +141,6 @@
         inset 0 -2px 4px rgba(255, 255, 0, 0.15);
       backdrop-filter: blur(25px) saturate(200%);
       -webkit-backdrop-filter: blur(25px) saturate(200%);
-      position: relative;
       z-index: 1;
     }
     .chat-interface::after {
@@ -170,6 +177,12 @@
       align-items: center;
       gap: 0.75rem;
       background: rgba(15, 15, 21, 0.6);
+      cursor: move;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
       backdrop-filter: blur(30px) saturate(200%);
       -webkit-backdrop-filter: blur(30px) saturate(200%);
       position: relative;
@@ -178,6 +191,9 @@
         inset 0 1px 0 rgba(255, 255, 255, 0.12),
         0 0 30px rgba(255, 24, 0, 0.2),
         0 0 20px rgba(255, 255, 0, 0.15);
+    }
+    .header button {
+      cursor: pointer;
     }
     .header::after {
       content: '';
@@ -1134,6 +1150,22 @@
     .btn-copy-log:hover .log-count {
       box-shadow: 0 0 12px rgba(220, 20, 60, 0.8);
     }
+    /* Log viewer modal (right-click fallback when clipboard fails) */
+    .log-viewer-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000;
+      display: flex; align-items: center; justify-content: center; padding: 1rem;
+    }
+    .log-viewer-modal {
+      background: var(--iron-dark); border: 1px solid var(--iron-border);
+      border-radius: 8px; max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column;
+    }
+    .log-viewer-modal h3 { margin: 0; padding: 0.75rem 1rem; font-size: 1rem; }
+    .log-viewer-modal textarea {
+      flex: 1; min-height: 300px; font-family: ui-monospace, monospace; font-size: 12px;
+      padding: 1rem; resize: both; background: #1a1a1a; color: #eee; border: none;
+      border-top: 1px solid var(--iron-border);
+    }
+    .log-viewer-modal .log-viewer-actions { padding: 0.5rem 1rem; display: flex; gap: 0.5rem; justify-content: flex-end; }
   </style>
 </head>
 <body>
@@ -1143,7 +1175,7 @@
     <h1>JARVIS</h1>
     <span class="status" id="status">Ready</span>
     <div class="header-actions">
-      <button type="button" class="btn-icon btn-copy-log" id="btnCopyLog" title="Copy error logs" aria-label="Copy error logs">
+      <button type="button" class="btn-icon btn-copy-log" id="btnCopyLog" title="Copy error logs (right-click to view and manually copy)" aria-label="Copy error logs">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
           <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
           <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
@@ -1200,7 +1232,19 @@
   </div>
   </div>
 
-  <script>
+  <div id="logViewerOverlay" class="log-viewer-overlay" style="display: none;" role="dialog" aria-label="Error logs viewer">
+    <div class="log-viewer-modal">
+      <h3 id="logViewerTitle">Error &amp; Warning Logs — Full log below. Select all (Ctrl+A) then Copy (Ctrl+C) to copy every entry.</h3>
+      <textarea id="logViewerText" readonly aria-label="Full error log — select all and copy"></textarea>
+      <div class="log-viewer-actions">
+        <button type="button" id="logViewerSelectAll" title="Select entire log">Select All</button>
+        <button type="button" id="logViewerCopy">Copy to clipboard</button>
+        <button type="button" id="logViewerClose">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script nonce="{{CSP_NONCE}}">
     window.JARVIS_CONFIG = window.JARVIS_CONFIG || {};
     // Cartesia API Configuration - MUST be set via environment variables or window.JARVIS_CONFIG
     // Never hardcode API keys in source code - this is a critical security vulnerability
@@ -1340,6 +1384,26 @@
           captureLogEntry(entry);
         }
       };
+
+      // Intercept console.info and console.debug (same filter so no JARVIS message is missed)
+      const originalInfo = console.info;
+      console.info = function(...args) {
+        originalInfo.apply(console, args);
+        if (args.length > 0 && typeof args[0] === 'string' && 
+            (args[0].includes('[JARVIS]') || args[0].includes('n8n') || args[0].includes('webhook'))) {
+          const entry = formatLogEntry('INFO', args);
+          captureLogEntry(entry);
+        }
+      };
+      const originalDebug = console.debug;
+      console.debug = function(...args) {
+        originalDebug.apply(console, args);
+        if (args.length > 0 && typeof args[0] === 'string' && 
+            (args[0].includes('[JARVIS]') || args[0].includes('n8n') || args[0].includes('webhook'))) {
+          const entry = formatLogEntry('DEBUG', args);
+          captureLogEntry(entry);
+        }
+      };
       
       // Capture unhandled promise rejections
       window.addEventListener('unhandledrejection', function(event) {
@@ -1410,23 +1474,41 @@
         }
       }
       
-      // Copy logs to clipboard
+      // Copy logs to clipboard (ASCII separators for reliable paste into chat/terminals)
       function copyLogs() {
         if (capturedLogs.length === 0) {
           alert('No logs captured yet. Errors and warnings will appear here automatically.');
           return;
         }
         
-        const header = '═══════════════════════════════════════════════════════════\n';
-        const title = 'JARVIS Error & Warning Log\n';
-        const timestamp = `Captured: ${new Date().toLocaleString()}\n`;
-        const separator = '═══════════════════════════════════════════════════════════\n\n';
+        const fullLog = buildFullLog();
         
-        const fullLog = header + title + timestamp + separator + 
-                       capturedLogs.join('\n\n' + '─'.repeat(60) + '\n\n') + 
-                       '\n\n' + separator;
+        function doCopy(text) {
+          if (window.electronAPI?.writeClipboardText) {
+            return Promise.resolve(window.electronAPI.writeClipboardText(text));
+          }
+          if (navigator.clipboard?.writeText) {
+            return navigator.clipboard.writeText(text);
+          }
+          // Fallback: execCommand for HTTP or when Clipboard API unavailable
+          return new Promise((resolve, reject) => {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.cssText = 'position:fixed;left:-9999px;top:0';
+            document.body.appendChild(ta);
+            ta.select();
+            try {
+              const ok = document.execCommand('copy');
+              document.body.removeChild(ta);
+              ok ? resolve() : reject(new Error('execCommand copy failed'));
+            } catch (e) {
+              document.body.removeChild(ta);
+              reject(e);
+            }
+          });
+        }
         
-        navigator.clipboard.writeText(fullLog).then(() => {
+        doCopy(fullLog).then(() => {
           const btn = document.getElementById('btnCopyLog');
           if (btn) {
             // Clear any existing timeout
@@ -1445,20 +1527,93 @@
           console.log(`✅ Copied ${capturedLogs.length} log entries to clipboard`);
         }).catch(err => {
           console.error('Failed to copy logs:', err);
-          alert('Failed to copy logs. Please check console for errors.');
+          showLogViewer();
+          alert('Clipboard copy failed. Log viewer opened — use Select All then Ctrl+C to copy every entry.');
         });
       }
       
+      // Build full log string (header + all entries + footer) for copy/viewer
+      function buildFullLog() {
+        const header = '===========================================================\n';
+        const title = 'JARVIS Error & Warning Log\n';
+        const timestamp = `Captured: ${new Date().toLocaleString()}\n`;
+        const totalLine = capturedLogs.length >= maxEntries
+          ? `Total entries: ${capturedLogs.length} (max ${maxEntries} retained — oldest dropped)\n`
+          : `Total entries: ${capturedLogs.length}\n`;
+        const separator = '===========================================================\n\n';
+        const footer = '\n\n========== End of log (' + capturedLogs.length + ' entries) ==========\n\n' + separator;
+        return header + title + timestamp + totalLine + separator +
+          capturedLogs.join('\n\n' + '-'.repeat(60) + '\n\n') + footer;
+      }
+
+      // Show log viewer modal (full access to every entry; select all and copy)
+      function showLogViewer() {
+        if (capturedLogs.length === 0) {
+          alert('No logs captured yet.');
+          return;
+        }
+        const fullLog = buildFullLog();
+        const overlay = document.getElementById('logViewerOverlay');
+        const textarea = document.getElementById('logViewerText');
+        const titleEl = document.getElementById('logViewerTitle');
+        if (overlay && textarea) {
+          textarea.value = fullLog;
+          if (titleEl) {
+            titleEl.textContent = 'Error & Warning Logs — ' + capturedLogs.length + ' entries. Select all (Ctrl+A) then Copy (Ctrl+C) to copy every entry.';
+          }
+          overlay.style.display = 'flex';
+          textarea.focus();
+          textarea.select();
+        }
+      }
+
+      function hideLogViewer() {
+        const overlay = document.getElementById('logViewerOverlay');
+        if (overlay) overlay.style.display = 'none';
+      }
+
       // Initialize button when DOM is ready
       function initCopyLogButton() {
         const btn = document.getElementById('btnCopyLog');
         if (btn) {
           btn.addEventListener('click', copyLogs);
+          btn.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            showLogViewer();
+          });
           updateLogCount();
-        } else {
-          // Retry if button not found yet
-          setTimeout(initCopyLogButton, 100);
         }
+        const overlay = document.getElementById('logViewerOverlay');
+        if (overlay && !overlay.dataset.inited) {
+          overlay.dataset.inited = '1';
+          document.getElementById('logViewerClose')?.addEventListener('click', hideLogViewer);
+          document.getElementById('logViewerSelectAll')?.addEventListener('click', () => {
+            const ta = document.getElementById('logViewerText');
+            if (ta) {
+              ta.focus();
+              ta.select();
+            }
+          });
+          document.getElementById('logViewerCopy')?.addEventListener('click', () => {
+            const ta = document.getElementById('logViewerText');
+            if (ta) {
+              ta.focus();
+              ta.select();
+              const text = ta.value;
+              if (window.electronAPI?.writeClipboardText) {
+                window.electronAPI.writeClipboardText(text).catch(() => {
+                  navigator.clipboard?.writeText(text).catch(() => document.execCommand('copy'));
+                });
+              } else if (navigator.clipboard?.writeText) {
+                navigator.clipboard.writeText(text).catch(() => document.execCommand('copy'));
+              } else {
+                try { document.execCommand('copy'); } catch (_) {}
+              }
+            }
+          });
+          overlay.addEventListener('click', (e) => { if (e.target === overlay) hideLogViewer(); });
+        }
+        if (!btn) setTimeout(initCopyLogButton, 100);
       }
       
       // Start initialization
@@ -1468,8 +1623,9 @@
         initCopyLogButton();
       }
       
-      // Expose function for manual testing
+      // Expose functions for manual testing
       window.JARVIS_COPY_LOGS = copyLogs;
+      window.JARVIS_SHOW_LOG_VIEWER = showLogViewer;
       window.JARVIS_GET_LOGS = () => capturedLogs;
       window.JARVIS_CLEAR_LOGS = () => {
         capturedLogs.length = 0;
@@ -1565,9 +1721,112 @@
         initReadyButton();
       }
     })();
+
+    // Draggable chat interface — drag header to move
+    (function() {
+      'use strict';
+      const STORAGE_KEY = 'jarvis_chat_position';
+
+      function initDraggable() {
+        const chat = document.querySelector('.chat-interface');
+        const header = document.querySelector('.header');
+        if (!chat || !header) {
+          setTimeout(initDraggable, 100);
+          return;
+        }
+
+        let isDragging = false;
+        let startX = 0, startY = 0, startLeft = 0, startTop = 0;
+
+        function getPosition() {
+          const rect = chat.getBoundingClientRect();
+          return { left: rect.left, top: rect.top };
+        }
+
+        function getClientCoords(e) {
+          if (e.touches && e.touches.length) {
+            return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+          }
+          return { x: e.clientX, y: e.clientY };
+        }
+
+        function setPosition(left, top) {
+          const w = chat.offsetWidth;
+          const h = chat.offsetHeight;
+          const maxLeft = window.innerWidth - w + 20;
+          const maxTop = window.innerHeight - h + 20;
+          left = Math.max(-w + 80, Math.min(maxLeft, left));
+          top = Math.max(0, Math.min(maxTop, top));
+          chat.style.left = left + 'px';
+          chat.style.top = top + 'px';
+          chat.style.transform = 'none';
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ left, top })); } catch (_) {}
+        }
+
+        function restorePosition() {
+          try {
+            const s = localStorage.getItem(STORAGE_KEY);
+            if (s) {
+              const { left, top } = JSON.parse(s);
+              if (typeof left === 'number' && typeof top === 'number') {
+                setPosition(left, top);
+                return;
+              }
+            }
+          } catch (_) {}
+        }
+
+        restorePosition();
+
+        function onPointerDown(e) {
+          if (e.target.closest('button') || e.target.closest('a') || e.target.closest('#status')) return;
+          isDragging = true;
+          const pos = getPosition();
+          const c = getClientCoords(e);
+          startX = c.x;
+          startY = c.y;
+          startLeft = pos.left;
+          startTop = pos.top;
+          chat.style.cursor = 'grabbing';
+          header.style.cursor = 'grabbing';
+        }
+
+        function onPointerMove(e) {
+          if (!isDragging) return;
+          const c = getClientCoords(e);
+          const dx = c.x - startX;
+          const dy = c.y - startY;
+          setPosition(startLeft + dx, startTop + dy);
+          if (e.cancelable && e.touches) e.preventDefault();
+        }
+
+        function onPointerUp() {
+          if (!isDragging) return;
+          isDragging = false;
+          chat.style.cursor = '';
+          header.style.cursor = 'move';
+        }
+
+        header.addEventListener('mousedown', onPointerDown);
+        header.addEventListener('touchstart', onPointerDown, { passive: true });
+        document.addEventListener('mousemove', onPointerMove);
+        document.addEventListener('mouseup', onPointerUp);
+        document.addEventListener('touchmove', onPointerMove, { passive: false });
+        document.addEventListener('touchend', onPointerUp);
+        document.addEventListener('touchcancel', onPointerUp);
+
+        header.setAttribute('title', header.getAttribute('title') || 'Drag to move');
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initDraggable);
+      } else {
+        initDraggable();
+      }
+    })();
   </script>
-  <script type="module" src="./js/app.js"></script>
-  <script>
+  <script type="module" src="./js/app.js" nonce="{{CSP_NONCE}}"></script>
+  <script nonce="{{CSP_NONCE}}">
     // Set timestamp on initial message and update greeting with time of day
     (function() {
       function getTimeOfDay() {

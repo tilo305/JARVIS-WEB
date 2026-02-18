@@ -16,21 +16,25 @@ A comprehensive textbook that established the discipline of security engineering
 ## Key Concepts Relevant to JARVIS-WEB
 
 ### 1. Cryptography Fundamentals
+
 - API key protection strategies
 - Secure WebSocket connections (TLS/WSS)
 - Authentication token handling
 - **Applied**: API key security, HTTPS enforcement
 
 ### 2. Distributed System Security
+
 - WebSocket security patterns
 - Real-time communication security
 - **Applied**: WebSocket connection security (recommended for future)
 
 ### 3. Threat Modeling
+
 - Systematic approach to identifying threats
 - **Applied**: Security threat analysis for file uploads, webhooks
 
 ### 4. Network Security
+
 - WebSocket attack prevention
 - API security patterns
 - **Applied**: Security headers, input validation
@@ -40,19 +44,22 @@ A comprehensive textbook that established the discipline of security engineering
 ## Key Chapters Relevant to JARVIS-WEB
 
 ### Chapter 21: Network Attack and Defense
+
 - **Relevance**: WebSocket security, API security
 - **Applied**: Security headers, rate limiting
 
 ### Chapter 22: Web Security
+
 - **Relevance**: Web application security
-- **Applied**: 
+- **Applied**:
   - XSS prevention (webhook sanitization)
   - File upload security
   - Security headers
 
 ### Chapter 23: API Security
+
 - **Relevance**: API key management, webhook security
-- **Applied**: 
+- **Applied**:
   - API key security
   - Webhook response validation
   - Rate limiting
@@ -82,11 +89,13 @@ A comprehensive textbook that established the discipline of security engineering
 ## Implementation Status
 
 ✅ **Partially Implemented**:
+
 - Web security principles
 - API security patterns
 - Network security headers
 
 📋 **Recommended** (from this book):
+
 - WebSocket authentication
 - Advanced cryptography for sensitive data
 - Comprehensive threat modeling
@@ -97,11 +106,13 @@ A comprehensive textbook that established the discipline of security engineering
 ## Access Information
 
 **Free Access**:
+
 - Internet Archive (archive.org) - May be available for borrowing
 - Public libraries - Check digital library access
 - University libraries - Academic access
 
 **Purchase**:
+
 - Wiley (official publisher)
 - Amazon, Barnes & Noble
 - O'Reilly Learning Platform (with subscription)

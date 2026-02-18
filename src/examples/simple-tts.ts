@@ -5,7 +5,7 @@
  */
 
 import { CartesiaTTSClient } from '../tts-client.js';
-import { writeFileSync } from 'fs';
+import { writeFileSync } from 'node:fs';
 
 async function main() {
   console.log('=== Cartesia TTS Example ===\n');

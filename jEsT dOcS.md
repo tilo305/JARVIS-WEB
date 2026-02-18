@@ -2,22 +2,25 @@
 
 ## 🚨 CRITICAL: MANDATORY RESEARCH PROTOCOL (MUST READ FIRST)
 
-### BEFORE USING THIS DOCUMENTATION, YOU MUST:
+### BEFORE USING THIS DOCUMENTATION, YOU MUST
 
 #### 1. COMPREHENSIVE RESEARCH ON JESTJS.IO/DOCS (MANDATORY FIRST STEP)
-- **ALWAYS** start by doing comprehensive research on: **https://jestjs.io/docs/getting-started**
+
+- **ALWAYS** start by doing comprehensive research on: **<https://jestjs.io/docs/getting-started>**
 - This is the **official Jest documentation**
 - Covers Jest fundamentals, configuration, mocking, matchers, and testing best practices
 - Essential for understanding Jest testing framework before diving into this project-specific guide
 - **THIS MUST BE DONE FIRST** before using any content from this document
 
 #### 2. THEN RESEARCH THIS DOCUMENT
+
 - After researching jestjs.io/docs, read this document thoroughly
 - This document is **Jest project-specific** for the JARVIS-WEB application
 - Covers project-specific patterns, configurations, and implementations
 - Both documents are complementary and should be used together
 
 #### 3. RESEARCH HIERARCHY
+
 ```
 1. https://jestjs.io/docs/getting-started (FIRST - Official Jest documentation)
    ↓
@@ -27,12 +30,14 @@
 ```
 
 #### 4. WHY THIS ORDER MATTERS
+
 - **jestjs.io/docs** teaches Jest fundamentals (configuration, matchers, mocking, async testing)
 - **This document** teaches project-specific implementation and best practices
 - Understanding Jest fundamentals first makes test implementation much easier to grasp
 - Prevents confusion between general Jest and project-specific patterns
 
 ### ⚠️ CRITICAL WARNINGS
+
 - **DO NOT** skip researching jestjs.io/docs - it's essential foundational knowledge
 - **DO NOT** confuse Jest with other testing frameworks
 - **ALWAYS** verify which version of Jest you're working with
@@ -41,6 +46,7 @@
 ---
 
 ## 📋 Table of Contents
+
 1. [Getting Started](#getting-started)
 2. [Installation & Setup](#installation--setup)
 3. [Configuration](#configuration)
@@ -59,9 +65,11 @@
 ## 🚀 Getting Started
 
 ### What is Jest for JARVIS-WEB?
+
 Jest is a JavaScript testing framework designed to ensure correctness of any JavaScript codebase. For JARVIS-WEB, Jest provides comprehensive testing for web applications, WebSocket integration, and real-time audio processing.
 
 ### Key Features
+
 - **Zero Configuration**: Works out of the box for web applications
 - **Snapshots**: Capture large objects with ease for web testing
 - **Isolated**: Tests run in parallel processes for web performance
@@ -1128,11 +1136,13 @@ export default {
 ## 📚 Additional Resources
 
 ### Official Documentation
+
 - [Jest Getting Started](https://jestjs.io/docs/getting-started)
 - [Jest API Reference](https://jestjs.io/docs/api)
 - [Jest Configuration](https://jestjs.io/docs/configuration)
 
 ### Project-Specific Resources
+
 - Current Jest config: `jest.config.js`
 - Test setup: `tests/setup.js`
 - Test examples: `tests/` directory
@@ -1171,6 +1181,7 @@ Jest is a powerful testing framework that provides everything you need to test y
 For the JARVIS-WEB project, Jest is already configured and ready to use. The existing test structure provides a solid foundation for expanding test coverage and ensuring the reliability of your voice AI system.
 
 Remember:
+
 - Write tests that are easy to understand and maintain
 - Use descriptive test names and organize tests logically
 - Mock external dependencies appropriately

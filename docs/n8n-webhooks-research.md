@@ -21,6 +21,7 @@ This document summarizes all n8n webhook usage across the project (single webhoo
 ## 1.5 Single Source of Truth: n8n Payload
 
 **`public/js/n8n-payload.js`** — Shared module used by:
+
 - Chat UI (`app.js`) — via `buildN8nPayload`
 - Fallback-revert debug page (`public/debug/fallback-revert-debug.html`)
 

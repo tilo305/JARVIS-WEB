@@ -4,10 +4,9 @@
  * Extracts selectors, properties, variables, media queries, keyframes, etc.
  */
 
-import { readFile, readdir } from 'fs/promises';
-import { join, relative } from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+import { readFile, readdir } from 'node:fs/promises';
+import { join, relative, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

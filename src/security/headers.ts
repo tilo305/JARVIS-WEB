@@ -1,12 +1,48 @@
 /**
  * Security Headers Configuration
  * Based on OWASP Secure Headers Project and Building Secure and Reliable Systems
- * 
- * Implements comprehensive security headers for defense in depth
+ * Implements strict CSP per docs/cSp DoCs.md (web.dev/strict-csp)
  */
 
 export interface SecurityHeaders {
   [key: string]: string | number;
+}
+
+/**
+ * Build strict CSP policy string (nonce-based).
+ * Use with getSecurityHeaders({ csp: buildStrictCsp(...) }) when serving HTML.
+ */
+export function buildStrictCsp(options: {
+  nonce: string;
+  isProduction?: boolean;
+  allowUnsafeEval?: boolean;
+  reportUri?: string;
+}): string {
+  const { nonce, isProduction = false, allowUnsafeEval = false, reportUri = '' } = options;
+  const scriptSrc = [
+    `'nonce-${nonce}'`,
+    "'strict-dynamic'",
+    ...(isProduction ? [] : ["'unsafe-inline'"]),
+    ...(allowUnsafeEval ? ["'unsafe-eval'"] : []),
+    'https:',
+    'http:',
+  ].join(' ');
+  const directives = [
+    `script-src ${scriptSrc}`,
+    "object-src 'none'",
+    "base-uri 'none'",
+    "default-src 'self'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com data:",
+    "connect-src 'self' wss: https: http://localhost http://127.0.0.1 blob:",
+    "img-src 'self' data: blob:",
+    "media-src 'self' blob:",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ];
+  if (reportUri) directives.push(`report-uri ${reportUri}`);
+  if (isProduction) directives.push("upgrade-insecure-requests");
+  return directives.join('; ');
 }
 
 /**
@@ -17,27 +53,30 @@ export function getSecurityHeaders(options: {
   isProduction?: boolean;
   allowedOrigins?: string[];
   enableCSP?: boolean;
+  /** Pre-built strict CSP (e.g. from buildStrictCsp). When set, enableCSP is ignored for CSP. */
+  csp?: string;
 } = {}): SecurityHeaders {
-  const { isProduction = false, allowedOrigins = [], enableCSP = true } = options;
-  
+  const { isProduction = false, allowedOrigins = [], enableCSP = true, csp } = options;
+
+  const fallbackCsp = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self' data:",
+    "connect-src 'self' wss: https: http://localhost http://127.0.0.1",
+    "media-src 'self' blob:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    "upgrade-insecure-requests",
+  ].join('; ');
+
+  const cspValue = csp ?? (enableCSP ? fallbackCsp : null);
+
   const headers: SecurityHeaders = {
-    // Content Security Policy - prevents XSS, injection attacks
-    ...(enableCSP && {
-      'Content-Security-Policy': [
-        "default-src 'self'",
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // Required for Vite dev, tighten in production
-        "style-src 'self' 'unsafe-inline'",
-        "img-src 'self' data: blob:",
-        "font-src 'self' data:",
-        "connect-src 'self' wss: https:",
-        "media-src 'self' blob:",
-        "object-src 'none'",
-        "base-uri 'self'",
-        "form-action 'self'",
-        "frame-ancestors 'none'",
-        "upgrade-insecure-requests",
-      ].join('; '),
-    }),
+    ...(cspValue && { 'Content-Security-Policy': cspValue }),
     
     // HTTP Strict Transport Security - force HTTPS
     ...(isProduction && {

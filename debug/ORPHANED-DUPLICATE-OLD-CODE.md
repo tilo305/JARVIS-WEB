@@ -144,21 +144,19 @@ Same URL string appears in `src/config.ts`, `public/js/app.js` (getConfig fallba
 
 ---
 
-## 9. Orphaned JS modules removed (2026-02-07)
+## 9. Orphaned JS modules (status)
 
-**Removed — not imported by app.js, server, or any runtime:**
+**In use by app.js:**
 
-- **`public/js/cors-handler.js`** — CORS diagnostic module. Never imported; server handles CORS separately.
-- **`public/js/ui-patterns.js`** — UI patterns/easing module. Never imported by app.
-- **`public/js/agentic-patterns.js`** — Agentic design patterns (ConversationHistory, etc.). Only used by its unit test; app implements its own flow.
-- **`public/js/payload-verification.js`** — Payload validation helpers. Only used by its unit test; app does not call `validatePayload` at runtime.
+- **`public/js/cors-handler.js`** — CORS diagnostics: `detectCORSError`, `diagnoseCORS`, `testCORSPreflight`, `getCORSConfigurationGuide`. Imported and used in app.js.
+- **`public/js/agentic-patterns.js`** — ConversationHistory, classifyIntent, getContextEnrichment, validateInput, runWithRetry. Imported and used in app.js.
 
-**Tests removed (only tested the removed modules):**
+**Removed (no longer in repo):**
 
-- **`tests/unit/agentic-patterns.test.js`**
-- **`tests/unit/payload-verification.test.js`**
+- **`public/js/ui-patterns.js`** — Was never added to app.js import chain; docs (INTEGRATION-GUIDE, UI-PATTERNS-IMPLEMENTATION) referenced it; file does not exist.
+- **`public/js/payload-verification.js`** — Removed as orphaned (not imported by app). See docs/PAYLOAD-VERIFICATION-COMPLETE.md.
 
-**Still in use (app.js import chain):** `app.js` → cartesia-audio-bridge, vad-config, n8n-payload, ocr-tool, file-creator, debug.js, utils/error-handling, utils/performance, security.js, utils/debug. All other `public/js/*.js` and `public/js/utils/*.js` are either used or are the barrel `utils/index.js` (documented optional entry).
+**Still in use (app.js import chain):** `app.js` → cartesia-audio-bridge, vad-config, n8n-payload, ocr-tool, file-creator, debug.js, utils (error-handling, performance, debug), security.js, agentic-patterns.js, cors-handler.js.
 
 ---
 
@@ -172,7 +170,7 @@ Same URL string appears in `src/config.ts`, `public/js/app.js` (getConfig fallba
 - ✅ Cartesia API version - `2025-04-16` everywhere
 - ✅ Webhook URL - No duplicate constants
 - ✅ `escapeHtml` - Consolidated in debug.js, imported where needed
-- ✅ Orphaned JS removed: cors-handler, ui-patterns, agentic-patterns, payload-verification (and their tests)
+- ✅ payload-verification.js removed (orphaned). cors-handler.js and agentic-patterns.js are in use by app.js.
 
 **Cartesia cleanup (2026-02-07):** Removed orphaned `parse-cartesia-files.js` (superseded by `parse-all-files.js`). Removed stub `cArTeSiA wEbSoCkEt.md` and consolidated API reference URL into `cArTeSiA dOcS.md`; updated src @see refs.
 

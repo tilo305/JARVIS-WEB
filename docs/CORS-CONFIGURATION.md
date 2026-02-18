@@ -15,6 +15,7 @@ When JARVIS-WEB (running at `http://localhost:3000`) makes a POST request to you
 ### What Triggers CORS Preflight
 
 According to MDN, a **preflight request** (OPTIONS) is triggered when:
+
 - The request method is anything other than GET, HEAD, or POST
 - POST requests with `Content-Type: application/json` (which JARVIS-WEB uses)
 - Custom headers are included
@@ -25,7 +26,7 @@ JARVIS-WEB sends POST requests with `Content-Type: application/json`, so **prefl
 
 1. **Browser sends OPTIONS (preflight) request** to n8n webhook
    - Headers: `Origin`, `Access-Control-Request-Method: POST`, `Access-Control-Request-Headers: content-type`
-   
+
 2. **Server must respond to OPTIONS** with:
    - `Access-Control-Allow-Origin: <origin>` (or `*`)
    - `Access-Control-Allow-Methods: POST, OPTIONS`
@@ -48,6 +49,7 @@ Add a "Set" node in your n8n workflow to add CORS headers:
    - Configure it to set response headers
 
 2. **Set Node Configuration:**
+
    ```
    Mode: "Respond to Webhook"
    Options → Response Headers:
@@ -80,6 +82,7 @@ If you control the infrastructure:
 2. Or use an API gateway that handles CORS
 
 **Example nginx configuration:**
+
 ```nginx
 location /webhook/ {
     if ($request_method = 'OPTIONS') {
@@ -100,7 +103,7 @@ location /webhook/ {
 
 ## Complete n8n Workflow Example
 
-### Workflow Structure:
+### Workflow Structure
 
 ```
 [Webhook Trigger]
@@ -115,7 +118,7 @@ location /webhook/ {
 [Respond to Webhook]
 ```
 
-### Step-by-Step n8n Setup:
+### Step-by-Step n8n Setup
 
 1. **Webhook Trigger Node:**
    - Method: `POST`
@@ -129,11 +132,13 @@ location /webhook/ {
 3. **Set Node (For OPTIONS Response):**
    - Mode: `Respond to Webhook`
    - Response Headers:
+
      ```
      Access-Control-Allow-Origin: http://localhost:3000
      Access-Control-Allow-Methods: POST, OPTIONS
      Access-Control-Allow-Headers: Content-Type
      ```
+
    - Response Code: `200`
    - Response Body: `{}` (empty JSON)
 
@@ -143,9 +148,11 @@ location /webhook/ {
 5. **Set Node (For POST Response):**
    - Mode: `Respond to Webhook`
    - Response Headers:
+
      ```
      Access-Control-Allow-Origin: http://localhost:3000
      ```
+
    - Response Code: `200`
    - Response Body: Your JSON response with `output`, `reply`, etc.
 
@@ -161,6 +168,7 @@ location /webhook/ {
 ### Manual Testing
 
 **Test Preflight (OPTIONS):**
+
 ```bash
 curl -X OPTIONS \
   -H "Origin: http://localhost:3000" \
@@ -171,6 +179,7 @@ curl -X OPTIONS \
 ```
 
 **Expected Response Headers:**
+
 ```
 Access-Control-Allow-Origin: http://localhost:3000
 Access-Control-Allow-Methods: POST, OPTIONS
@@ -178,6 +187,7 @@ Access-Control-Allow-Headers: Content-Type
 ```
 
 **Test Actual Request (POST):**
+
 ```bash
 curl -X POST \
   -H "Origin: http://localhost:3000" \
@@ -188,6 +198,7 @@ curl -X POST \
 ```
 
 **Expected Response Headers:**
+
 ```
 Access-Control-Allow-Origin: http://localhost:3000
 ```
@@ -197,16 +208,19 @@ Access-Control-Allow-Origin: http://localhost:3000
 ### Error: "Failed to fetch"
 
 **Symptoms:**
+
 - Browser console shows "Failed to fetch" or "TypeError: Failed to fetch"
 - Network tab shows OPTIONS request failed or blocked
 
 **Causes:**
+
 1. Server doesn't respond to OPTIONS requests
 2. Server doesn't include `Access-Control-Allow-Origin` header
 3. Server includes wrong origin in `Access-Control-Allow-Origin`
 4. Server doesn't allow `Content-Type` header
 
 **Solutions:**
+
 1. Ensure n8n workflow handles OPTIONS requests
 2. Verify CORS headers are set correctly
 3. Check that origin matches exactly (including protocol and port)
@@ -214,20 +228,24 @@ Access-Control-Allow-Origin: http://localhost:3000
 ### Error: "CORS policy: No 'Access-Control-Allow-Origin' header"
 
 **Symptoms:**
+
 - Browser console shows specific CORS error message
 - Preflight may succeed but POST fails
 
 **Solutions:**
+
 1. Add `Access-Control-Allow-Origin` header to POST responses
 2. Ensure header value matches your origin exactly
 
 ### Error: Preflight succeeds but POST fails
 
 **Symptoms:**
+
 - OPTIONS request returns 200 with CORS headers
 - POST request fails with CORS error
 
 **Solutions:**
+
 1. Ensure POST response also includes `Access-Control-Allow-Origin`
 2. Check that workflow doesn't remove headers between OPTIONS and POST
 
@@ -238,6 +256,7 @@ Access-Control-Allow-Origin: http://localhost:3000
 For production, you may need to allow multiple origins:
 
 **n8n Set Node (Dynamic Origin):**
+
 ```javascript
 // In n8n Code node or Set node expression
 const origin = $json.headers['origin'] || $json.headers['Origin'];
@@ -276,6 +295,7 @@ if (allowedOrigins.includes(origin)) {
 ### Use JARVIS-WEB Diagnostics
 
 Run in browser console:
+
 ```javascript
 // Full CORS diagnostics
 JARVIS_DEBUG_CORS()
@@ -299,7 +319,8 @@ JARVIS_DEBUG_CORS_PREFLIGHT()
 
 ## Quick Reference: Required Headers
 
-### For OPTIONS (Preflight) Response:
+### For OPTIONS (Preflight) Response
+
 ```
 Access-Control-Allow-Origin: http://localhost:3000
 Access-Control-Allow-Methods: POST, OPTIONS
@@ -307,12 +328,14 @@ Access-Control-Allow-Headers: Content-Type
 Access-Control-Max-Age: 86400 (optional, caches preflight for 24h)
 ```
 
-### For POST Response:
+### For POST Response
+
 ```
 Access-Control-Allow-Origin: http://localhost:3000
 ```
 
-### Important Notes:
+### Important Notes
+
 - Origin must match **exactly** (including protocol, domain, and port)
 - `http://localhost:3000` ≠ `http://localhost:3000/` (trailing slash matters)
 - Headers are case-insensitive but values are case-sensitive

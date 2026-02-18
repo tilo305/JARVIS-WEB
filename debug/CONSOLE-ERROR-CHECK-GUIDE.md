@@ -6,10 +6,10 @@
 
 ## LIVE Console Error Capture
 
-**URL:** http://localhost:3000/debug/console-errors-live.html
+**URL:** <http://localhost:3000/debug/console-errors-live.html>
 
 1. Open the LIVE tool in one tab.
-2. Open the main app with `?capture_errors=1` in another tab: http://localhost:3000/?capture_errors=1
+2. Open the main app with `?capture_errors=1` in another tab: <http://localhost:3000/?capture_errors=1>
 3. Use the app — errors appear in the LIVE tool in real time.
 
 ## Static check
@@ -35,7 +35,7 @@ Checks `public/js/app.js` and `public/js/cartesia-audio-bridge.js` for common ba
 
 ## How to check the console
 
-1. Open the app: http://localhost:3000/ (or a debug page under http://localhost:3000/debug/).
+1. Open the app: <http://localhost:3000/> (or a debug page under <http://localhost:3000/debug/>).
 2. Open DevTools: **F12** (or **Ctrl+Shift+I** / **Cmd+Option+I**) → **Console** tab.
 3. For more logging: add `?debug=1` to the URL or use the console filter for `[JARVIS]`.
 

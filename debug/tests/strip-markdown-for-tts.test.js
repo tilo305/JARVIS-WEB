@@ -14,7 +14,10 @@ function stripMarkdownForTTS(text) {
     .replace(/_([^_]+)_/g, '$1')
     .replace(/`([^`]+)`/g, '$1')
     .replace(/~~([^~]+)~~/g, '$1')
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/\*+/g, '')
+    .replace(/_+/g, ' ')
+    .replace(/\s+/g, ' ');
   return t.trim();
 }
 
@@ -55,5 +58,14 @@ describe('stripMarkdownForTTS (TTS no asterisks)', () => {
   it('handles mixed markdown like agent intro', () => {
     const intro = 'I can manage your **Calendar**, handle **Gmail**, update **Google Sheets**, and **Airtable**.';
     expect(stripMarkdownForTTS(intro)).toBe('I can manage your Calendar, handle Gmail, update Google Sheets, and Airtable.');
+  });
+
+  it('strips standalone asterisks (TTS would read as "asterisk")', () => {
+    expect(stripMarkdownForTTS('Hello * world')).toBe('Hello world');
+    expect(stripMarkdownForTTS('Item * Item * Item')).toBe('Item Item Item');
+  });
+
+  it('strips standalone underscores (TTS would read as "underscore")', () => {
+    expect(stripMarkdownForTTS('Hello _ there')).toBe('Hello there');
   });
 });

@@ -1,8 +1,10 @@
 # ESLint Documentation - Complete Guide
 
 ## 📁 Directory Context
-**Root**: `C:\Users\lazar\Downloads\GitHub\JARVIS-WEB`
-**File Location**: `C:\Users\lazar\Downloads\GitHub\JARVIS-WEB\eSLiNt DoCs.md`
+
+**Root**: `JARVIS-WEB` (project root; e.g. `...\Github\JARVIS-WEB` or `...\Everything AI\Github\JARVIS-WEB`)
+**File Location**: `<project-root>/eSLiNt DoCs.md`
+**Config**: `<project-root>/eslint.config.js` (flat config, ESLint 9.x)
 
 ---
 
@@ -79,21 +81,25 @@ ESLint requires Node.js with the following versions:
 ### Method 1: Quick Start (Recommended)
 
 #### Using npm (npm 7+)
+
 ```bash
 npm init @eslint/config@latest
 ```
 
 #### Using yarn
+
 ```bash
 yarn create @eslint/config
 ```
 
 #### Using pnpm
+
 ```bash
 pnpm create @eslint/config@latest
 ```
 
 #### Using bun
+
 ```bash
 bun create @eslint/config@latest
 ```
@@ -101,22 +107,26 @@ bun create @eslint/config@latest
 ### Method 2: With Specific Shared Config
 
 #### Using npm
+
 ```bash
 # Use 'eslint-config-xo' shared config
 npm init @eslint/config@latest -- --config eslint-config-xo
 ```
 
 #### Using yarn
+
 ```bash
 yarn create @eslint/config -- --config eslint-config-xo
 ```
 
 #### Using pnpm
+
 ```bash
 pnpm create @eslint/config@latest -- --config eslint-config-xo
 ```
 
 #### Using bun
+
 ```bash
 bun create @eslint/config@latest -- --config eslint-config-xo
 ```
@@ -126,26 +136,31 @@ bun create @eslint/config@latest -- --config eslint-config-xo
 #### Step 1: Install ESLint Packages
 
 **npm:**
+
 ```bash
 npm install --save-dev eslint@latest @eslint/js@latest
 ```
 
 **yarn:**
+
 ```bash
 yarn add --dev eslint@latest @eslint/js@latest
 ```
 
 **pnpm:**
+
 ```bash
 pnpm add --save-dev eslint@latest @eslint/js@latest
 ```
 
 **bun:**
+
 ```bash
 bun add --dev eslint@latest @eslint/js@latest
 ```
 
 #### Step 2: Create Configuration File
+
 ```bash
 # Create JavaScript configuration file
 touch eslint.config.js
@@ -160,6 +175,7 @@ touch eslint.config.js
 ### Interactive Setup
 
 1. **Run the initialization command**:
+
    ```bash
    npm init @eslint/config@latest
    ```
@@ -177,26 +193,31 @@ touch eslint.config.js
 ### Running ESLint
 
 #### Using npm
+
 ```bash
 npx eslint yourfile.js
 ```
 
 #### Using yarn
+
 ```bash
 yarn dlx eslint yourfile.js
 ```
 
 #### Using pnpm
+
 ```bash
 pnpm dlx eslint yourfile.js
 ```
 
 #### Using bun
+
 ```bash
 bunx eslint yourfile.js
 ```
 
 ### Lint Multiple Files/Directories
+
 ```bash
 npx eslint project-dir/ file.js
 ```
@@ -212,6 +233,7 @@ npx eslint project-dir/ file.js
 ### Configuration File Creation
 
 When you run `npm init @eslint/config`, you'll get:
+
 - `eslint.config.js` (CommonJS)
 - `eslint.config.mjs` (ES Modules)
 
@@ -231,6 +253,7 @@ export default defineConfig([
 ### Configuration Breakdown
 
 #### 1. **Import Required Modules**
+
 ```javascript
 import { defineConfig } from "eslint/config";
 import globals from "globals";
@@ -238,21 +261,25 @@ import js from "@eslint/js";
 ```
 
 #### 2. **Define File Patterns**
+
 ```javascript
 { files: ["**/*.js"] }
 ```
 
 #### 3. **Set Language Options**
+
 ```javascript
 { languageOptions: { globals: globals.browser } }
 ```
 
 #### 4. **Configure Plugins**
+
 ```javascript
 { plugins: { js } }
 ```
 
 #### 5. **Extend Configurations**
+
 ```javascript
 { extends: ["js/recommended"] }
 ```
@@ -291,6 +318,7 @@ export default defineConfig([
 ### Environment Configuration
 
 #### Browser Environment
+
 ```javascript
 import globals from "globals";
 
@@ -303,6 +331,7 @@ export default defineConfig([
 ```
 
 #### Node.js Environment
+
 ```javascript
 import globals from "globals";
 
@@ -315,6 +344,7 @@ export default defineConfig([
 ```
 
 #### Mixed Environment
+
 ```javascript
 import globals from "globals";
 
@@ -387,6 +417,7 @@ export default defineConfig([
 ESLint rules can be configured with three error levels:
 
 #### 1. **Off (0)**
+
 - **Value**: `"off"` or `0`
 - **Behavior**: Rule is disabled completely
 - **Use case**: When you don't want to enforce a rule
@@ -400,6 +431,7 @@ ESLint rules can be configured with three error levels:
 ```
 
 #### 2. **Warn (1)**
+
 - **Value**: `"warn"` or `1`
 - **Behavior**: Rule violation shows as warning
 - **Exit code**: Does NOT affect exit code (still 0)
@@ -414,6 +446,7 @@ ESLint rules can be configured with three error levels:
 ```
 
 #### 3. **Error (2)**
+
 - **Value**: `"error"` or `2`
 - **Behavior**: Rule violation shows as error
 - **Exit code**: Will be 1 (fails CI/CD)
@@ -454,31 +487,37 @@ npx eslint [options] [file|dir|glob]*
 ### Common Commands
 
 #### Lint a Single File
+
 ```bash
 npx eslint file.js
 ```
 
 #### Lint a Directory
+
 ```bash
 npx eslint src/
 ```
 
 #### Lint Multiple Files/Directories
+
 ```bash
 npx eslint src/ lib/ app.js
 ```
 
 #### Lint with Auto-Fix
+
 ```bash
 npx eslint --fix file.js
 ```
 
 #### Lint with Specific Config
+
 ```bash
 npx eslint --config eslint.config.js file.js
 ```
 
 #### Lint with Output Format
+
 ```bash
 npx eslint --format stylish file.js
 ```
@@ -486,43 +525,57 @@ npx eslint --format stylish file.js
 ### CLI Options
 
 #### `--fix`
+
 - Automatically fix problems when possible
+
 ```bash
 npx eslint --fix file.js
 ```
 
 #### `--format`
+
 - Specify output format
+
 ```bash
 npx eslint --format json file.js
 ```
 
 #### `--config`
+
 - Use specific configuration file
+
 ```bash
 npx eslint --config custom-config.js file.js
 ```
 
 #### `--ignore-path`
+
 - Specify ignore file
+
 ```bash
 npx eslint --ignore-path .gitignore file.js
 ```
 
 #### `--max-warnings`
+
 - Exit with error if warnings exceed limit
+
 ```bash
 npx eslint --max-warnings 0 file.js
 ```
 
 #### `--quiet`
+
 - Only report errors, not warnings
+
 ```bash
 npx eslint --quiet file.js
 ```
 
 #### `--debug`
+
 - Output debugging information
+
 ```bash
 npx eslint --debug file.js
 ```
@@ -536,11 +589,13 @@ npx eslint --debug file.js
 #### Step 1: Verify Prerequisites
 
 1. **Check Node.js version**:
+
    ```bash
    node --version
    ```
 
 2. **Ensure package.json exists**:
+
    ```bash
    npm init  # if no package.json
    ```
@@ -555,6 +610,7 @@ node-linker=hoisted
 ```
 
 **Why this is needed**:
+
 - Ensures pnpm installs dependencies compatible with npm
 - Less likely to produce errors
 - More compatible with ESLint plugins
@@ -636,11 +692,13 @@ npm install --save-dev eslint@latest
 ## ✅ Best Practices
 
 ### 1. **Use Local Installation**
+
 ```bash
 npm install --save-dev eslint@latest @eslint/js@latest
 ```
 
 ### 2. **Use Recommended Configurations**
+
 ```javascript
 export default defineConfig([
     { files: ["**/*.js"], plugins: { js }, extends: ["js/recommended"] },
@@ -648,11 +706,13 @@ export default defineConfig([
 ```
 
 ### 3. **Customize Rules Gradually**
+
 - Start with recommended rules
 - Add custom rules as needed
 - Document why rules are disabled
 
 ### 4. **Use Shareable Configs**
+
 - Search for "eslint-config" on npmjs.com
 - Examples:
   - `eslint-config-airbnb`
@@ -660,12 +720,14 @@ export default defineConfig([
   - `eslint-config-google`
 
 ### 5. **Integrate with Editor**
+
 - VS Code: ESLint extension
 - WebStorm: Built-in support
 - Sublime Text: SublimeLinter-eslint
 - Atom: linter-eslint
 
 ### 6. **Add to package.json Scripts**
+
 ```json
 {
     "scripts": {
@@ -677,6 +739,7 @@ export default defineConfig([
 ```
 
 ### 7. **Use .eslintignore**
+
 ```
 node_modules/
 dist/
@@ -686,6 +749,7 @@ coverage/
 ```
 
 ### 8. **Enable in Pre-commit Hooks**
+
 ```bash
 npm install --save-dev husky lint-staged
 ```
@@ -699,6 +763,7 @@ npm install --save-dev husky lint-staged
 ```
 
 ### 9. **Configure for CI/CD**
+
 ```yaml
 # .github/workflows/lint.yml
 name: Lint
@@ -714,6 +779,7 @@ jobs:
 ```
 
 ### 10. **Document Custom Rules**
+
 ```javascript
 export default defineConfig([
     {
@@ -736,11 +802,12 @@ export default defineConfig([
 
 #### Current Setup
 
-Based on the project structure:
+The project uses **ESLint 9 flat config** with **typescript-eslint**:
 
-**Root**: `C:\Users\lazar\Downloads\GitHub\JARVIS-WEB`
-
-**Configuration file**: `C:\Users\lazar\Downloads\GitHub\JARVIS-WEB\eslint.config.js`
+- **Config file**: `eslint.config.js` at project root (uses `tseslint.config()`, not `defineConfig`)
+- **TypeScript**: `src/**/*.ts`, `tests/**/*.ts`, `debug/**/*.ts` use `tseslint.configs.recommended` and optional `tsconfig.eslint.json`
+- **Scripts**: `lint`, `lint:fix`, `lint:check`, `lint:src`, `lint:public`, `lint:server`, `lint:tests` (see package.json)
+- **Note**: Full-tree `eslint .` / `lint:check` may crash with an ajv/defaultMeta bug; use directory-specific lint or single-file lint as workaround (see Troubleshooting §7)
 
 #### Recommended Configuration for This Project
 
@@ -887,6 +954,7 @@ debug/
 **Problem**: Configuration file not found
 
 **Solution**:
+
 ```bash
 # Ensure eslint.config.js exists in root
 ls eslint.config.js
@@ -900,6 +968,7 @@ touch eslint.config.js
 **Problem**: Plugin not installed locally
 
 **Solution**:
+
 ```bash
 npm install --save-dev @eslint/js
 ```
@@ -909,6 +978,7 @@ npm install --save-dev @eslint/js
 **Problem**: ECMAScript version mismatch
 
 **Solution**:
+
 ```javascript
 export default defineConfig([
     {
@@ -924,6 +994,7 @@ export default defineConfig([
 **Problem**: Using ESLint 9+ with old plugin
 
 **Solution**:
+
 - Update plugins to latest versions
 - Check plugin compatibility with ESLint 9+
 
@@ -932,6 +1003,7 @@ export default defineConfig([
 **Problem**: Hoisting issues with pnpm
 
 **Solution**: Create `.npmrc`:
+
 ```ini
 auto-install-peers=true
 node-linker=hoisted
@@ -942,9 +1014,24 @@ node-linker=hoisted
 **Problem**: Conflicting rule auto-fixes
 
 **Solution**:
+
 - Check for conflicting rules
 - Disable one of the conflicting rules
 - Report to ESLint if it's a bug
+
+#### 7. **"Cannot set properties of undefined (setting 'defaultMeta')" / "NOT SUPPORTED: option missingRefs"**
+
+**Problem**: Running `npm run lint` or `eslint .` crashes with an error inside `@eslint/eslintrc` (ajv-related). This is a known compatibility issue between ESLint 9, the legacy eslintrc layer, and ajv when the full tree is linted (e.g. with TypeScript ESLint).
+
+**Solution**:
+
+- **Workaround**: Lint by directory or single files so the problematic code path is not hit:
+  - `npx eslint public/`
+  - `npx eslint src/`
+  - `npx eslint server.js vite.config.js`
+  - Or use the project scripts: `npm run lint:src`, `npm run lint:public`, `npm run lint:server`, `npm run lint:tests`
+- **Cause**: A dependency in the chain (e.g. `@eslint/eslintrc` or typescript-eslint) uses an older ajv API; the project’s `overrides.ajv` can trigger the mismatch when the full config is evaluated.
+- **Permanent fix**: Upgrade or pin `@eslint/eslintrc` and/or `ajv` when upstream fixes are available; or wait for ESLint/TypeScript-ESLint to drop the legacy eslintrc path.
 
 ### Debug Mode
 
@@ -967,12 +1054,14 @@ npx eslint --print-config file.js
 ## 🚀 Next Steps
 
 ### 1. **Learn Advanced Configuration**
+
 - Multiple configuration files
 - Override patterns
 - Plugin development
 - Custom rules
 
 ### 2. **Explore Plugins**
+
 - `eslint-plugin-react`
 - `eslint-plugin-vue`
 - `eslint-plugin-import`
@@ -980,17 +1069,20 @@ npx eslint --print-config file.js
 - `eslint-plugin-promise`
 
 ### 3. **Integrate with Tools**
+
 - Editor integration (VS Code, WebStorm)
 - Build systems (Webpack, Rollup, Vite)
 - CI/CD pipelines (GitHub Actions, GitLab CI)
 - Pre-commit hooks (Husky, lint-staged)
 
 ### 4. **Create Custom Rules**
+
 - Write custom rules for project-specific patterns
 - Share rules with team via plugins
 - Contribute to community
 
 ### 5. **Use Shareable Configs**
+
 - Search npmjs.com for "eslint-config"
 - Popular configs:
   - Airbnb: `eslint-config-airbnb`
@@ -999,6 +1091,7 @@ npx eslint --print-config file.js
   - XO: `eslint-config-xo`
 
 ### 6. **Contribute to ESLint**
+
 - Report bugs
 - Propose new rules
 - Submit pull requests
@@ -1009,22 +1102,25 @@ npx eslint --print-config file.js
 ## 📚 Additional Resources
 
 ### Official Documentation
-- **Main site**: https://eslint.org
-- **Getting Started**: https://eslint.org/docs/latest/use/getting-started
-- **Configuration**: https://eslint.org/docs/latest/use/configure
-- **Rules**: https://eslint.org/docs/latest/rules
-- **CLI**: https://eslint.org/docs/latest/use/command-line-interface
-- **Migration Guide**: https://eslint.org/docs/latest/use/migrate-to-9.0.0
+
+- **Main site**: <https://eslint.org>
+- **Getting Started**: <https://eslint.org/docs/latest/use/getting-started>
+- **Configuration**: <https://eslint.org/docs/latest/use/configure>
+- **Rules**: <https://eslint.org/docs/latest/rules>
+- **CLI**: <https://eslint.org/docs/latest/use/command-line-interface>
+- **Migration Guide**: <https://eslint.org/docs/latest/use/migrate-to-9.0.0>
 
 ### Community Resources
-- **GitHub**: https://github.com/eslint/eslint
-- **Discord**: https://eslint.org/chat
+
+- **GitHub**: <https://github.com/eslint/eslint>
+- **Discord**: <https://eslint.org/chat>
 - **Twitter**: @geteslint
 - **Stack Overflow**: [eslint] tag
 
 ### Plugins Directory
-- **npm search**: https://www.npmjs.com/search?q=eslint-plugin
-- **Awesome ESLint**: https://github.com/dustinspecker/awesome-eslint
+
+- **npm search**: <https://www.npmjs.com/search?q=eslint-plugin>
+- **Awesome ESLint**: <https://github.com/dustinspecker/awesome-eslint>
 
 ---
 
@@ -1065,16 +1161,4 @@ npx eslint . --max-warnings 0
 **Document Created**: 2025-11-11  
 **ESLint Version**: 9.x (Latest)  
 **Node.js Compatibility**: ^18.18.0, ^20.9.0, >=21.1.0  
-**Official Documentation**: https://eslint.org/docs/latest/use/getting-started
-
-
-
-
-
-
-
-
-
-
-
-
+**Official Documentation**: <https://eslint.org/docs/latest/use/getting-started>

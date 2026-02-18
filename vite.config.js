@@ -12,7 +12,7 @@ const STT_WS = 'wss://api.cartesia.ai/stt/websocket';
 const TTS_WS = 'wss://api.cartesia.ai/tts/websocket';
 const WS_CHECK_MS = 30_000;
 
-/** Vite plugin: ensure built index.html preserves full source (chat-interface, JARVIS_CONFIG, favicon, etc.) */
+/** Vite plugin: ensure built index.html preserves full source (chat-interface, JARVIS_CONFIG, favicon, etc.). Uses relative script path so Electron file:// and static servers both work. */
 function preserveIndexHtmlPlugin() {
   return {
     name: 'preserve-index-html',
@@ -21,14 +21,29 @@ function preserveIndexHtmlPlugin() {
       const outDir = options.dir || join(__dirname, 'dist-public');
       const jsChunk = Object.keys(bundle).find((k) => k.startsWith('assets/') && k.endsWith('.js'));
       if (!jsChunk) return;
-      const scriptSrc = '/' + jsChunk;
+      const scriptSrc = './' + jsChunk;
       const sourcePath = join(__dirname, 'public', 'index.html');
       let html = readFileSync(sourcePath, 'utf8');
       html = html.replace(
-        /<script\s+type="module"\s+src="[^"]*"><\/script>/,
-        `<script type="module" crossorigin src="${scriptSrc}"></script>`
+        /<script\s+type="module"\s+src="[^"]*"([^>]*)><\/script>/,
+        (_, extra) => `<script type="module" crossorigin src="${scriptSrc}"${extra}></script>`
       );
       writeFileSync(join(outDir, 'index.html'), html);
+    },
+  };
+}
+
+/** Vite plugin: relax CSP in dev so Vite HMR and inline scripts work (no nonce injection). */
+function devCspPlugin() {
+  const DEV_CSP = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' wss://api.cartesia.ai wss: https: http://localhost http://127.0.0.1 blob:; img-src 'self' data: blob:; media-src 'self' blob:; object-src 'none'; base-uri 'none';";
+  return {
+    name: 'dev-csp',
+    apply: 'serve',
+    transformIndexHtml(html) {
+      return html.replace(
+        /<meta\s+http-equiv="Content-Security-Policy"\s+content="[^"]*"\s*\/?>/,
+        `<meta http-equiv="Content-Security-Policy" content="${DEV_CSP}">`
+      );
     },
   };
 }
@@ -123,18 +138,21 @@ export default defineConfig(({ mode }) => {
     envDir, // Ensures dev/build both read root .env
     plugins: [
       preserveIndexHtmlPlugin(),
+      devCspPlugin(),
       blockEnvFilesPlugin(),
       viteStaticCopy({
         targets: [
           { src: 'audio/*', dest: 'audio' },
           { src: 'debug/*.html', dest: 'debug' },
           { src: 'js/n8n-payload.js', dest: 'js' },
+          { src: 'js/debug.js', dest: 'js' },
         ],
       }),
       cartesiaWebSocketStatusPlugin(),
     ],
     build: {
-      outDir: join(__dirname, 'dist-public'), // absolute path to project root
+      base: './',
+      outDir: join(__dirname, 'dist-public'),
       emptyOutDir: true,
       chunkSizeWarningLimit: 4096,
     },
@@ -159,7 +177,8 @@ export default defineConfig(({ mode }) => {
       const cartesiaApiKey = env.VITE_CARTESIA_API_KEY || env.CARTESIA_API_KEY || '';
       const cartesiaVoiceId = env.VITE_CARTESIA_VOICE_ID || env.CARTESIA_VOICE_ID || '95131c95-525c-463b-893d-803bafdf93c4';
       const n8nWebhookUrl = env.VITE_N8N_WEBHOOK_URL || env.N8N_WEBHOOK_URL || defaultN8n;
-      const sendTranscriptOnFinal = env.VITE_SEND_TRANSCRIPT_ON_FINAL === 'true';
+      // Low-latency bidirectional flow: default true (send on STT final); set to 'false' to wait for silence
+      const sendTranscriptOnFinal = env.VITE_SEND_TRANSCRIPT_ON_FINAL !== 'false';
       return {
         'import.meta.env.VITE_CARTESIA_API_KEY': JSON.stringify(cartesiaApiKey),
         'import.meta.env.CARTESIA_API_KEY': JSON.stringify(cartesiaApiKey),

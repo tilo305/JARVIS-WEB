@@ -5,8 +5,17 @@
  */
 'use strict';
 
+/** Keys that must be present on every n8n webhook payload (frontend + Electron). */
+export const N8N_PAYLOAD_REQUIRED_KEYS = [
+  'message', 'query', 'input',
+  'session_id', 'sessionId',
+  'timestamp', 'timezone', 'location',
+  'message_id', 'messageId',
+  'source', 'attachments',
+];
+
 /** Keys checked (in order) for reply text in n8n webhook JSON response */
-export const N8N_REPLY_KEYS = ['output', 'reply', 'result', 'text', 'message', 'response', 'answer', 'content'];
+export const N8N_REPLY_KEYS = ['output', 'reply', 'result', 'text', 'message', 'response', 'answer', 'content', 'body'];
 
 /**
  * Extract reply string from n8n webhook JSON response.
@@ -131,6 +140,7 @@ export function getNaturalFallback(userMessage) {
  * @param {Array} [options.conversationHistory] - Previous conversation messages for context
  * @param {string} [options.intent] - Agentic: detected intent (e.g. greeting)
  * @param {Object} [options.contextEnrichment] - Agentic: context (e.g. viewportWidth)
+ * @param {Object} [options.agenticHints] - Optional { planMode, refineMode } for workflow selection
  * @returns {Object} Full payload object
  */
 export function buildN8nPayload(message, options = {}) {
@@ -154,8 +164,12 @@ export function buildN8nPayload(message, options = {}) {
   const messageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
   const { timezone, locale, language } = getClientLocation();
 
+  const trimmedMessage = (message || '').trim();
   const payload = {
-    message: (message || '').trim(),
+    message: trimmedMessage,
+    // Aliases so n8n workflows that expect "query" or "input" still receive the user message
+    query: trimmedMessage,
+    input: trimmedMessage,
     session_id: sessionId,
     sessionId,
     timestamp: now,
@@ -174,5 +188,43 @@ export function buildN8nPayload(message, options = {}) {
   }
   if (options.intent != null) payload.intent = options.intent;
   if (options.contextEnrichment != null) payload.contextEnrichment = options.contextEnrichment;
+  if (options.agenticHints != null && typeof options.agenticHints === 'object') {
+    payload.agenticHints = options.agenticHints;
+  }
   return payload;
+}
+
+/**
+ * Validate payload before sending to n8n (frontend and Electron).
+ * Ensures all required keys exist and message/query/input are consistent.
+ * @param {Object} payload - Built payload object
+ * @returns {{ valid: boolean, errors?: string[] }}
+ */
+export function validateN8nPayload(payload) {
+  const errors = [];
+  if (!payload || typeof payload !== 'object') {
+    return { valid: false, errors: ['Payload must be an object'] };
+  }
+  for (const key of N8N_PAYLOAD_REQUIRED_KEYS) {
+    if (!(key in payload)) {
+      errors.push(`Missing required key: ${key}`);
+    }
+  }
+  const msg = payload.message;
+  const q = payload.query;
+  const inp = payload.input;
+  if (typeof msg !== 'string') errors.push('payload.message must be a string');
+  if (typeof q !== 'string') errors.push('payload.query must be a string');
+  if (typeof inp !== 'string') errors.push('payload.input must be a string');
+  if (msg !== q || msg !== inp) {
+    errors.push('payload.message, query, and input must be the same value');
+  }
+  if (payload.source !== 'voice' && payload.source !== 'text') {
+    errors.push("payload.source must be 'voice' or 'text'");
+  }
+  if (!Array.isArray(payload.attachments)) {
+    errors.push('payload.attachments must be an array');
+  }
+  if (errors.length) return { valid: false, errors };
+  return { valid: true };
 }

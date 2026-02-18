@@ -17,7 +17,8 @@ A comprehensive check for orphaned code was performed across the codebase. The p
 
 **Action Taken:** ✅ Removed the method entirely.
 
-**Reasoning:** 
+**Reasoning:**
+
 - The method was private and never called
 - Configuration is handled via URL query params in `connect()`
 - The deprecation comment indicated it was kept for backwards compatibility, but no code references it
@@ -25,12 +26,14 @@ A comprehensive check for orphaned code was performed across the codebase. The p
 ### ✅ Verified: All Other Code is in Use
 
 #### Examples (`src/examples/`)
+
 - **Status:** ✅ Not orphaned
-- **Usage:** 
+- **Usage:**
   - `bidirectional-conversation.ts` - Used by `npm run example` script and `debug/live/example-run.test.js`
   - `simple-tts.ts` and `simple-stt.ts` - Documentation examples for library users
 
 #### Public API Functions
+
 - **Status:** ✅ Not orphaned
 - **Findings:**
   - `floatTo16BitPCM`, `float32ToInt16`, `int16ToFloat32` - Used by tests and documented as public API utilities
@@ -38,6 +41,7 @@ A comprehensive check for orphaned code was performed across the codebase. The p
   - All exported types and interfaces - Used by the library consumers
 
 #### Methods
+
 - **Status:** ✅ All in use
 - **Findings:**
   - `sendAudio()` - Used internally by `sendAudioChunk()` and as public API in `BidirectionalConversation`
@@ -45,10 +49,12 @@ A comprehensive check for orphaned code was performed across the codebase. The p
   - All connection/disconnection methods - Used by the application
 
 #### Imports
+
 - **Status:** ✅ All used
 - **Findings:** No unused imports detected in source files
 
 #### Types
+
 - **Status:** ✅ All used
 - **Findings:**
   - `STTFlushDoneResponse` - Used in type unions and handled in message processing
@@ -64,7 +70,7 @@ According to `debug/ORPHANED-DUPLICATE-OLD-CODE.md`, the following issues were a
 - ✅ `JARVIS_DEBUG_SEND_TEST` - Uses `getLLMReply`
 - ✅ Cartesia API version - `2025-04-16` everywhere
 - ✅ Webhook URL - No duplicate constants
-- ⚠️ `escapeHtml` - Minor duplicate (intentional for self-contained debug page)
+- ✅ `escapeHtml` - Single export in debug.js; imported by app.js, fallback-revert-debug.html, console-errors-live.html
 
 ## Recommendations
 

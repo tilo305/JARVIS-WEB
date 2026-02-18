@@ -18,6 +18,7 @@ The JavaScript handbook patterns have been **successfully applied** to the JARVI
 **File:** `public/js/app.js`
 
 **Changes:**
+
 - ✅ Added imports for custom error classes (`ValidationError`, `NetworkError`, `TimeoutError`, `ConfigurationError`)
 - ✅ Enhanced `getLLMReply()` function with:
   - Custom error classes for better error categorization
@@ -26,6 +27,7 @@ The JavaScript handbook patterns have been **successfully applied** to the JARVI
   - Better error logging with error class information
 
 **Before:**
+
 ```javascript
 if (!n8nWebhookUrl || typeof n8nWebhookUrl !== 'string' || !n8nWebhookUrl.trim()) {
   DEBUG.error('n8n webhook URL is missing or invalid', { n8nWebhookUrl });
@@ -34,6 +36,7 @@ if (!n8nWebhookUrl || typeof n8nWebhookUrl !== 'string' || !n8nWebhookUrl.trim()
 ```
 
 **After:**
+
 ```javascript
 if (!n8nWebhookUrl || typeof n8nWebhookUrl !== 'string' || !n8nWebhookUrl.trim()) {
   const error = new ConfigurationError('N8N webhook URL is not set', 'n8nWebhookUrl');
@@ -43,6 +46,7 @@ if (!n8nWebhookUrl || typeof n8nWebhookUrl !== 'string' || !n8nWebhookUrl.trim()
 ```
 
 **Benefits:**
+
 - Better error categorization
 - More informative error logging
 - Easier debugging with error class names
@@ -55,11 +59,13 @@ if (!n8nWebhookUrl || typeof n8nWebhookUrl !== 'string' || !n8nWebhookUrl.trim()
 **File:** `public/js/app.js`
 
 **Changes:**
+
 - ✅ Added `PerformanceMonitor` import from `./utils/debug.js`
 - ✅ Wrapped n8n API call with `PerformanceMonitor.measureAsync()`
 - ✅ Logs request duration in debug output
 
 **Implementation:**
+
 ```javascript
 const { result: responseData, duration } = await PerformanceMonitor.measureAsync(
   `n8n Request (${payload.source})`,
@@ -75,6 +81,7 @@ DEBUG.trace('n8n: response received', {
 ```
 
 **Benefits:**
+
 - Real-time performance metrics
 - Better debugging with timing information
 - Performance API integration for detailed analysis
@@ -86,22 +93,26 @@ DEBUG.trace('n8n: response received', {
 **File:** `public/js/app.js`
 
 **Changes:**
+
 - ✅ Added `debounce` import from `./utils/performance.js`
 - ✅ Applied debouncing to textarea auto-resize function
 - ✅ Reduced excessive calculations during typing
 
 **Before:**
+
 ```javascript
 textInput.addEventListener('input', autoResizeTextarea);
 ```
 
 **After:**
+
 ```javascript
 const debouncedAutoResize = debounce(autoResizeTextarea, 100);
 textInput.addEventListener('input', debouncedAutoResize);
 ```
 
 **Benefits:**
+
 - Reduced CPU usage during typing
 - Smoother UI performance
 - Better user experience
@@ -113,11 +124,13 @@ textInput.addEventListener('input', debouncedAutoResize);
 **File:** `public/js/app.js`
 
 **Changes:**
+
 - ✅ Added `memoize` import from `./utils/performance.js`
 - ✅ Wrapped `getConfig()` function with memoization
 - ✅ Config is now cached after first call
 
 **Before:**
+
 ```javascript
 function getConfig() {
   // ... config logic
@@ -126,6 +139,7 @@ const { apiKey, voiceId, n8nWebhookUrl } = getConfig();
 ```
 
 **After:**
+
 ```javascript
 import { memoize } from './utils/performance.js';
 
@@ -136,6 +150,7 @@ const { apiKey, voiceId, n8nWebhookUrl } = getConfig();
 ```
 
 **Benefits:**
+
 - Config is computed only once
 - Faster subsequent access
 - Reduced overhead for repeated config reads
@@ -188,12 +203,14 @@ Before deploying to production:
 
 ## Performance Impact
 
-### Positive Impacts:
+### Positive Impacts
+
 - ✅ **Debouncing:** Reduces CPU usage during typing
 - ✅ **Memoization:** Faster config access after first call
 - ✅ **Performance Monitoring:** Minimal overhead, valuable metrics
 
-### No Negative Impacts:
+### No Negative Impacts
+
 - ✅ All changes maintain backward compatibility
 - ✅ Error handling improvements don't change behavior
 - ✅ Performance utilities are opt-in enhancements
@@ -202,12 +219,14 @@ Before deploying to production:
 
 ## Next Steps (Optional)
 
-### Immediate:
+### Immediate
+
 1. Test the applied changes thoroughly
 2. Monitor performance metrics in production
 3. Review error logs for improved categorization
 
-### Future Enhancements:
+### Future Enhancements
+
 1. Apply Result pattern more extensively (currently using custom errors)
 2. Add more debouncing/throttling where needed
 3. Expand performance monitoring to other critical paths
@@ -218,6 +237,7 @@ Before deploying to production:
 ## Documentation
 
 All documentation is available:
+
 - `JAVASCRIPT-HANDBOOK-INTEGRATION.md` - Analysis
 - `JAVASCRIPT-BEST-PRACTICES-GUIDE.md` - Best practices
 - `JAVASCRIPT-HANDBOOK-USAGE-EXAMPLES.md` - Usage examples
@@ -230,6 +250,7 @@ All documentation is available:
 ✅ **Successfully applied JavaScript handbook patterns to production code!**
 
 The codebase now includes:
+
 - Enhanced error handling with custom error classes
 - Performance monitoring for API calls
 - Debounced text input for better performance

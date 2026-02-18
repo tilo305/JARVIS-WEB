@@ -7,27 +7,31 @@ Complete documentation of all security books and resources referenced for JARVIS
 ## 📚 Free & Official Resources
 
 ### 1. Building Secure and Reliable Systems
+
 **File**: `bUiLdInG sEcUrE aNd ReLiAbLe SyStEmS.md`  
 **Status**: ✅ FREE & OFFICIAL  
-**Source**: https://google.github.io/building-secure-and-reliable-systems/  
+**Source**: <https://google.github.io/building-secure-and-reliable-systems/>  
 **Primary Reference**: Security architecture and design principles
 
 ### 2. OWASP API Security Top 10
+
 **File**: `oWaSp aPi sEcUrItY tOp 10.md`  
 **Status**: ✅ FREE & OPEN SOURCE  
-**Source**: https://owasp.org/www-project-api-security/  
+**Source**: <https://owasp.org/www-project-api-security/>  
 **Primary Reference**: API security best practices
 
 ### 3. OWASP LLM Top 10
+
 **File**: `oWaSp lLm tOp 10.md`  
 **Status**: ✅ FREE & OPEN SOURCE  
-**Source**: https://owasp.org/www-project-large-language-model-applications/  
+**Source**: <https://owasp.org/www-project-large-language-model-applications/>  
 **Primary Reference**: LLM/AI security and guardrails
 
 ### 4. OWASP Web Security Testing Guide
+
 **File**: `oWaSp wEb sEcUrItY tEsTiNg gUiDe.md`  
 **Status**: ✅ FREE & OPEN SOURCE  
-**Source**: https://owasp.org/www-project-web-security-testing-guide/  
+**Source**: <https://owasp.org/www-project-web-security-testing-guide/>  
 **Primary Reference**: Security testing framework
 
 ---
@@ -35,6 +39,7 @@ Complete documentation of all security books and resources referenced for JARVIS
 ## 📖 Additional Security Books
 
 ### 5. Security Engineering (3rd Edition)
+
 **File**: `sEcUrItY eNgInEeRiNg.md`  
 **Author**: Ross Anderson  
 **Publisher**: Wiley (2020)  
@@ -42,6 +47,7 @@ Complete documentation of all security books and resources referenced for JARVIS
 **Primary Reference**: Foundational security engineering principles
 
 ### 6. Designing Secure Software
+
 **File**: `dEsIgNiNg sEcUrE sOfTwArE.md`  
 **Author**: Loren Kohnfelder  
 **Publisher**: No Starch Press (2021)  
@@ -49,6 +55,7 @@ Complete documentation of all security books and resources referenced for JARVIS
 **Primary Reference**: Developer-focused security guidance
 
 ### 7. Secure by Design
+
 **File**: `sEcUrE bY dEsIgN.md`  
 **Authors**: Dan Bergh Johnsson, Daniel Deogun, Daniel Sawano  
 **Publisher**: Manning Publications (2019)  
@@ -56,6 +63,7 @@ Complete documentation of all security books and resources referenced for JARVIS
 **Primary Reference**: TypeScript/JavaScript security patterns
 
 ### 8. Real-World Cryptography
+
 **File**: `rEaL-wOrLd cRyPtOgRaPhY.md`  
 **Author**: David Wong  
 **Publisher**: Manning Publications (2021)  
@@ -63,6 +71,7 @@ Complete documentation of all security books and resources referenced for JARVIS
 **Primary Reference**: API key protection and WebSocket security
 
 ### 9. The Web Application Hacker's Handbook (2nd Edition)
+
 **File**: `tHe wEb aPpLiCaTiOn hAcKeR's hAnDbOoK.md`  
 **Authors**: Dafydd Stuttard, Marcus Pinto  
 **Publisher**: Wiley (2011)  
@@ -70,6 +79,7 @@ Complete documentation of all security books and resources referenced for JARVIS
 **Primary Reference**: Web application vulnerabilities and defenses
 
 ### 10. The Site Reliability Workbook
+
 **File**: `tHe sItE rElIaBiLiTy wOrKbOoK.md`  
 **Authors**: Betsy Beyer, Niall Richard Murphy, David K. Rensin, Kent Kawahara, Stephen Thorne  
 **Publisher**: O'Reilly Media (2018)  
@@ -81,6 +91,7 @@ Complete documentation of all security books and resources referenced for JARVIS
 ## 📊 Implementation Status by Book
 
 ### Fully Implemented ✅
+
 - **Building Secure and Reliable Systems**: Security by design, least privilege, defense in depth
 - **OWASP API Security Top 10**: 9/10 risks addressed
 - **OWASP LLM Top 10**: 6/10 applicable risks addressed
@@ -88,6 +99,7 @@ Complete documentation of all security books and resources referenced for JARVIS
 - **The Web Application Hacker's Handbook**: File upload security, XSS prevention
 
 ### Partially Implemented 📋
+
 - **Security Engineering**: Web security, API security (advanced features recommended)
 - **Secure by Design**: TypeScript security patterns (advanced patterns recommended)
 - **Real-World Cryptography**: API key security, HTTPS (advanced crypto recommended)
@@ -98,21 +110,25 @@ Complete documentation of all security books and resources referenced for JARVIS
 ## 🔗 Quick Access
 
 ### Free Resources (Start Here)
+
 1. `bUiLdInG sEcUrE aNd ReLiAbLe SyStEmS.md` - Google's official guide
 2. `oWaSp aPi sEcUrItY tOp 10.md` - API security standards
 3. `oWaSp lLm tOp 10.md` - LLM security standards
 4. `oWaSp wEb sEcUrItY tEsTiNg gUiDe.md` - Testing framework
 
 ### Technology-Specific
+
 5. `sEcUrE bY dEsIgN.md` - TypeScript/JavaScript security
-6. `rEaL-wOrLd cRyPtOgRaPhY.md` - Cryptography for developers
+2. `rEaL-wOrLd cRyPtOgRaPhY.md` - Cryptography for developers
 
 ### Comprehensive Guides
+
 7. `sEcUrItY eNgInEeRiNg.md` - Foundational security engineering
-8. `dEsIgNiNg sEcUrE sOfTwArE.md` - Developer security guide
-9. `tHe wEb aPpLiCaTiOn hAcKeR's hAnDbOoK.md` - Web security vulnerabilities
+2. `dEsIgNiNg sEcUrE sOfTwArE.md` - Developer security guide
+3. `tHe wEb aPpLiCaTiOn hAcKeR's hAnDbOoK.md` - Web security vulnerabilities
 
 ### Operational Security
+
 10. `tHe sItE rElIaBiLiTy wOrKbOoK.md` - Production security practices
 
 ---
@@ -120,6 +136,7 @@ Complete documentation of all security books and resources referenced for JARVIS
 ## 📝 Documentation Files
 
 Each book has its own documentation file with:
+
 - Overview and key concepts
 - Relevance to JARVIS-WEB
 - Implementation status
@@ -131,22 +148,26 @@ Each book has its own documentation file with:
 ## 🎯 Reading Priority
 
 ### Immediate (Free Resources)
+
 1. Building Secure and Reliable Systems
 2. OWASP API Security Top 10
 3. OWASP LLM Top 10
 
 ### Short-term (Free via Libraries/Archive)
+
 4. The Web Application Hacker's Handbook
-5. Security Engineering
+2. Security Engineering
 
 ### Medium-term (Purchase or Library Access)
+
 6. Designing Secure Software
-7. Secure by Design
-8. Real-World Cryptography
+2. Secure by Design
+3. Real-World Cryptography
 
 ### Long-term (Reference)
+
 9. The Site Reliability Workbook
-10. OWASP Web Security Testing Guide
+2. OWASP Web Security Testing Guide
 
 ---
 

@@ -16,29 +16,33 @@ A practical guide drawing on 20+ years of security experience from Microsoft and
 ## Key Concepts Applied to JARVIS-WEB
 
 ### 1. Trust Boundaries
+
 - Identify where trust changes in the system
-- **Applied**: 
+- **Applied**:
   - File upload validation at trust boundary
   - Webhook response sanitization at trust boundary
   - API key validation
 
 ### 2. Threat Modeling
+
 - Systematic identification of threats
-- **Applied**: 
+- **Applied**:
   - File upload threat analysis
   - Webhook injection threat analysis
   - XSS threat analysis
 
 ### 3. Secure Design Patterns
+
 - Reusable security patterns
-- **Applied**: 
+- **Applied**:
   - Input validation pattern
   - Output sanitization pattern
   - Rate limiting pattern
 
 ### 4. Common Vulnerabilities
+
 - XSS, CSRF, injection attacks
-- **Applied**: 
+- **Applied**:
   - XSS prevention (webhook sanitization)
   - Input validation (file uploads)
   - Output encoding (HTML escaping)
@@ -48,23 +52,27 @@ A practical guide drawing on 20+ years of security experience from Microsoft and
 ## Key Chapters Relevant to JARVIS-WEB
 
 ### Chapter 4: Trust Boundaries
+
 - **Relevance**: Identifying security boundaries
 - **Applied**: File upload validation, webhook sanitization
 
 ### Chapter 5: Threat Modeling
+
 - **Relevance**: Systematic threat identification
 - **Applied**: Security threat analysis
 
 ### Chapter 8: Input Validation
+
 - **Relevance**: Validating all inputs
-- **Applied**: 
+- **Applied**:
   - File upload validation
   - URL validation
   - Filename sanitization
 
 ### Chapter 9: Output Encoding
+
 - **Relevance**: Sanitizing all outputs
-- **Applied**: 
+- **Applied**:
   - Webhook response sanitization
   - HTML entity escaping
 
@@ -93,12 +101,14 @@ A practical guide drawing on 20+ years of security experience from Microsoft and
 ## Implementation Status
 
 ✅ **Fully Implemented**:
+
 - Trust boundary identification
 - Input validation
 - Output sanitization
 - Secure design patterns
 
 📋 **Recommended** (from this book):
+
 - Security design review process
 - Threat modeling documentation
 - Security testing procedures
@@ -108,11 +118,13 @@ A practical guide drawing on 20+ years of security experience from Microsoft and
 ## Access Information
 
 **Free Access**:
+
 - No Starch Press - Free sample chapters available
 - Public libraries - Check digital library access
 - O'Reilly Learning Platform (with subscription)
 
 **Purchase**:
+
 - No Starch Press (official publisher)
 - Amazon, Barnes & Noble
 - ~$40-50 USD

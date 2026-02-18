@@ -2,16 +2,30 @@
   "name": "jarvis-web-cartesia",
   "version": "1.0.0",
   "description": "Bidirectional conversational AI using Cartesia STT and TTS WebSockets",
-  "main": "dist/index.js",
+  "main": "electron/main.js",
   "type": "module",
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "start": "node dist/index.js",
-    "example": "node dist/examples/bidirectional-conversation.js",
+    "start": "node dist/src/index.js",
+    "example": "node dist/src/examples/bidirectional-conversation.js",
     "serve": "node server.js",
     "serve:prod": "node scripts/kill-port-then-vite.mjs build && node server.js",
     "dev:browser": "vite",
+    "electron": "concurrently -k \"node scripts/kill-port-then-vite.mjs\" \"node scripts/wait-for-vite.mjs && node scripts/start-electron-with-env.mjs\"",
+    "electron:raw": "electron electron/main.js",
+    "electron:built": "cross-env USE_BUILT=1 ELECTRON_DISABLE_SECURITY_WARNINGS=1 electron electron/main.js",
+    "dev:electron": "npm run electron",
+    "kill:all": "node scripts/kill-all-tasks.mjs",
+    "electron:build": "npm run vite:build && node debug/tools/validate-electron-paths.js && npm run electron:built",
+    "electron:validate": "node debug/tools/validate-electron-paths.js",
+    "electron:verify": "node debug/tools/verify-electron-integration.mjs",
+    "app:dir": "electron-builder --dir",
+    "app:dist": "electron-builder",
+    "dist": "npm run electron:build && electron-builder",
+    "dist:win": "npm run electron:build && electron-builder --win",
+    "dist:mac": "npm run electron:build && electron-builder --mac",
+    "dist:linux": "npm run electron:build && electron-builder --linux",
     "vite": "node scripts/kill-port-then-vite.mjs",
     "vite:build": "node scripts/kill-port-then-vite.mjs build",
     "preview": "vite preview",
@@ -19,21 +33,28 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "lint:check": "eslint . --max-warnings 0",
+    "lint:md": "npx markdownlint-cli \"**/*.md\" --ignore-path .gitignore",
     "lint:src": "eslint src/",
     "lint:public": "eslint public/",
     "lint:server": "eslint server.js vite.config.js",
+    "lint:tests": "eslint tests/",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "node scripts/clear-coverage.mjs && jest --coverage",
     "test:unit": "jest tests/unit --collectCoverage=false",
+    "test:core": "jest tests/core-functionality.test.js --collectCoverage=false",
+    "test:integration": "jest tests/integration tests/integration.test.js debug/tests/integration --collectCoverage=false",
     "test:all": "jest --coverage --verbose --watchAll=false",
     "test:ci": "jest --coverage --ci --watchAll=false",
     "ci": "npm run build && npm run lint:check && npm run test:coverage",
     "verify": "npm run lint:check && npm run build && npm test",
     "check": "npm run lint:check && npm run build && npm test -- --watchAll=false && npm run vite:build",
     "debug": "node debug/run-debug-suite.mjs",
+    "parse:electron": "node scripts/parse-electron.mjs",
+    "parse:ipc": "node scripts/parse-ipc.mjs",
     "test:debug": "jest --coverage > debug/results/latest-test-run.txt 2>&1",
-    "test:integration": "jest debug/tests/integration --collectCoverage=false"
+    "test:n8n-webhook": "node scripts/test-n8n-webhook.mjs",
+    "postinstall": "electron-builder install-app-deps"
   },
   "keywords": [
     "cartesia",
@@ -43,14 +64,22 @@
     "voice",
     "conversation"
   ],
-  "author": "",
+  "author": "JARVIS-WEB",
   "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "overrides": {
+    "tar": ">=7.5.8"
+  },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "@ricky0123/vad-web": "^0.0.30",
     "dotenv": "^17.2.3",
     "jspdf": "^4.1.0",
     "tesseract.js": "^5.1.0",
-    "ws": "^8.16.0"
+    "ws": "^8.16.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",
@@ -62,6 +91,9 @@
     "@types/node": "^20.10.0",
     "@types/ws": "^8.5.10",
     "babel-jest": "^30.2.0",
+    "concurrently": "^9.1.2",
+    "cross-env": "^10.1.0",
+    "electron": "40.2.1",
     "eslint": "^9.39.2",
     "globals": "^17.3.0",
     "jest": "^30.2.0",
@@ -69,8 +101,33 @@
     "ts-jest": "^29.4.6",
     "typescript": "^5.3.3",
     "typescript-eslint": "^8.54.0",
-    "concurrently": "^9.1.2",
     "vite": "^7.3.1",
-    "vite-plugin-static-copy": "^3.2.0"
+    "vite-plugin-static-copy": "^3.2.0",
+    "wait-on": "^8.0.1",
+    "electron-builder": "^26.7.0"
+  },
+  "build": {
+    "appId": "com.jarvis.web",
+    "productName": "JARVIS",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "dist-public/**/*",
+      "scripts/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": ["nsis", "portable"]
+    },
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.productivity"
+    },
+    "linux": {
+      "target": ["AppImage"]
+    }
   }
 }

@@ -3,10 +3,10 @@
  * Cross-platform (Windows, macOS, Linux). Use: npm run vite
  * Aggressively kills all previous tasks on the port and related processes.
  */
-import { spawn, exec } from 'child_process';
-import { promisify } from 'util';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { spawn, exec } from 'node:child_process';
+import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { loadEnvEverywhere, getProjectRoot } from './load-env-everywhere.mjs';
 
 const execAsync = promisify(exec);

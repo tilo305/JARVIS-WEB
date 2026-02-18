@@ -3,6 +3,7 @@
 ## ✅ Successfully Downloaded Full Content
 
 ### 1. Building Secure and Reliable Systems (Google) ✅
+
 **Status**: **FULL CONTENT EXTRACTED**  
 **File**: `bUiLdInG sEcUrE aNd ReLiAbLe SyStEmS.md`  
 **Content**: 22 chapters, 1.1M+ characters  
@@ -14,12 +15,14 @@
 ## 📥 Partially Downloaded (HTML Pages)
 
 ### 2. OWASP API Security Top 10
+
 **Status**: HTML page downloaded  
 **File**: `oWaSp aPi sEcUrItY tOp 10.md`  
 **Content**: HTML page (needs text extraction)  
 **Next Step**: Extract text content from HTML or visit website to copy content
 
 ### 3. OWASP LLM Top 10
+
 **Status**: HTML page downloaded  
 **File**: `oWaSp lLm tOp 10.md`  
 **Content**: HTML page (needs text extraction)  
@@ -29,12 +32,15 @@
 
 ## 📋 Instructions for Remaining Books
 
-### Free/Open-Source Books:
-- **OWASP Web Security Testing Guide**: Visit https://owasp.org/www-project-web-security-testing-guide/
+### Free/Open-Source Books
+
+- **OWASP Web Security Testing Guide**: Visit <https://owasp.org/www-project-web-security-testing-guide/>
 - **Other OWASP Guides**: Available on owasp.org
 
-### Copyrighted Books:
+### Copyrighted Books
+
 See `iNsTrUcTiOnS fOr cOpYrIgHtEd bOoKs.md` for detailed instructions on:
+
 - Internet Archive (free borrowing)
 - Public library access
 - Free trials
@@ -45,13 +51,16 @@ See `iNsTrUcTiOnS fOr cOpYrIgHtEd bOoKs.md` for detailed instructions on:
 ## 🎯 What You Have Now
 
 ✅ **Full Book Content**:
+
 - Building Secure and Reliable Systems (complete)
 
 📄 **HTML Pages** (need text extraction):
+
 - OWASP API Security Top 10
 - OWASP LLM Top 10
 
 📚 **Reference Documentation**:
+
 - Individual book reference files (created earlier)
 - Download instructions
 - Access guides
@@ -60,7 +69,7 @@ See `iNsTrUcTiOnS fOr cOpYrIgHtEd bOoKs.md` for detailed instructions on:
 
 ## 🔧 Next Steps
 
-1. **For OWASP Guides**: 
+1. **For OWASP Guides**:
    - Visit the websites
    - Copy the actual text content
    - Paste into the markdown files

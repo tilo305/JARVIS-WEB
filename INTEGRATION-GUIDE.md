@@ -7,11 +7,13 @@ The UI patterns module has been created and CSS has been enhanced. To complete t
 ### Step 1: Add Import (after line 23)
 
 Find this line:
+
 ```javascript
 import { DEBUG, escapeHtml } from './debug.js';
 ```
 
 Add after it:
+
 ```javascript
 import {
   NotificationSystem,
@@ -27,11 +29,13 @@ import {
 ### Step 2: Initialize UI Patterns (after line 33)
 
 Find this line:
+
 ```javascript
 const MIC_BOOST_STORAGE_KEY = 'jarvis_mic_boost';
 ```
 
 Add after it:
+
 ```javascript
 // Initialize UI patterns (microinteractions, notifications, smart defaults)
 const notifications = isBrowser ? new NotificationSystem() : null;
@@ -45,6 +49,7 @@ let progressIndicator = null;
 ### Step 3: Update `appendMessage` function (after line 191)
 
 Find this section:
+
 ```javascript
   });
   
@@ -55,6 +60,7 @@ Find this section:
 ```
 
 Add before the return statement:
+
 ```javascript
   // Store message in context for smart defaults
   if (smartDefaults && role === 'user') {
@@ -67,12 +73,14 @@ Add before the return statement:
 #### 4a. Add progress indicator at start (after line 241)
 
 Find:
+
 ```javascript
   if (!payload.message) return { reply: "I didn't catch that. Try again?", data: {} };
   DEBUG.trace('n8n: sending payload', {
 ```
 
 Add before DEBUG.trace:
+
 ```javascript
   // Show progress indicator for async operations
   if (progressIndicator) {
@@ -88,11 +96,13 @@ Add before DEBUG.trace:
 #### 4b. Update progress during fetch (around line 282)
 
 Find:
+
 ```javascript
     const res = await fetch(n8nWebhookUrl, {
 ```
 
 Add before it:
+
 ```javascript
     // Update progress
     if (progressIndicator) progressIndicator.setProgress(30);
@@ -101,12 +111,14 @@ Add before it:
 #### 4c. Update progress after fetch (around line 288)
 
 Find:
+
 ```javascript
     clearTimeout(timeoutId);
     const contentType = res.headers.get('content-type') || '';
 ```
 
 Add after clearTimeout:
+
 ```javascript
     // Update progress
     if (progressIndicator) progressIndicator.setProgress(60);
@@ -115,11 +127,13 @@ Add after clearTimeout:
 #### 4d. Update progress before parsing (around line 303)
 
 Find:
+
 ```javascript
     const reply = extractReplyFromJson(data);
 ```
 
 Add before it:
+
 ```javascript
     // Update progress
     if (progressIndicator) progressIndicator.setProgress(90);
@@ -136,11 +150,13 @@ Add before it:
 #### 4e. Add success notification (around line 320)
 
 Find:
+
 ```javascript
     if (typeof reply === 'string') return { reply, data };
 ```
 
 Replace with:
+
 ```javascript
     if (typeof reply === 'string') {
       // Success notification
@@ -154,6 +170,7 @@ Replace with:
 #### 4f. Hide progress on fallback (around line 336)
 
 Find:
+
 ```javascript
     const fallback = natural || "I heard you, sir. Still getting set up — please try again in a moment.";
     DEBUG.trace('n8n: using fallback (no reply in response)', { natural: !!natural, fallbackPreview: fallback.slice(0, 50) });
@@ -161,6 +178,7 @@ Find:
 ```
 
 Add before return:
+
 ```javascript
     // Hide progress on fallback
     if (progressIndicator) progressIndicator.hide();
@@ -169,12 +187,14 @@ Add before return:
 #### 4g. Add error notifications (around line 337)
 
 Find the catch block:
+
 ```javascript
   } catch (err) {
     if (timeoutId) clearTimeout(timeoutId);
 ```
 
 Add at start of catch:
+
 ```javascript
   } catch (err) {
     // Hide progress on error
@@ -184,6 +204,7 @@ Add at start of catch:
 ```
 
 Then add notifications in each error case:
+
 - After `AbortError`: `if (notifications) notifications.error('Request timed out', 4000);`
 - After `CORS` error: `if (notifications) notifications.error('Network error - check connection', 4000);`
 - After general error: `if (notifications) notifications.error('Connection failed', 4000);`
@@ -191,6 +212,7 @@ Then add notifications in each error case:
 ### Step 5: Update textInput initialization (around line 728)
 
 Find:
+
 ```javascript
 if (textInput) {
   // Auto-resize textarea as user types
@@ -198,6 +220,7 @@ if (textInput) {
 ```
 
 Add after `if (textInput) {`:
+
 ```javascript
   // Initialize input hints and autocomplete (UI patterns)
   if (isBrowser) {
@@ -241,6 +264,7 @@ After integration, test:
 ## Support
 
 If you encounter issues:
+
 1. Check browser console for errors
 2. Verify `ui-patterns.js` is loaded
 3. Ensure all imports are correct

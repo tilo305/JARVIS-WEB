@@ -21,12 +21,14 @@
 ## ✅ Code Integration
 
 ### Imports & Exports
+
 - [x] `cartesia-audio-bridge.js` imports `WakeWordManager` - ✅ CORRECT
 - [x] `wake-word-manager.js` imports `Porcupine` from wake word package - ✅ CORRECT
 - [x] `wake-word-manager.js` imports `DEBUG` - ✅ CORRECT
 - [x] All exports are properly defined - ✅ CORRECT
 
 ### AudioWorklet Processor
+
 - [x] `wake-word-processor.js` registers as `'wake-word-processor'` - ✅ CORRECT
 - [x] Processor uses 16kHz sample rate (matches Cartesia STT) - ✅ CORRECT
 - [x] Processor uses Int16 PCM format (pcm_s16le) - ✅ CORRECT
@@ -34,6 +36,7 @@
 - [x] Processor sends frames to main thread for Porcupine - ✅ CORRECT
 
 ### Wake Word Manager
+
 - [x] Initializes Porcupine with AccessKey - ✅ CORRECT
 - [x] Validates and converts keyword paths to URLs - ✅ CORRECT
 - [x] Loads AudioWorklet processor with correct path - ✅ CORRECT
@@ -43,6 +46,7 @@
 - [x] Properly releases resources on cleanup - ✅ CORRECT
 
 ### Cartesia Audio Bridge Integration
+
 - [x] Imports `WakeWordManager` - ✅ CORRECT
 - [x] Initializes wake word manager in `startSTT()` - ✅ CORRECT
 - [x] Passes `audioWorkletBasePath` to manager - ✅ CORRECT
@@ -52,6 +56,7 @@
 - [x] Waits for wake word before activating STT (when enabled) - ✅ CORRECT
 
 ### App.js Integration
+
 - [x] Reads wake word config from environment - ✅ CORRECT
 - [x] Constructs keyword paths from `PORCUPINE_KEYWORD` - ✅ CORRECT
 - [x] Passes wake word config to bridge - ✅ CORRECT
@@ -61,6 +66,7 @@
 ## ✅ Configuration
 
 ### Environment Variables (vite.config.js)
+
 - [x] `VITE_WAKE_WORD_ACCESS_KEY` - ✅ DEFINED
 - [x] `VITE_PORCUPINE_KEYWORD` - ✅ DEFINED
 - [x] `VITE_PORCUPINE_SENSITIVITY` - ✅ DEFINED
@@ -68,6 +74,7 @@
 - [x] `VITE_DEBUG_WAKE_WORD` - ✅ DEFINED
 
 ### Vite Build Configuration
+
 - [x] Copies `audio/*` files (includes wake-word-processor.js) - ✅ CONFIGURED
 - [x] Copies `keywords/*` files - ✅ CONFIGURED
 - [x] All environment variables injected at build time - ✅ CONFIGURED
@@ -75,18 +82,21 @@
 ## ✅ Compatibility
 
 ### Cartesia STT Compatibility (cArTeSiA dOcS.md)
+
 - [x] Sample rate: 16kHz - ✅ MATCHES
 - [x] Encoding: pcm_s16le - ✅ MATCHES
 - [x] Format: Int16 PCM - ✅ MATCHES
 - [x] Processing: Parallel (non-blocking) - ✅ CORRECT
 
 ### AudioWorklet Compatibility (aUdiO dOcS.md)
+
 - [x] Uses AudioWorklet (not ScriptProcessorNode) - ✅ CORRECT
 - [x] Resamples from 48kHz to 16kHz - ✅ CORRECT
 - [x] Converts Float32 to Int16 - ✅ CORRECT
 - [x] Uses same path resolution as STT processor - ✅ CORRECT
 
 ### VAD Compatibility
+
 - [x] Wake word activates VAD pipeline - ✅ CORRECT
 - [x] VAD continues to gate STT after wake word - ✅ CORRECT
 - [x] No conflicts between wake word and VAD - ✅ CORRECT

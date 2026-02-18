@@ -21,6 +21,8 @@ const DEFAULT_API_KEY = '';
 const DEFAULT_VOICE_ID = '95131c95-525c-463b-893d-803bafdf93c4';
 const STT_CHUNK_MS = 100;
 
+// MDN: Use wss:// when page is HTTPS; ws:// from HTTPS is mixed content and blocked by browsers.
+// @see https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API/Writing_WebSocket_client_applications#security_considerations
 const TTS_ENDPOINT = 'wss://api.cartesia.ai/tts/websocket';
 const STT_ENDPOINT = 'wss://api.cartesia.ai/stt/websocket';
 
@@ -328,7 +330,8 @@ export class CartesiaAudioBridge {
             basePath += '/';
           }
           const ttsPath = `${basePath}tts-playback-processor.js`;
-          const ttsAbsolute = ttsPath.startsWith('http') ? ttsPath : new URL(ttsPath, window.location.origin).href;
+          const isAbsoluteUrl = (p) => p.startsWith('http:') || p.startsWith('https:') || p.startsWith('file:');
+          const ttsAbsolute = isAbsoluteUrl(ttsPath) ? ttsPath : new URL(ttsPath, window.location.origin).href;
           try {
             await this.audioContext.audioWorklet.addModule(ttsAbsolute);
           } catch (err) {
@@ -384,8 +387,9 @@ export class CartesiaAudioBridge {
       }
       const sttPath = `${basePath}stt-capture-processor.js`;
       const ttsPath = `${basePath}tts-playback-processor.js`;
-      const sttAbsolute = sttPath.startsWith('http') ? sttPath : new URL(sttPath, window.location.origin).href;
-      const ttsAbsolute = ttsPath.startsWith('http') ? ttsPath : new URL(ttsPath, window.location.origin).href;
+      const isAbsoluteUrl = (p) => p.startsWith('http:') || p.startsWith('https:') || p.startsWith('file:');
+      const sttAbsolute = isAbsoluteUrl(sttPath) ? sttPath : new URL(sttPath, window.location.origin).href;
+      const ttsAbsolute = isAbsoluteUrl(ttsPath) ? ttsPath : new URL(ttsPath, window.location.origin).href;
       DEBUG.trace('Loading AudioWorklet modules', { sttPath: sttAbsolute, ttsPath: ttsAbsolute });
       // Load STT processor
       try {

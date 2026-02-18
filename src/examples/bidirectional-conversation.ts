@@ -10,7 +10,7 @@
 
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
-import { writeFileSync } from 'fs';
+import { writeFileSync } from 'node:fs';
 import { BidirectionalConversation } from '../bidirectional-conversation.js';
 
 /**

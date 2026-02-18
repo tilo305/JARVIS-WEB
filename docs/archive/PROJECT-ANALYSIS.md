@@ -5,6 +5,7 @@
 **JARVIS-WEB** is a bidirectional conversational AI application using Cartesia's STT (Speech-to-Text) and TTS (Text-to-Speech) WebSocket APIs. The project provides both a Node.js library and a browser-based chat interface with real-time voice interaction.
 
 ### Key Technologies
+
 - **TypeScript** for type-safe backend code
 - **Vite** for frontend build tooling
 - **Web Audio API** (AudioWorklet) for real-time audio processing
@@ -19,10 +20,12 @@
 ### Core Source Files (`src/`)
 
 #### 1. **`index.ts`** - Main Export
+
 - Exports all public APIs: `CartesiaSTTClient`, `CartesiaTTSClient`, `BidirectionalConversation`, `CARTESIA_CONFIG`
 - Entry point for library consumers
 
 #### 2. **`config.ts`** - Configuration
+
 - **CARTESIA_CONFIG**: API credentials, endpoints, model settings
   - TTS: `sonic-turbo` (40ms first byte) or `sonic-3` (90ms, more emotive)
   - STT: `ink-whisper`, 16kHz PCM, 100ms chunks
@@ -30,6 +33,7 @@
 - **N8N_WEBHOOK_URL**: Default webhook for LLM integration
 
 #### 3. **`stt-client.ts`** - Speech-to-Text Client
+
 - WebSocket client for Cartesia STT API
 - Features:
   - Real-time audio streaming (100ms chunks)
@@ -44,6 +48,7 @@
   - `done()`: Close session
 
 #### 4. **`tts-client.ts`** - Text-to-Speech Client
+
 - WebSocket client for Cartesia TTS API
 - Features:
   - Continuations support (prosody continuity across chunks)
@@ -57,6 +62,7 @@
   - `cancelContext()`: Cancel pending TTS generation
 
 #### 5. **`bidirectional-conversation.ts`** - Conversation Manager
+
 - Orchestrates STT → Processing → TTS flow
 - Features:
   - Processes partial transcripts immediately for low latency
@@ -70,6 +76,7 @@
   - `onError()`: Error handling
 
 #### 6. **`types.ts`** - TypeScript Definitions
+
 - Complete type definitions for:
   - TTS requests/responses (chunk, done, error, timestamps)
   - STT requests/responses (transcript, done, error)
@@ -79,6 +86,7 @@
 ### Frontend (`public/`)
 
 #### 1. **`index.html`** - Chat UI
+
 - Iron Man-themed interface
 - Features:
   - Chat history display
@@ -89,6 +97,7 @@
   - Status indicator (Ready/Listening/Speaking/Error)
 
 #### 2. **`js/app.js`** - Main Application Logic
+
 - Integrates CartesiaAudioBridge with UI
 - Features:
   - Text and voice message handling
@@ -100,6 +109,7 @@
   - Debug mode support (`?debug=1`)
 
 #### 3. **`js/cartesia-audio-bridge.js`** - Audio Bridge
+
 - Browser implementation using Web Audio API
 - Features:
   - **VAD-gated streaming STT**: Only streams during speech
@@ -115,6 +125,7 @@
   - `tts-playback-processor.js`: Plays TTS audio chunks
 
 #### 4. **`js/vad-config.js`** - Voice Activity Detection Config
+
 - VAD settings aligned with voice bot design heuristics:
   - `redemptionMs`: 1200ms for responsiveness
   - `minSpeechMs`: Minimum speech duration
@@ -123,6 +134,7 @@
   - `silenceClosingPhrases`: British closing phrases
 
 #### 5. **`js/n8n-payload.js`** - n8n Integration
+
 - Builds payloads for n8n webhook:
   - Message text
   - Session ID for continuity
@@ -133,6 +145,7 @@
 - Natural language fallbacks for common queries
 
 #### 6. **`js/file-creator.js`** - File Generation
+
 - Creates downloadable files:
   - **PDF**: From title and content (using jsPDF)
   - **Image**: From base64 data
@@ -140,20 +153,24 @@
   - **Audio**: WAV conversion from uploaded files
 
 #### 7. **`js/ocr-tool.js`** - OCR Integration
+
 - Uses Tesseract.js for image text extraction
 - Adds OCR text to attachment payloads for n8n
 
 #### 8. **`js/debug.js`** - Debug Utilities
+
 - Conditional debug logging based on `window.JARVIS_DEBUG`
 - Trace, error, and info logging
 
 #### 9. **`js/audio-utils.js`** - Audio Utilities
+
 - Base64 PCM decoding
 - Audio format conversions
 
 ### Build Configuration
 
 #### 1. **`vite.config.js`** - Vite Configuration
+
 - Serves `public/` directory
 - Builds to `dist-public/`
 - Environment variable injection:
@@ -166,6 +183,7 @@
   - HTML preservation for builds
 
 #### 2. **`tsconfig.json`** - TypeScript Configuration
+
 - Target: ES2022
 - Module: ES2022
 - Strict mode enabled
@@ -173,12 +191,14 @@
 - Source maps and declarations enabled
 
 #### 3. **`jest.config.cjs`** - Test Configuration
+
 - Test environment: Node.js
 - Coverage thresholds: 40% branches, 50% functions/lines/statements
 - Test files: `tests/`, `debug/tests/`, `debug/live/`
 - Transform: ts-jest for TypeScript, babel-jest for JavaScript
 
 #### 4. **`eslint.config.js`** - Linting Configuration
+
 - TypeScript ESLint for `src/` and `tests/`
 - Browser globals for `public/js/`
 - AudioWorklet globals for processors
@@ -187,6 +207,7 @@
 ### Server Files
 
 #### 1. **`server.js`** - Static File Server
+
 - Simple HTTP server for `public/` directory
 - Serves on port 3000 (configurable via `PORT` env var)
 - Note: HTTPS required for production (AudioWorklet needs secure context)
@@ -200,13 +221,16 @@
 ### Tests
 
 #### Unit Tests (`tests/unit/`)
+
 - Test files for core functionality
 - Coverage tracking enabled
 
 #### Integration Tests (`debug/tests/integration/`)
+
 - End-to-end workflow tests
 
 #### Live Tests (`debug/live/`)
+
 - Real API integration tests
 - Environment checking tools
 
@@ -220,6 +244,7 @@
 ### Documentation Files
 
 #### Core Documentation
+
 - **`README.md`**: Main project documentation
 - **`QUICKSTART.md`**: Quick start guide
 - **`cArTeSiA dOcS.md`**: Cartesia API implementation guide
@@ -227,6 +252,7 @@
 - **`bOoK oN vOiCe BoT dEsIgN.md`**: VAD and voice bot design heuristics
 
 #### Integration Guides
+
 - **`FRONTEND-INTEGRATION-VERIFICATION.md`**: Frontend integration checklist
 - **`INTEGRATION-VERIFICATION.md`**: General integration verification
 - **`docs/DEBUG-VOICE.md`**: Voice debugging guide
@@ -294,6 +320,7 @@ PORT=3000
 ### n8n Webhook Response Format
 
 n8n workflow should return JSON with one of these fields:
+
 - `output`
 - `reply`
 - `result`
@@ -301,6 +328,7 @@ n8n workflow should return JSON with one of these fields:
 - `message`
 
 Optional file creation:
+
 ```json
 {
   "reply": "Here's your document",
@@ -320,25 +348,30 @@ Optional file creation:
 ## Scripts
 
 ### Development
+
 - `npm run dev`: TypeScript watch mode
 - `npm run vite`: Start Vite dev server
 - `npm run serve`: Start static file server
 
 ### Building
+
 - `npm run build`: Compile TypeScript
 - `npm run vite:build`: Build frontend with Vite
 
 ### Testing
+
 - `npm test`: Run Jest tests
 - `npm run test:coverage`: Generate coverage report
 - `npm run test:watch`: Watch mode
 
 ### Linting
+
 - `npm run lint`: Check code
 - `npm run lint:fix`: Auto-fix issues
 - `npm run lint:check`: Fail on warnings
 
 ### Debugging
+
 - `npm run debug`: Run debug suite
 - `npm run debug:n8n`: Test n8n webhook
 - `npm run debug:stt`: Check STT sample rate
@@ -349,12 +382,14 @@ Optional file creation:
 ## Dependencies
 
 ### Production
+
 - `@ricky0123/vad-web`: Voice Activity Detection
 - `jspdf`: PDF generation
 - `tesseract.js`: OCR for images
 - `ws`: WebSocket client (Node.js)
 
 ### Development
+
 - `typescript`: TypeScript compiler
 - `vite`: Frontend build tool
 - `jest`: Testing framework
@@ -393,6 +428,7 @@ Optional file creation:
 ## Known Issues & Solutions
 
 See `debug/` directory for extensive troubleshooting:
+
 - **N8N-RESPOND-TO-WEBHOOK-FIX.md**: n8n response format issues
 - **DEBUG-VOICE.md**: Voice/microphone debugging
 - **SILENCE-AND-CONVERSATION-TIMER-FIXES.md**: Timer-related fixes
@@ -402,6 +438,7 @@ See `debug/` directory for extensive troubleshooting:
 ## Future Enhancements
 
 Potential improvements:
+
 - Multi-language support
 - Custom voice training
 - Conversation history persistence

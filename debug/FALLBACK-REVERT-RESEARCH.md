@@ -43,6 +43,7 @@ User clicks mic
 ### 2.3 Most Likely Mic Revert Scenario
 
 **Hypothesis:** The mic reverts 2.5 seconds after the user stops speaking (when `onSpeechEnd` fires). During that 2.5s, the app is:
+
 1. Waiting for STT to return final transcript
 2. Calling n8n (1–5+ seconds)
 3. Playing TTS

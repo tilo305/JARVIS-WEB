@@ -1,6 +1,6 @@
 # OWASP LLM Top 10
 
-**Source**: https://owasp.org/www-project-large-language-model-applications/
+**Source**: <https://owasp.org/www-project-large-language-model-applications/>
 **License**: Creative Commons Attribution-ShareAlike 4.0
 **Downloaded**: 2026-02-07T07:28:59.076Z
 
@@ -14,12 +14,6 @@
     <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
-
-
-
-
-
-
 <meta name="description" content="404 - Not Found on the main website for The OWASP Foundation. OWASP is a nonprofit foundation that works to improve the security of software.">
 <meta property="og:description" content="404 - Not Found on the main website for The OWASP Foundation. OWASP is a nonprofit foundation that works to improve the security of software.">
 <meta property="og:title" content="404 - Not Found | OWASP Foundation">
@@ -32,7 +26,6 @@
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <meta http-equiv="X-XSS-Protection" content="1; mode=block">
 
-
 <link rel="canonical" href="https://owasp.org/404" />
 <!-- Global site tag (gtag.js) - Google Analytics -->
 <!-- <script async src="https://www.googletagmanager.com/gtag/js?id=UA-4531126-1"></script> -->
@@ -44,7 +37,6 @@
   gtag('config', 'UA-4531126-1');
 </script> -->
 <!-- Google Analytics -->
-
 
 <script src="https://owasp.org/www--site-theme/assets/js/js.cookie.min.js"></script>
 <script>
@@ -66,7 +58,7 @@
     else
       href = event.target.href
   if(Cookies.get('cookies-ok') == 'true'){  
-    
+
     ga('send', 'event', {
       eventCategory: 'Outbound Link',
       eventAction: 'click',
@@ -104,9 +96,6 @@
     <header role="banner">
   <div id="banner" class="notice" aria-label="announcement">
 </div>
-
-
-
 
 <style>
   #banner img {
@@ -191,11 +180,8 @@
   });
 </script>
   <div id="popup" class="notice" aria-label="announcement">
-   
+
 </div>
-
-
-
 
 <style>
   #banner img {
@@ -280,7 +266,7 @@
         $("#popup").html(htmlstring);
         $("#popup").removeClass("notice");
         $("#popup").addClass(usepop.type);
-        
+
         if( Cookies.get('popup-seen')!='true')
         {
           $("#popup").show();
@@ -339,11 +325,9 @@
     <div><a href="https://owasp.glueup.com/organization/6727/memberships" class="cta-button">Join</a></div>
   </div>
 
-
-
 <script type="text/javascript">
   $(function(){
-      
+
       url = $(location).attr('href');
       if(url.includes('www2'))
       {
@@ -354,12 +338,12 @@
     // this works to get data from a json file NOT in data
       $.getJSON("https://owasp.org/www--site-theme/assets/sitedata/menus.json", function(data) {
          var listr = "<ul aria-label='header menu'>";
-         
+
          var mlistr = "<ul class='mobile-menu hide-el' role='navigation' aria-label='mobile primary navigation'>";
 
           mlistr += "<li><a href='#' class='menu-toggler' aria-hidden='true'><i class='fa fa-times'></i></a></li>";
           mlistr += "<li>";
-          mlistr += "<form role='search' method='get' action='https://owasp.org/search'>";   
+          mlistr += "<form role='search' method='get' action='https://owasp.org/search'>";
           mlistr += "<div class='search-div'>";
           mlistr += "<input id='searchString' aria-label='search input' name='searchString' class='search-bar' type='search' placeholder='Search OWASP.org' required='true'>";
           mlistr += "<button id='search-button' aria-label='search button' type='submit' class='fa fa-search' style='padding-left: 8px;'></button></div></form>";
@@ -371,7 +355,7 @@
               {
                   mlistr += "<li><a href='" + menu.url + "'>" + menu.title + "</a>";
               }
-              
+
               if(menu.items){
                   listr += "<ul class='dropdown-menu'>";
                   if(!searchitem) {
@@ -380,7 +364,7 @@
                     mlistr += "<ul>";
                   }
                 $.each(menu.items, function(ndx, item){
-                
+
                   if(item.separator)
                   {
                       listr += "<li class='separator'>";
@@ -413,7 +397,7 @@
                   mlistr += "</div>";
                 }
               }
-              
+
               listr += "</li>";
               if(!searchitem)
                 mlistr += "</li>";
@@ -423,7 +407,7 @@
           mlistr += "<li><a href='https://owasp.org/membership'>BECOME A MEMBER</a></li>";
           mlistr += "<li><a href='https://owasp.org/sitemap'>SITEMAP</a></li>";
           mlistr += "</ul>";
-          
+
           //$('.desktop-logo').after(listr);
           $('#midmenu').html(listr);
           $('#overlay').after(mlistr);
@@ -449,15 +433,13 @@
   </script>
 </header>
 
-
-
     <main role="main">
       <div class="main-wrapper">
         <h1 class="page-title">404 - Not Found</h1>
         <div id="main" class="page-body tab" aria-labelledby="main-link" tabindex="0">
           
           <div class="container">
-  <p><img src="/assets/images/web/404-old-owasp.png"></p>
+  <p><img src="/assets/images/web/404-old-owasp.png" alt="404 page not found"></p>
   <h2>WHOA THAT PAGE CANNOT BE FOUND</h2>
   <p>Try the <strong>SEARCH</strong> function in the main navigation to find something. If you are looking for chapter information, please see <a href="/chapters/">Chapters</a> for the correct chapter. For information about OWASP projects see <a href="/projects/">Projects</a>. For common attacks, vulnerabilities, or information about other community-led contributions see <a href="/www-community/">Contributed Content</a>.</p>
   
@@ -477,7 +459,7 @@
 
           <div class="sidebar" role="complementary">
    <div class='owasp-sidebar-top'>
-    <strong>The OWASP<sup>&reg;</sup> Foundation</strong> works to improve the security of software through its community-led open source software projects, 
+    <strong>The OWASP<sup>&reg;</sup> Foundation</strong> works to improve the security of software through its community-led open source software projects,
      hundreds of chapters worldwide, tens of thousands of members, and by hosting local and global conferences.
 </div>
 
@@ -525,7 +507,6 @@
 </script>
 </div>
 
-
       </div>
     </main>
 
@@ -546,24 +527,24 @@
       // 5 = Other  
       member = null;
       chosenIndex = -1;
-      var pick = Math.floor(Math.random() * 100);      
+      var pick = Math.floor(Math.random() * 100);
       var randomIndex = -1;
       if(pick < 44){
         // pick a platinum member
         randomIndex = Math.floor(Math.random() * plat_indices.length);
-        pIndex = plat_indices[randomIndex];            
+        pIndex = plat_indices[randomIndex];
         cycleIndex = randomIndex
         while(chosenIndex == -1)
         {
           randomIndex++;
           if(indexUsed.indexOf(pIndex)== -1){
             chosenIndex = pIndex;
-            
+
           }else if(randomIndex >= plat_indices.length){
             randomIndex = 0;
-            
+
           }
-          if (randomIndex == cycleIndex){ // we could not find a plat member not already in the list....            
+          if (randomIndex == cycleIndex){ // we could not find a plat member not already in the list....
             break;
           }
         }
@@ -571,19 +552,19 @@
       if (chosenIndex == -1 && pick < 77) {
         // pick a gold member
         randomIndex = Math.floor(Math.random() * gold_indices.length);
-        pIndex = gold_indices[randomIndex];            
+        pIndex = gold_indices[randomIndex];
         cycleIndex = randomIndex
         while(chosenIndex == -1)
         {
           randomIndex++;
           if(indexUsed.indexOf(pIndex)== -1){
             chosenIndex = pIndex;
-            
+
           }else if(randomIndex >= gold_indices.length){
             randomIndex = 0;
-            
+
           }
-          if (randomIndex == cycleIndex){ // we could not find a plat member not already in the list....            
+          if (randomIndex == cycleIndex){ // we could not find a plat member not already in the list....
             break;
           }
         }
@@ -591,24 +572,24 @@
       if (chosenIndex == -1){
         // pick an other member
         randomIndex = Math.floor(Math.random() * other_indices.length);
-        pIndex = other_indices[randomIndex];            
+        pIndex = other_indices[randomIndex];
         cycleIndex = randomIndex
         while(chosenIndex == -1)
         {
           randomIndex++;
           if(indexUsed.indexOf(pIndex)== -1){
             chosenIndex = pIndex;
-            
+
           }else if(randomIndex >= other_indices.length){
             randomIndex = 0;
-            
+
           }
-          if (randomIndex == cycleIndex){ // we could not find a plat member not already in the list....            
+          if (randomIndex == cycleIndex){ // we could not find a plat member not already in the list....
             break;
           }
         }
-      }    
-      if(chosenIndex >= 0){          
+      }
+      if(chosenIndex >= 0){
         member = members[chosenIndex];
         indexUsed.push(chosenIndex);
         var membertype = 'not a member';
@@ -619,9 +600,9 @@
         else if(member.member && member.membertype == 3)
           membertype = 'gold member';
         else if(member.member && member.membertype)
-          membertype = member.membertype;        
+          membertype = member.membertype;
       }
-      return member;      
+      return member;
     }
 
     $(function() {  
@@ -633,7 +614,7 @@
           else if (this.member && this.membertype == 2)
             plat_indices.push(index);
           else
-            other_indices.push(index);        
+            other_indices.push(index);
         });
 
         var indexUsed = [];
@@ -655,13 +636,12 @@
             if (member)
             {
                 counter++;
-                htmlstring += '<a href="'+ member["url"] + '" class="member-logo" rel="sponsored noopener noreferrer" target="_blank" onclick="handleOutboundLinkClicks(event);"><img src="https://owasp.org' + member["image"] + '" alt="image"/></a>';                                
+                htmlstring += '<a href="'+ member["url"] + '" class="member-logo" rel="sponsored noopener noreferrer" target="_blank" onclick="handleOutboundLinkClicks(event);"><img src="https://owasp.org' + member["image"] + '" alt="image"/></a>';
             }
           }
 
           $("#corp_member_div").html(htmlstring);
-         
-          
+
         }
     });
   </script>
@@ -679,7 +659,6 @@
   </div>
 </section>
 
-  
   <section class="footer-wrapper">
     <section class="social">
 <a href="https://github.com/OWASP/" aria-label="github organization" target="_blank" rel="noopener noreferrer"><i class="fa fa-lg fa-github"></i></a>
@@ -711,6 +690,5 @@
   </section>
 </footer>
 
-    
   </body>
 </html>

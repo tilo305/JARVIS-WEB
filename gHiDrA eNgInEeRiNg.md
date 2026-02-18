@@ -1,4 +1,5 @@
 # JARVIS Desktop Voice AI - Reverse Engineering Documentation
+
 ## Master the art of debugging desktop applications, from understanding code to mitigating threats
 
 **Authors:** David Álvarez Pérez, Ravikant Tiwari  
@@ -24,6 +25,7 @@ This documentation is a comprehensive guide that not only introduces you to the 
 ### Who This Desktop Guide Is For
 
 This desktop guide is intended for:
+
 - Desktop security researchers
 - Desktop malware analysts
 - Desktop bug hunters
@@ -47,6 +49,7 @@ On March 7, 2017, WikiLeaks started to leak Vault 7, which became the biggest le
 #### Desktop NSA Release
 
 During RSA Conference 2019 in San Francisco, Rob Joyce, senior advisor for cybersecurity at NSA, announced Ghidra and explained its unique capabilities for desktop applications:
+
 - Team collaboration on a single desktop project feature
 - The capabilities to extend and scale Ghidra for desktop applications
 - The generic processor model (SLEIGH) for desktop systems
@@ -58,6 +61,7 @@ On April 4, 2019, the NSA released the source code of Ghidra on GitHub, as well 
 #### Ghidra vs IDA and Other Competitors
 
 Current strengths of Ghidra:
+
 - Open source and free (including its decompiler)
 - Supports many architectures
 - Can load multiple binaries at the same time in a project
@@ -69,10 +73,11 @@ Current strengths of Ghidra:
 #### Installing Ghidra
 
 Requirements:
+
 - **Hardware:** 4 GB RAM, 1 GB storage (for installing Ghidra binaries), dual monitors (strongly recommended)
 - **Software:** Java 17 64-bit Runtime and Development Kit
 
-Download the latest version from https://ghidra-sre.org/ or compile from source using Gradle.
+Download the latest version from <https://ghidra-sre.org/> or compile from source using Gradle.
 
 #### Creating a New Ghidra Project
 
@@ -92,12 +97,14 @@ Unlike other reverse-engineering tools, Ghidra doesn't work with files directly.
 Ghidra includes a true script arsenal accessible via Window | Script Manager. Scripts are categorized by folder and can be written in Java or Python.
 
 Example script locations:
+
 - `$USER_HOME/ghidra_scripts`
 - Ghidra installation script directories
 
 #### The Script Class
 
 **Java Script Skeleton:**
+
 ```java
 import ghidra.app.script.GhidraScript;
 
@@ -110,6 +117,7 @@ public class MyScript extends GhidraScript {
 ```
 
 **Python Script Skeleton:**
+
 ```python
 from ghidra.app.script import GhidraScript
 
@@ -119,6 +127,7 @@ class MyScript(GhidraScript):
 ```
 
 #### Available GhidraScript States
+
 - `currentProgram`
 - `currentAddress`
 - `currentLocation`
@@ -128,6 +137,7 @@ class MyScript(GhidraScript):
 #### Script Development
 
 Important annotations for scripts:
+
 - `@category` - Organize scripts in Script Manager
 - `@menupath` - Add script to Ghidra menu
 - `@keybinding` - Assign hotkey to script
@@ -139,6 +149,7 @@ Important annotations for scripts:
 #### Setting Up the Development Environment
 
 Required software:
+
 - JDK 17 for x86_64
 - Eclipse IDE for Java developers
 - PyDev 6.3.1
@@ -157,6 +168,7 @@ Required software:
 In Ghidra 9.0, the `DEBUG_ADDRESS` was set to `*:18001`, allowing remote debugging connections from any IP address.
 
 **The Fix:**
+
 ```bash
 DEBUG_ADDRESS="127.0.0.1:18001"
 ```
@@ -199,6 +211,7 @@ This restricts debugging connections to localhost only.
 #### Setting Up the Environment
 
 Use VirtualBox or VMware with:
+
 - Isolated network
 - Read-only shared folders
 - No internet connection for static analysis
@@ -206,11 +219,13 @@ Use VirtualBox or VMware with:
 #### Looking for Malware Indicators
 
 **Key Analysis Steps:**
+
 1. Look for strings (Search | For Strings)
 2. Check intelligence sources (VirusTotal)
 3. Analyze imported functions
 
 **Unsafe Functions to Look For:**
+
 - `strcpy`, `strcat` - Buffer overflow
 - `malloc`, `free` - Heap operations
 - `VirtualAlloc`, `VirtualProtect` - Memory manipulation
@@ -310,6 +325,7 @@ analyzeHeadless C:\Projects MyProject -process malware.exe \
 #### Using Ghidra BSim
 
 BSim uses Ghidra's decompiler to generate feature vectors for each function based on:
+
 - Data flow
 - Control flow
 - Normalized to handle different compilers/architectures
@@ -319,11 +335,12 @@ BSim uses Ghidra's decompiler to generate feature vectors for each function base
 1. Download and run Elasticsearch
 2. Install BSim Elasticsearch plugin (lsh plugin)
 3. Create BSim database:
+
 ```bash
 bsim createdatabase elasticsearch://localhost/bsim_db
 ```
 
-4. Add servers in Ghidra: BSim | Manage Servers
+1. Add servers in Ghidra: BSim | Manage Servers
 
 #### Populating BSim Database
 
@@ -346,18 +363,21 @@ bsim generatesigs ghidra://localhost/myproject \
 #### Memory Corruption Vulnerabilities
 
 **Stack-based Buffer Overflow:**
+
 ```c
 char buffer[200];
 strcpy(buffer, argv[1]);  // Vulnerable!
 ```
 
 **Heap-based Buffer Overflow:**
+
 ```c
 char *buffer = malloc(10);
 strcpy(buffer, input);  // Vulnerable!
 ```
 
 **Format String Vulnerability:**
+
 ```c
 printf(user_input);  // Vulnerable!
 ```
@@ -375,6 +395,7 @@ printf(user_input);  // Vulnerable!
 #### Exploiting Stack-Based Buffer Overflow
 
 **Exploitation Steps:**
+
 1. Calculate offset to return address
 2. Craft payload with shellcode
 3. Overwrite return address to point to shellcode
@@ -387,6 +408,7 @@ printf(user_input);  // Vulnerable!
 #### P-Code Advantages
 
 P-Code is Ghidra's intermediate representation that provides:
+
 - Architecture-independent analysis
 - Fine-grained control flow
 - Single assignment property
@@ -395,6 +417,7 @@ P-Code is Ghidra's intermediate representation that provides:
 #### Looking for Vulnerable Functions
 
 **Retrieving Functions from Symbols Table:**
+
 ```python
 symbol_table = currentProgram.getSymbolTable()
 sscanf_symbols = symbol_table.getSymbols("_sscanf")
@@ -403,6 +426,7 @@ sscanf_symbols = symbol_table.getSymbols("_sscanf")
 #### Analyzing with P-Code
 
 **Getting P-Code Operations:**
+
 ```python
 decomp_results = decompileFunction(function, timeout)
 high_func = decomp_results.getHighFunction()
@@ -471,6 +495,7 @@ public class MyProvider extends ComponentProviderAdapter {
 #### Developing a Ghidra Loader
 
 **Key Methods:**
+
 - `getName()` - Return loader name
 - `findSupportedLoadSpecs()` - Check if file can be loaded
 - `load()` - Load file into Ghidra
@@ -478,6 +503,7 @@ public class MyProvider extends ComponentProviderAdapter {
 - `validateOptions()` - Validate options
 
 **Example Load Method Structure:**
+
 ```java
 @Override
 public void load(ByteProvider provider, LoadSpec loadSpec,
@@ -499,6 +525,7 @@ public void load(ByteProvider provider, LoadSpec loadSpec,
 #### SLEIGH Language Specification
 
 SLEIGH files in processor module:
+
 - `*.slaspec` - Processor specification
 - `*.sinc` - Instruction definitions
 - `*.pspec` - Processor details
@@ -524,6 +551,7 @@ SLEIGH files in processor module:
 #### Ghidra Debugger Overview
 
 Supported backends:
+
 - Windows debugger (dbgeng.dll)
 - GDB (GNU Debugger)
 - LLDB
@@ -544,17 +572,20 @@ Supported backends:
 #### Execution Control
 
 **Stepping:**
+
 - Step Into (F8) - Execute one instruction
 - Step Over - Execute function without entering
 - Step Out (F12) - Execute until return
 
 **Breakpoints:**
+
 - Software (SW_EXECUTE) - Patch with INT3
 - Hardware (HW_EXECUTE, HW_READ, HW_WRITE) - Use debug registers
 
 #### Remote Debugging
 
 **Setup for Linux:**
+
 ```bash
 # On target machine
 gdbserver 0.0.0.0:12345 ./program
@@ -622,12 +653,14 @@ Debugger | Configure and Launch | remote gdb
 #### Identifying Encryption Algorithms
 
 **Look for:**
+
 - CryptoAPI functions (`CryptEncrypt`, `BCryptEncrypt`)
 - Known constants (Salsa20: "expand 32-byte k")
 - S-box values (AES)
 - String patterns
 
 **Using FindCrypt-Ghidra:**
+
 1. Install plugin
 2. Run FindCrypt.java script
 3. Trace references to crypto constants
@@ -649,14 +682,12 @@ Debugger | Configure and Launch | remote gdb
 ## Further Learning Resources
 
 - Ghidra Documentation: `<GhidraInstallDir>/docs/`
-- Ghidra GitHub: https://github.com/NationalSecurityAgency/ghidra
-- Ghidra Website: https://ghidra-sre.org/
-- Ghidra Cheat Sheet: https://ghidra-sre.org/CheatSheet.html
-- Telegram: https://t.me/GhidraRE
-- Discord: https://discord.gg/S4tQnUB
+- Ghidra GitHub: <https://github.com/NationalSecurityAgency/ghidra>
+- Ghidra Website: <https://ghidra-sre.org/>
+- Ghidra Cheat Sheet: <https://ghidra-sre.org/CheatSheet.html>
+- Telegram: <https://t.me/GhidraRE>
+- Discord: <https://discord.gg/S4tQnUB>
 
 ---
 
 *This document is a condensed technical reference from "Ghidra Software Reverse-Engineering for Beginners, Second Edition" by David Álvarez Pérez and Ravikant Tiwari, published by Packt Publishing.*
-
-

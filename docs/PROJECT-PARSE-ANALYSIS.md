@@ -99,6 +99,7 @@ JARVIS-WEB/
   - Server: `PORT`
 
 **Code config:**
+
 - `src/config.ts`: `N8N_WEBHOOK_URL`, `CARTESIA_CONFIG` (API version, TTS/STT endpoints, sample rates, chunk sizes, WS timeouts).
 - `public/js/app.js` `getConfig()`: reads env + `JARVIS_CONFIG`.
 
@@ -137,6 +138,7 @@ JARVIS-WEB/
 - **STT input:** PCM s16le, 16 kHz, 100ms chunks (1600 samples).  
   Captured by `stt-capture-processor.js` (resample from context sample rate, then chunk).
 - **TTS output:** PCM s16le, 44.1 kHz (config in `config.ts`), base64 in WebSocket messages; played by `tts-playback-processor.js`.
+
 ---
 
 ## 8. n8n Contract

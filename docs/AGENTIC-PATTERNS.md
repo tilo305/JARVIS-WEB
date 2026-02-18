@@ -9,11 +9,13 @@ This document describes how patterns from *Agentic Design Patterns: A Hands-On G
 **Purpose**: Maintain short-term conversational context so the backend can produce coherent, context-aware replies.
 
 **Implementation**:
+
 - `ConversationHistory` in `public/js/agentic-patterns.js` stores the last 20 user/assistant turns in memory.
 - On each request, the last 10 turns are sent to n8n in `conversationHistory`.
 - n8n can use this array to ground the LLM in prior context.
 
 **Payload field**:
+
 ```json
 {
   "conversationHistory": [
@@ -28,11 +30,13 @@ This document describes how patterns from *Agentic Design Patterns: A Hands-On G
 **Purpose**: Classify intent so n8n can route to different workflows or prompt branches.
 
 **Implementation**:
+
 - `classifyIntent(text)` in `agentic-patterns.js` does rule-based intent classification.
 - Intents: `greeting`, `goodbye`, `help`, `calendar`, `email`, `search`, `general`.
 - The `intent` field is sent in every payload.
 
 **Payload field**:
+
 ```json
 {
   "intent": "calendar"
@@ -44,10 +48,12 @@ This document describes how patterns from *Agentic Design Patterns: A Hands-On G
 **Purpose**: Enrich the payload with device and environment context.
 
 **Implementation**:
+
 - `getContextEnrichment()` adds viewport size, voice support, and a truncated `userAgent`.
 - Sent as `contextEnrichment` in the payload for n8n to use for personalization.
 
 **Payload field**:
+
 ```json
 {
   "contextEnrichment": {
@@ -64,6 +70,7 @@ This document describes how patterns from *Agentic Design Patterns: A Hands-On G
 **Purpose**: Validate and sanitize user input before sending to the backend.
 
 **Implementation**:
+
 - `validateInput(text)`:
   - Rejects non-strings, empty text.
   - Enforces max length (8000 chars).
@@ -75,6 +82,7 @@ This document describes how patterns from *Agentic Design Patterns: A Hands-On G
 **Purpose**: Make requests more resilient to transient failures.
 
 **Implementation**:
+
 - `runWithRetry(fn, options)` wraps the n8n `fetch` call.
 - Retries up to 3 times with exponential backoff for `AbortError`, `Failed to fetch`, timeout, etc.
 - Non-retryable errors fail immediately.
@@ -105,6 +113,7 @@ The full payload sent to the webhook includes:
 To use the agentic fields in n8n:
 
 1. **Memory**: In your LLM prompt, include:
+
    ```
    Previous conversation:
    {{ $json.conversationHistory }}
@@ -119,11 +128,9 @@ To use the agentic fields in n8n:
 
 With `?debug=1` or when debug mode is enabled:
 
-- **Clear history**: Run in the console:
-  ```js
-  window.JARVIS_CONVERSATION_HISTORY?.clear?.()
-  ```
-- **Inspect history**: Run:
+- **Chat history** is not cleared by any in-app action; it persists until the site is refreshed.
+- **Inspect history** (read-only): Run in the console:
+
   ```js
   window.JARVIS_CONVERSATION_HISTORY?.getRecent?.(20)
   ```

@@ -51,6 +51,7 @@ Added two new debug functions (available when `?debug=1`):
 ### Diagnosing CORS Issues
 
 1. **Open JARVIS-WEB with debug mode:**
+
    ```
    http://localhost:3000?debug=1
    ```
@@ -58,6 +59,7 @@ Added two new debug functions (available when `?debug=1`):
 2. **Open browser console (F12)**
 
 3. **Run CORS diagnostics:**
+
    ```javascript
    JARVIS_DEBUG_CORS()
    ```

@@ -1,6 +1,6 @@
 # OWASP API Security Top 10
 
-**Source**: https://owasp.org/www-project-api-security/
+**Source**: <https://owasp.org/www-project-api-security/>
 **License**: Creative Commons Attribution-ShareAlike 4.0
 **Downloaded**: 2026-02-07T07:28:58.991Z
 
@@ -14,12 +14,6 @@
     <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
-
-
-
-
-
-
 <meta name="description" content="The API Security project focuses on strategies and solutions to understand and mitigate the unique vulnerabilities and security risks of Application Programming Interfaces (APIs)">
 <meta property="og:description" content="The API Security project focuses on strategies and solutions to understand and mitigate the unique vulnerabilities and security risks of Application Programming Interfaces (APIs)">
 <meta property="og:title" content="OWASP API Security Project | OWASP Foundation">
@@ -32,7 +26,6 @@
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <meta http-equiv="X-XSS-Protection" content="1; mode=block">
 
-
 <link rel="canonical" href="https://owasp.org/www-project-api-security/" />
 <!-- Global site tag (gtag.js) - Google Analytics -->
 <!-- <script async src="https://www.googletagmanager.com/gtag/js?id=UA-4531126-1"></script> -->
@@ -44,7 +37,6 @@
   gtag('config', 'UA-4531126-1');
 </script> -->
 <!-- Google Analytics -->
-
 
 <script src="https://owasp.org/www--site-theme/assets/js/js.cookie.min.js"></script>
 <script>
@@ -66,7 +58,7 @@
     else
       href = event.target.href
   if(Cookies.get('cookies-ok') == 'true'){  
-    
+
     ga('send', 'event', {
       eventCategory: 'Outbound Link',
       eventAction: 'click',
@@ -104,9 +96,6 @@
     <header role="banner">
   <div id="banner" class="notice" aria-label="announcement">
 </div>
-
-
-
 
 <style>
   #banner img {
@@ -191,11 +180,8 @@
   });
 </script>
   <div id="popup" class="notice" aria-label="announcement">
-   
+
 </div>
-
-
-
 
 <style>
   #banner img {
@@ -280,7 +266,7 @@
         $("#popup").html(htmlstring);
         $("#popup").removeClass("notice");
         $("#popup").addClass(usepop.type);
-        
+
         if( Cookies.get('popup-seen')!='true')
         {
           $("#popup").show();
@@ -339,11 +325,9 @@
     <div><a href="https://owasp.glueup.com/organization/6727/memberships" class="cta-button">Join</a></div>
   </div>
 
-
-
 <script type="text/javascript">
   $(function(){
-      
+
       url = $(location).attr('href');
       if(url.includes('www2'))
       {
@@ -354,12 +338,12 @@
     // this works to get data from a json file NOT in data
       $.getJSON("https://owasp.org/www--site-theme/assets/sitedata/menus.json", function(data) {
          var listr = "<ul aria-label='header menu'>";
-         
+
          var mlistr = "<ul class='mobile-menu hide-el' role='navigation' aria-label='mobile primary navigation'>";
 
           mlistr += "<li><a href='#' class='menu-toggler' aria-hidden='true'><i class='fa fa-times'></i></a></li>";
           mlistr += "<li>";
-          mlistr += "<form role='search' method='get' action='https://owasp.org/search'>";   
+          mlistr += "<form role='search' method='get' action='https://owasp.org/search'>";
           mlistr += "<div class='search-div'>";
           mlistr += "<input id='searchString' aria-label='search input' name='searchString' class='search-bar' type='search' placeholder='Search OWASP.org' required='true'>";
           mlistr += "<button id='search-button' aria-label='search button' type='submit' class='fa fa-search' style='padding-left: 8px;'></button></div></form>";
@@ -371,7 +355,7 @@
               {
                   mlistr += "<li><a href='" + menu.url + "'>" + menu.title + "</a>";
               }
-              
+
               if(menu.items){
                   listr += "<ul class='dropdown-menu'>";
                   if(!searchitem) {
@@ -380,7 +364,7 @@
                     mlistr += "<ul>";
                   }
                 $.each(menu.items, function(ndx, item){
-                
+
                   if(item.separator)
                   {
                       listr += "<li class='separator'>";
@@ -413,7 +397,7 @@
                   mlistr += "</div>";
                 }
               }
-              
+
               listr += "</li>";
               if(!searchitem)
                 mlistr += "</li>";
@@ -423,7 +407,7 @@
           mlistr += "<li><a href='https://owasp.org/membership'>BECOME A MEMBER</a></li>";
           mlistr += "<li><a href='https://owasp.org/sitemap'>SITEMAP</a></li>";
           mlistr += "</ul>";
-          
+
           //$('.desktop-logo').after(listr);
           $('#midmenu').html(listr);
           $('#overlay').after(mlistr);
@@ -449,26 +433,14 @@
   </script>
 </header>
 
-
-
     <main role="main">
       <div class="main-wrapper">
         
   
-  
-  
-  
-  
-  
-  
-
-
 <nav class="sub-nav" role="navigation" aria-label="navigate page tabs">
   <ul role="tablist">
       <li>
-          
-          
-          
+
           <a href="#div-main" id="main-link" class="tab-link current" role="tab" aria-selected="true" aria-controls="main">Main</a>
      </li>
     
@@ -514,7 +486,7 @@
         {
           $('.tab-link').each(function () {
             divid = '#sec-' + $(this).attr('id').toLowerCase().replace('-link', '');
-            $(divid).addClass('tab-hidden'); 
+            $(divid).addClass('tab-hidden');
             $(this).removeClass('current');
           });
 
@@ -530,7 +502,7 @@
 
   $('.tab-link').click(function (e) {
     e.preventDefault();
-    
+
     $('.tab-link').each(function () {
       $(this).removeClass('current');
       divid = '#sec-' + $(this).attr('id').toLowerCase().replace('-link', '');
@@ -544,19 +516,16 @@
   });
 </script>
 
-
-
-
         <h1 class="page-title">OWASP API Security Project</h1>
         <div id="main" class="page-body tab" role="tabpanel" aria-labelledby="main-link" tabindex="0">
           
           <section id='sec-main' class='page-body'>
           <div class="alert">
   <p style="text-align:center">
-    Check out the new 
+    Check out the new
     <a href="https://owasp.org/API-Security/editions/2023/en/0x00-header/">
       OWASP API Security Top 10 2023
-    </a>! 
+    </a>!
   </p>
 </div>
 
@@ -679,7 +648,6 @@ provided that you attribute the work and if you alter, transform, or build upon
 this work, you may distribute the resulting work only under the same or similar
 license to this one.</p>
 
-
           </section>
           
 
@@ -745,7 +713,6 @@ kozmic, LauraRosePorter, Matthieu Estrade, nathanawmk, PauloASilva, pentagramz,
 philippederyck, pleothaud, r00ter, Raj kumar, Sagar Popat, Stephen Gates,
 thomaskonrad, xycloops123, Raphael Hagi, Eduardo Bellis, Bruno Barbosa</p>
 
-
           </section>
           
           
@@ -781,7 +748,6 @@ members, asking questions or sharing ideas.</p>
 
 <p>Ready to contribute directly into the repo? Great! Just make sure you read the
 <a href="https://github.com/OWASP/API-Security/blob/master/CONTRIBUTING.md">How to Contribute guide</a>.</p>
-
 
           </section>
           
@@ -868,7 +834,6 @@ Aviv</a> (<a href="https://github.com/OWASP/www-project-api-security/raw/master/
   </li>
 </ul>
 
-
           </section>
           
           
@@ -894,7 +859,6 @@ project)</li>
 <h2 id="roadmap">Roadmap</h2>
 
 <p><img src="assets/images/roadmap.png" alt="Roadmap" /></p>
-
 
           </section>
           
@@ -983,7 +947,6 @@ project)</li>
   </li>
 </ul>
 
-
           </section>
           
           
@@ -1004,17 +967,11 @@ project)</li>
     
        
 
-
-
-  
   <div class='owasp-sidebar-top'>
-    <strong>The OWASP<sup>&reg;</sup> Foundation</strong> works to improve the security of software through its community-led open source software projects, 
+    <strong>The OWASP<sup>&reg;</sup> Foundation</strong> works to improve the security of software through its community-led open source software projects,
      hundreds of chapters worldwide, tens of thousands of members, and by hosting local and global conferences.
 </div>
 
-
-  
-  
   <h3 id="api-security-information">API Security Information</h3>
 
 <p><span class="fa-stack fa-2x" title="Production Project">
@@ -1045,11 +1002,6 @@ project)</li>
   <li><a href="https://github.com/OWASP/API-Security">GitHub</a></li>
 </ul>
 
-
-  
-  
-  
-  
   <h3 id="leaders">Leaders</h3>
 
 <ul>
@@ -1057,9 +1009,6 @@ project)</li>
   <li><a href="/cdn-cgi/l/email-protection#a7cec9c8c989d4cfccc2c3dee7c8d0c6d4d789c8d5c0">Inon Shkedy</a></li>
   <li><a href="/cdn-cgi/l/email-protection#433322362f2c6d302a2f3522032c342230336d2c3124">Paulo Silva</a></li>
 </ul>
-
-
-  
 
   <div class='owasp-sidebar-bottom'>
    <h3>Upcoming OWASP Global Events</h3>
@@ -1071,7 +1020,7 @@ project)</li>
 <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script type="text/javascript">
    var events = [];
    $(function () {
-      eventsyml = YAML.load('https://owasp.org/assets/sitedata/events.yml');
+      eventsyml = YAML.load('<https://owasp.org/assets/sitedata/events.yml>');
 
       $.each(eventsyml, function (index) {
          if (this.category == 'Global') {
@@ -1131,24 +1080,24 @@ project)</li>
       // 5 = Other  
       member = null;
       chosenIndex = -1;
-      var pick = Math.floor(Math.random() * 100);      
+      var pick = Math.floor(Math.random() * 100);
       var randomIndex = -1;
       if(pick < 44){
         // pick a platinum member
         randomIndex = Math.floor(Math.random() * plat_indices.length);
-        pIndex = plat_indices[randomIndex];            
+        pIndex = plat_indices[randomIndex];
         cycleIndex = randomIndex
         while(chosenIndex == -1)
         {
           randomIndex++;
           if(indexUsed.indexOf(pIndex)== -1){
             chosenIndex = pIndex;
-            
+
           }else if(randomIndex >= plat_indices.length){
             randomIndex = 0;
-            
+
           }
-          if (randomIndex == cycleIndex){ // we could not find a plat member not already in the list....            
+          if (randomIndex == cycleIndex){ // we could not find a plat member not already in the list....
             break;
           }
         }
@@ -1156,19 +1105,19 @@ project)</li>
       if (chosenIndex == -1 && pick < 77) {
         // pick a gold member
         randomIndex = Math.floor(Math.random() * gold_indices.length);
-        pIndex = gold_indices[randomIndex];            
+        pIndex = gold_indices[randomIndex];
         cycleIndex = randomIndex
         while(chosenIndex == -1)
         {
           randomIndex++;
           if(indexUsed.indexOf(pIndex)== -1){
             chosenIndex = pIndex;
-            
+
           }else if(randomIndex >= gold_indices.length){
             randomIndex = 0;
-            
+
           }
-          if (randomIndex == cycleIndex){ // we could not find a plat member not already in the list....            
+          if (randomIndex == cycleIndex){ // we could not find a plat member not already in the list....
             break;
           }
         }
@@ -1176,24 +1125,24 @@ project)</li>
       if (chosenIndex == -1){
         // pick an other member
         randomIndex = Math.floor(Math.random() * other_indices.length);
-        pIndex = other_indices[randomIndex];            
+        pIndex = other_indices[randomIndex];
         cycleIndex = randomIndex
         while(chosenIndex == -1)
         {
           randomIndex++;
           if(indexUsed.indexOf(pIndex)== -1){
             chosenIndex = pIndex;
-            
+
           }else if(randomIndex >= other_indices.length){
             randomIndex = 0;
-            
+
           }
-          if (randomIndex == cycleIndex){ // we could not find a plat member not already in the list....            
+          if (randomIndex == cycleIndex){ // we could not find a plat member not already in the list....
             break;
           }
         }
-      }    
-      if(chosenIndex >= 0){          
+      }
+      if(chosenIndex >= 0){
         member = members[chosenIndex];
         indexUsed.push(chosenIndex);
         var membertype = 'not a member';
@@ -1204,9 +1153,9 @@ project)</li>
         else if(member.member && member.membertype == 3)
           membertype = 'gold member';
         else if(member.member && member.membertype)
-          membertype = member.membertype;        
+          membertype = member.membertype;
       }
-      return member;      
+      return member;
     }
 
     $(function() {  
@@ -1218,7 +1167,7 @@ project)</li>
           else if (this.member && this.membertype == 2)
             plat_indices.push(index);
           else
-            other_indices.push(index);        
+            other_indices.push(index);
         });
 
         var indexUsed = [];
@@ -1240,13 +1189,12 @@ project)</li>
             if (member)
             {
                 counter++;
-                htmlstring += '<a href="'+ member["url"] + '" class="member-logo" rel="sponsored noopener noreferrer" target="_blank" onclick="handleOutboundLinkClicks(event);"><img src="https://owasp.org' + member["image"] + '" alt="image"/></a>';                                
+                htmlstring += '<a href="'+ member["url"] + '" class="member-logo" rel="sponsored noopener noreferrer" target="_blank" onclick="handleOutboundLinkClicks(event);"><img src="https://owasp.org' + member["image"] + '" alt="image"/></a>';
             }
           }
 
           $("#corp_member_div").html(htmlstring);
-         
-          
+
         }
     });
   </script>
@@ -1264,7 +1212,6 @@ project)</li>
   </div>
 </section>
 
-  
   <section class="footer-wrapper">
     <section class="social">
 <a href="https://github.com/OWASP/" aria-label="github organization" target="_blank" rel="noopener noreferrer"><i class="fa fa-lg fa-github"></i></a>
@@ -1298,5 +1245,3 @@ project)</li>
 
   </body>
 </html>
-
-

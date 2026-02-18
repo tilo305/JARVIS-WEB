@@ -3,9 +3,28 @@
  * @see jEsT dOcS.md — Project-Specific Setup, Test Setup File
  * ESM: jest is imported so it is available when running with type: "module".
  */
-import { jest } from '@jest/globals';
+import { expect, jest } from '@jest/globals';
 
 process.env.NODE_ENV = 'test';
+
+// Custom matchers (per jEsT dOcS.md — Advanced Features)
+expect.extend({
+  toBeWithinRange(received, floor, ceiling) {
+    const pass = received >= floor && received <= ceiling;
+    if (pass) {
+      return {
+        message: () =>
+          `expected ${received} not to be within range ${floor} - ${ceiling}`,
+        pass: true,
+      };
+    }
+    return {
+      message: () =>
+        `expected ${received} to be within range ${floor} - ${ceiling}`,
+      pass: false,
+    };
+  },
+});
 
 // Expose jest on global so setup and tests can use it (e.g. jest.clearAllMocks())
 global.jest = jest;

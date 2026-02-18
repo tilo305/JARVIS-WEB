@@ -3,6 +3,7 @@
 ## ✅ Code is Correctly Implemented
 
 The timestamp code is **definitely in the files**:
+
 - ✅ `public/js/app.js` line 161: Contains `class="timestamp"`
 - ✅ `public/index.html` line 642: Contains CSS for `.message .timestamp`
 
@@ -13,35 +14,44 @@ Your browser is likely caching the old JavaScript file without the timestamp cod
 ## 🚀 Quick Fix (Do This First!)
 
 ### Option 1: Hard Refresh (Easiest)
+
 1. Open your browser with the JARVIS app
 2. Press **`Ctrl + Shift + R`** (Windows/Linux) or **`Cmd + Shift + R`** (Mac)
 3. This forces a complete reload of all files
 4. Send a test message - timestamps should now appear!
 
 ### Option 2: Clear Cache via DevTools
+
 1. Open Developer Tools: Press **`F12`**
 2. Right-click the **refresh button** in your browser
 3. Select **"Empty Cache and Hard Reload"**
 4. Send a test message
 
 ### Option 3: Restart Dev Server
+
 1. Stop your current dev server (press `Ctrl+C` in terminal)
 2. Restart it:
+
    ```bash
    npm run vite
    ```
+
    or
+
    ```bash
    npm run serve
    ```
+
 3. Open browser to `http://localhost:3000`
 4. Send a test message
 
 ## ✅ Verify It's Working
 
 After refreshing, send a message and:
+
 1. Right-click on the message → **Inspect Element**
 2. Look for this structure:
+
    ```html
    <div class="message user">
      <div class="label">You</div>
@@ -53,6 +63,7 @@ After refreshing, send a message and:
 ## 🧪 Test in Browser Console
 
 Open browser console (F12) and run:
+
 ```javascript
 // Test timestamp generation
 const now = new Date();
@@ -68,6 +79,7 @@ console.log('Timestamp test:', timestamp);
 ## 📝 What to Look For
 
 After sending a message, you should see:
+
 - **Label**: "You" or "JARVIS"
 - **Timestamp**: "3:45 PM" (or current time)
 - **Content**: Your message text

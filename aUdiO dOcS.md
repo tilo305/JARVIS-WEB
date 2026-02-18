@@ -88,6 +88,7 @@ The **AudioWorklet** interface of the Web Audio API supplies custom audio proces
 Web Audio uses Float32 in `[-1, 1]`. Cartesia uses `pcm_s16le` (Int16, little-endian).
 
 **Float32 → Int16:**
+
 ```javascript
 function floatTo16BitPCM(float32Array) {
   const int16Array = new Int16Array(float32Array.length);
@@ -100,6 +101,7 @@ function floatTo16BitPCM(float32Array) {
 ```
 
 **Int16 → Float32 (for TTS playback):**
+
 ```javascript
 function int16ToFloat32(int16Array) {
   const float32Array = new Float32Array(int16Array.length);
@@ -116,10 +118,12 @@ function int16ToFloat32(int16Array) {
 Web Audio does not support arbitrary sample rates for live streams. You must resample manually or use `OfflineAudioContext` for offline resampling.
 
 **Downsampling (e.g., 48 kHz → 16 kHz for STT):**
+
 - Ratio: 48000 / 16000 = 3 → take every 3rd sample (or average blocks of 3)
 - 100 ms at 16 kHz = 1600 samples = 3200 bytes
 
 **Upsampling (e.g., 8 kHz TTS → 48 kHz playback):**
+
 - Ratio: 48000 / 8000 = 6 → interpolate (e.g., linear) between samples
 - Or: create `AudioBuffer` with 8 kHz and let Web Audio resample (createBuffer accepts custom sample rates)
 
@@ -138,6 +142,7 @@ getUserMedia (mic)
 ```
 
 **AudioWorklet STT Processor responsibilities:**
+
 1. Receive Float32 from `process(inputs, outputs, parameters)`
 2. Convert to Int16
 3. Resample 48 kHz → 16 kHz (or 44.1 → 16)
@@ -145,6 +150,7 @@ getUserMedia (mic)
 5. Send binary via `port.postMessage()` to main thread, which forwards to WebSocket
 
 **Chunk sizing for STT:**
+
 - **Ultra-low latency:** 10–20 ms (~320–640 bytes @ 16 kHz mono)
 - **Balanced:** 50–100 ms (~1600–3200 bytes @ 16 kHz)
 - **Cartesia recommendation:** ~100 ms intervals
@@ -177,6 +183,7 @@ User speaks → STT WebSocket → Transcript (is_final: false/true)
 ```
 
 **Latency targets:**
+
 - TTS first byte: < 100 ms (sonic-3) or < 50 ms (sonic-turbo)
 - STT partial: Time from audio chunk to `is_final: false`
 - End-to-end: User speaks → Audio response starts
@@ -349,6 +356,7 @@ ttsNode.port.postMessage({ type: 'audio', samples: Array.from(pcmInt16) });
 ## 9. References
 
 ### MDN
+
 - [AudioWorklet](https://developer.mozilla.org/en-US/docs/Web/API/AudioWorklet)
 - [AudioWorkletNode](https://developer.mozilla.org/en-US/docs/Web/API/AudioWorkletNode)
 - [AudioWorkletProcessor](https://developer.mozilla.org/en-US/docs/Web/API/AudioWorkletProcessor)
@@ -356,10 +364,12 @@ ttsNode.port.postMessage({ type: 'audio', samples: Array.from(pcmInt16) });
 - [BaseAudioContext.createBuffer](https://developer.mozilla.org/en-US/docs/Web/API/BaseAudioContext/createBuffer)
 
 ### Cartesia
+
 - [TTS WebSocket](https://docs.cartesia.ai/api-reference/tts/websocket)
 - [STT Streaming](https://docs.cartesia.ai/api-reference/stt/stt)
 - [Contexts](https://docs.cartesia.ai/api-reference/tts/working-with-web-sockets/contexts)
 
 ### Other
+
 - [web.dev: Microphone audio processing](https://web.dev/patterns/media/microphone-process)
 - [Float32 to Int16 conversion (Stack Overflow)](https://stackoverflow.com/questions/33738873/float32-to-int16-javascript-web-audio-api)

@@ -9,6 +9,7 @@ The server now includes comprehensive CORS diagnostics and logging. When CORS er
 ### 1. Automatic CORS Error Reporting
 
 When a CORS error occurs in the browser:
+
 - Error details are automatically sent to the server
 - Server console displays comprehensive diagnostic information
 - Includes recommendations for fixing the issue
@@ -16,6 +17,7 @@ When a CORS error occurs in the browser:
 ### 2. Server-Side CORS Testing
 
 The server can test CORS configuration directly (bypassing browser restrictions):
+
 - Tests preflight (OPTIONS) requests
 - Logs results to server console
 - Runs automatically on server startup if webhook URL is configured
@@ -32,11 +34,13 @@ Two new endpoints for CORS diagnostics:
 ### On Server Startup
 
 When the server starts, it will:
+
 1. Display server information
 2. Show CORS diagnostics status
 3. Automatically test CORS if webhook URL is configured
 
 Example output:
+
 ```
 Server: http://localhost:3000
 Serving: public (development)
@@ -110,11 +114,13 @@ Error Message: Failed to fetch
 ### From Browser Console
 
 Run the diagnostic function:
+
 ```javascript
 JARVIS_DEBUG_CORS()
 ```
 
 This will:
+
 - Test CORS from the browser
 - Display results in browser console
 - Send diagnostic report to server console
@@ -122,6 +128,7 @@ This will:
 ### From Server
 
 The server automatically tests CORS on startup if:
+
 - `VITE_N8N_WEBHOOK_URL` or `N8N_WEBHOOK_URL` environment variable is set
 - Server can reach the webhook URL
 
@@ -130,6 +137,7 @@ The server automatically tests CORS on startup if:
 ### Environment Variables
 
 Set these to enable auto-testing:
+
 ```bash
 export VITE_N8N_WEBHOOK_URL="https://n8n.hempstarai.com/webhook/..."
 # or
@@ -139,6 +147,7 @@ export N8N_WEBHOOK_URL="https://n8n.hempstarai.com/webhook/..."
 ### Server Startup
 
 The server will:
+
 1. Check for webhook URL in environment variables
 2. If found, automatically test CORS configuration
 3. Log results to console
@@ -157,6 +166,7 @@ The server will:
 **Cause:** Server cannot reach webhook URL or webhook doesn't support OPTIONS
 
 **Solution:**
+
 1. Verify webhook URL is correct
 2. Check network connectivity
 3. Verify n8n workflow is active
@@ -167,6 +177,7 @@ The server will:
 **Cause:** Browser cannot reach server endpoint
 
 **Solution:**
+
 1. Verify server is running
 2. Check browser console for network errors
 3. Verify `/api/cors-error` endpoint is accessible

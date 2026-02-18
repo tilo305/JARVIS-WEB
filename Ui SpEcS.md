@@ -3,6 +3,7 @@
 Complete UI codebase with all colors, styling, and details for the JARVIS chat interface.
 
 ## Table of Contents
+
 1. [Color Palette](#color-palette)
 2. [Typography](#typography)
 3. [Complete HTML Structure](#complete-html-structure)
@@ -16,6 +17,7 @@ Complete UI codebase with all colors, styling, and details for the JARVIS chat i
 ## Color Palette
 
 ### CSS Variables (from `:root`)
+
 ```css
 --bg-deep: #0a0a0f;              /* Deep black background */
 --bg-panel: #0f0f15;             /* Panel background */
@@ -52,6 +54,7 @@ Complete UI codebase with all colors, styling, and details for the JARVIS chat i
 ```
 
 ### Color Usage Reference
+
 - **Gold (#FFB800, #FFD700)**: Primary accent, buttons, borders, assistant messages
 - **Red (#C41E3A, #DC143C)**: User messages, logo, status indicators, recording state
 - **Background**: Deep black (#0a0a0f) with gradient overlays
@@ -62,10 +65,12 @@ Complete UI codebase with all colors, styling, and details for the JARVIS chat i
 ## Typography
 
 ### Font Families
+
 - **Primary**: `'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`
 - **Heading (JARVIS)**: `'Orbitron', sans-serif` (Google Fonts)
 
 ### Font Sizes
+
 - **Heading (h1)**: `1.25rem` (20px)
 - **Message content**: `0.9375rem` (15px)
 - **Message label**: `0.7rem` (11.2px)
@@ -74,6 +79,7 @@ Complete UI codebase with all colors, styling, and details for the JARVIS chat i
 - **Attachment button**: `0.8125rem` (13px)
 
 ### Font Weights
+
 - **Heading**: `700` (bold)
 - **Message label**: `600` (semi-bold)
 - **Body text**: `400` (normal)
@@ -168,18 +174,21 @@ Complete UI codebase with all colors, styling, and details for the JARVIS chat i
 ### HTML Element Details
 
 #### Favicon (SVG Data URI)
+
 - **Format**: SVG embedded as data URI
-- **Colors**: 
+- **Colors**:
   - Outer circle: `#C41E3A` (iron-red) at 30% opacity
   - Middle circle: `#FFB800` (gold) stroke, 2px width
   - Inner circle: `#DC143C` (iron-red-bright) fill
 - **ViewBox**: `0 0 32 32`
 
 #### Font Imports
+
 - **Google Fonts**: Orbitron (weights: 400, 600, 700) and Inter (weights: 400, 500, 600)
 - **Display**: `swap` (ensures text is visible during font load)
 
 #### Element IDs (Required for JavaScript)
+
 - `status` - Status indicator text
 - `chatContainer` - Main chat message container
 - `btnExportPdf` - Export PDF button
@@ -190,6 +199,7 @@ Complete UI codebase with all colors, styling, and details for the JARVIS chat i
 - `btnMic` - Microphone button
 
 #### ARIA Attributes
+
 - `aria-hidden="true"` - Logo (decorative)
 - `aria-label` - All buttons have descriptive labels
 - `aria-pressed` - Microphone button (toggles between "true" and "false")
@@ -197,6 +207,7 @@ Complete UI codebase with all colors, styling, and details for the JARVIS chat i
 - `aria-live="polite"` - Chat container (announces new messages)
 
 #### CSS Classes Used in HTML
+
 - `.chat-interface` - Main container
 - `.header` - Header section
 - `.logo` - Circular logo element
@@ -215,6 +226,7 @@ Complete UI codebase with all colors, styling, and details for the JARVIS chat i
 - `.btn-send` - Send button
 
 #### Dynamic Classes (Added/Removed via JavaScript)
+
 - `.status.listening` - Applied when listening to voice
 - `.status.speaking` - Applied when speaking/TTS active
 - `.status.status-misfire` - Applied on VAD misfire
@@ -1192,6 +1204,7 @@ body::after {
 ## Component Specifications
 
 ### Chat Interface Container
+
 - **Width**: `700px`
 - **Height**: `600px`
 - **Background**: `rgba(15, 15, 21, 0.7)` with gradient overlays
@@ -1200,6 +1213,7 @@ body::after {
 - **Box Shadow**: Multiple layered shadows for depth and glow effect
 
 ### Header
+
 - **Padding**: `1rem 1.5rem` (16px 24px)
 - **Border**: 2px gradient border (red to gold)
 - **Background**: `rgba(15, 15, 21, 0.6)` with backdrop blur
@@ -1207,6 +1221,7 @@ body::after {
 - **Title**: Orbitron font, gradient text with shimmer animation
 
 ### Status Indicator
+
 - **Font Size**: `0.75rem` (12px)
 - **Padding**: `0.25rem 0.75rem`
 - **Border Radius**: `6px`
@@ -1217,27 +1232,30 @@ body::after {
   - Error: Red text, red background
 
 ### Messages
+
 - **Max Width**: `85%` of container
 - **Padding**: `0.75rem 1rem` (12px 16px)
 - **Border Radius**: `20px`
 - **Font Size**: `0.9375rem` (15px)
 - **Line Height**: `1.45`
-- **User Messages**: 
+- **User Messages**:
   - Right-aligned
   - Red gradient background
   - Red border and glow
-- **Assistant Messages**: 
+- **Assistant Messages**:
   - Left-aligned
   - Gold gradient background
   - Gold border and glow
 
 ### Input Row
+
 - **Padding**: `1rem 1.5rem 1.5rem`
 - **Background**: `rgba(13, 17, 23, 0.5)` with backdrop blur
 - **Border**: `2px solid rgba(255, 184, 0, 0.3)`
 - **Border Radius**: `20px`
 
 ### Input Field
+
 - **Background**: `#1a1a22`
 - **Border**: `1px solid #2a2a35`
 - **Border Radius**: `20px`
@@ -1249,6 +1267,7 @@ body::after {
 ### Buttons
 
 #### Icon Buttons (Paperclip, Mic, Export)
+
 - **Size**: `48px × 48px` (header actions: `40px × 40px`)
 - **Border**: `2px solid #FFB800`
 - **Border Radius**: `12px`
@@ -1257,6 +1276,7 @@ body::after {
 - **Active State**: Red gradient when recording
 
 #### Send Button
+
 - **Size**: `52px × 52px`
 - **Border**: `2px solid #FFB800`
 - **Border Radius**: `12px`
@@ -1269,46 +1289,55 @@ body::after {
 ## Animations
 
 ### Background Pulse
+
 - **Duration**: `8s`
 - **Easing**: `ease-in-out`
 - **Effect**: Opacity pulses from 0.4 to 0.7
 
 ### Border Glow
+
 - **Duration**: `3s`
 - **Easing**: `ease-in-out`
 - **Effect**: Header border glow intensity pulses
 
 ### Logo Rotate
+
 - **Duration**: `3s`
 - **Easing**: `linear`
 - **Effect**: Continuous 360° rotation of conic gradient border
 
 ### Logo Glow
+
 - **Duration**: `2s`
 - **Easing**: `ease-in-out`
 - **Effect**: Logo scale and glow intensity pulse
 
 ### Text Shimmer
+
 - **Duration**: `2.5s`
 - **Easing**: `ease-in-out`
 - **Effect**: Gradient position shifts, glow intensity changes
 
 ### Status Pulse
+
 - **Duration**: `1.2s`
 - **Easing**: `cubic-bezier(0.42, 0, 0.58, 1)`
 - **Effect**: Status dot scale and opacity pulse
 
 ### Recording Pulse
+
 - **Duration**: `1.2s`
 - **Easing**: `cubic-bezier(0.42, 0, 0.58, 1)`
 - **Effect**: Recording button glow intensity pulses
 
 ### Fade In (Messages)
+
 - **Duration**: `300ms`
 - **Easing**: `cubic-bezier(0, 0, 0.58, 1)`
 - **Effect**: Message fades in with slight upward translation and scale
 
 ### Gradient Shift
+
 - **Duration**: `3s`
 - **Easing**: `ease`
 - **Effect**: Continuous gradient position animation
@@ -1318,23 +1347,27 @@ body::after {
 ## Layout & Dimensions
 
 ### Overall Layout
+
 - **Body**: Flexbox, centered, full viewport height
 - **Chat Interface**: Fixed size `700px × 600px`, centered
 - **Structure**: Flex column (header, chat container, input row)
 
 ### Spacing
+
 - **Gap between messages**: `0.75rem` (12px)
 - **Gap in input row**: `0.5rem` (8px)
 - **Gap in header**: `0.75rem` (12px)
 - **Padding (standard)**: `1rem 1.5rem` (16px 24px)
 
 ### Scrollbar
+
 - **Width**: `6px`
 - **Thumb Color**: `rgba(139, 115, 85, 0.3)`
 - **Thumb Hover**: `rgba(201, 162, 39, 0.5)`
 - **Border Radius**: `3px`
 
 ### Responsive Considerations
+
 - Animations respect `prefers-reduced-motion`
 - Fixed dimensions (not responsive by default)
 - Can be made responsive by changing width/height to percentages or viewport units
@@ -1344,6 +1377,7 @@ body::after {
 ## SVG Icons
 
 ### Paperclip Icon (Attachment Button)
+
 - **ViewBox**: `0 0 24 24`
 - **Stroke Width**: `1.75`
 - **Size**: `20px × 20px`
@@ -1352,6 +1386,7 @@ body::after {
 - **Stroke Linejoin**: `round`
 - **Path Data**: `m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48`
 - **Full SVG**:
+
 ```html
 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
   <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
@@ -1359,16 +1394,18 @@ body::after {
 ```
 
 ### Send Icon (Paper Airplane - Send Button)
+
 - **ViewBox**: `0 0 24 24`
 - **Stroke Width**: `2`
 - **Size**: `20px × 20px`
 - **Stroke**: `currentColor` (inherits button color)
 - **Stroke Linecap**: `round`
 - **Stroke Linejoin**: `round`
-- **Path Data**: 
+- **Path Data**:
   - Path 1: `m22 2-7 20-4-9-9-4Z`
   - Path 2: `M22 2 11 13`
 - **Full SVG**:
+
 ```html
 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
   <path d="m22 2-7 20-4-9-9-4Z"/>
@@ -1377,6 +1414,7 @@ body::after {
 ```
 
 ### Microphone Icon (Microphone Button)
+
 - **ViewBox**: `0 0 24 24`
 - **Stroke Width**: `1.75`
 - **Size**: `20px × 20px`
@@ -1389,6 +1427,7 @@ body::after {
   - Line 1: `x1="12" y1="19" x2="12" y2="23"` (stand)
   - Line 2: `x1="8" y1="23" x2="16" y2="23"` (base)
 - **Full SVG**:
+
 ```html
 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
   <rect x="9" y="2" width="6" height="11" rx="3" ry="3"/>
@@ -1399,6 +1438,7 @@ body::after {
 ```
 
 ### Export PDF Icon (Export Button in Header)
+
 - **ViewBox**: `0 0 24 24`
 - **Stroke Width**: `1.75`
 - **Size**: `18px × 18px` (smaller than other icons)
@@ -1410,6 +1450,7 @@ body::after {
   - Polyline: `14 2 14 8 20 8"` (fold corner)
   - Path 2: `M10 13h4M10 17h4M8 9h.01"` (text lines)
 - **Full SVG**:
+
 ```html
 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
   <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
@@ -1419,15 +1460,18 @@ body::after {
 ```
 
 ### Icon Styling
+
 All icons inherit `currentColor` from their parent button, which is `#0a0a0f` (dark text on gold/red gradient background).
 
 **Icon Filters Applied:**
+
 - `.btn-icon svg`: `filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.2))`
 - `.btn-icon:hover svg`: `filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))`
 - `.btn-send > *`: `filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3))`
 - `.btn-send:hover:not(:disabled) svg`: `filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4))`
 
 **Icon Transforms:**
+
 - `.btn-icon:hover svg`: `transform: scale(1.1)`
 - `.btn-icon:active svg`: `transform: scale(0.95)`
 - `.btn-send:hover:not(:disabled) svg`: `transform: scale(1.1) rotate(-5deg)`
@@ -1440,6 +1484,7 @@ All icons inherit `currentColor` from their parent button, which is `#0a0a0f` (d
 ### All CSS Classes Defined
 
 #### Layout Classes
+
 - `.chat-interface` - Main container (700px × 600px)
 - `.header` - Header section with logo, title, status
 - `.header-actions` - Container for header buttons
@@ -1448,6 +1493,7 @@ All icons inherit `currentColor` from their parent button, which is `#0a0a0f` (d
 - `.input-wrap` - Text input wrapper
 
 #### Component Classes
+
 - `.logo` - Circular logo element (36px × 36px)
 - `.header h1` - JARVIS title with gradient text
 - `.status` - Status indicator base class
@@ -1462,11 +1508,13 @@ All icons inherit `currentColor` from their parent button, which is `#0a0a0f` (d
 - `.btn-attachment` - Download button for attachments (created dynamically)
 
 #### Button Classes
+
 - `.btn-icon` - Icon button base class (48px × 48px, or 40px in header)
 - `.btn-export` - Export PDF button (additional class, inherits `.btn-icon` styles)
 - `.btn-send` - Send button (52px × 52px)
 
 #### State Classes (Applied via JavaScript)
+
 - `.status.listening` - Red glow, pulsing animation
 - `.status.speaking` - Gold glow, pulsing animation
 - `.status.error` - Red error styling
@@ -1475,6 +1523,7 @@ All icons inherit `currentColor` from their parent button, which is `#0a0a0f` (d
 - `.btn-icon.active.recording` - Red gradient, pulsing animation
 
 #### Pseudo-elements
+
 - `body::before` - Grid pattern overlay
 - `body::after` - Radial gradient overlay with pulse animation
 - `.chat-interface::before` - Top border glow
@@ -1489,6 +1538,7 @@ All icons inherit `currentColor` from their parent button, which is `#0a0a0f` (d
 - `.message .attachments .btn-attachment::before` - Hover shine effect
 
 #### Pseudo-classes
+
 - `:hover` - Hover states for buttons, images, inputs
 - `:active` - Active/pressed states
 - `:focus` / `:focus-visible` - Focus states with gold outline
@@ -1497,27 +1547,34 @@ All icons inherit `currentColor` from their parent button, which is `#0a0a0f` (d
 - `::placeholder` - Textarea placeholder styling
 
 #### Media Queries
+
 - `@media (prefers-reduced-motion: no-preference)` - Animation enable/disable
 
 ### CSS Classes Without Specific Styles
+
 - `.btn-export` - No additional CSS, inherits `.btn-icon` styles (used for semantic identification)
 
 ### CSS Selectors Breakdown
 
 #### Universal Selector
+
 - `*` - `box-sizing: border-box`
 
 #### Element Selectors
+
 - `body` - Main page styling with background gradients
 - `textarea` - Input field styling (within `.input-wrap`)
 
 #### ID Selectors
+
 - `#fileInput` - Hidden file input (`display: none`)
 
 #### Attribute Selectors
+
 - None used
 
 #### Combinators
+
 - `.header .logo` - Logo within header
 - `.header h1` - H1 within header
 - `.header .status` - Status within header
@@ -1534,6 +1591,7 @@ All icons inherit `currentColor` from their parent button, which is `#0a0a0f` (d
 - `.input-wrap textarea` - Textarea within input wrapper
 
 #### Scrollbar Styling
+
 - `.chat-container::-webkit-scrollbar` - Scrollbar width
 - `.chat-container::-webkit-scrollbar-track` - Scrollbar track
 - `.chat-container::-webkit-scrollbar-thumb` - Scrollbar thumb
@@ -1544,6 +1602,7 @@ All icons inherit `currentColor` from their parent button, which is `#0a0a0f` (d
 ## Additional Notes
 
 ### Glassmorphism Effects
+
 - Heavy use of `backdrop-filter: blur()` for glass-like transparency
 - Multiple layered backgrounds for depth
 - Gradient overlays for color accents
@@ -1554,6 +1613,7 @@ All icons inherit `currentColor` from their parent button, which is `#0a0a0f` (d
 - `backdrop-filter: blur(10px)` on status indicator
 
 ### Accessibility
+
 - ARIA labels on all interactive elements
 - Focus-visible states with gold outline (`outline: 2px solid var(--gold)`)
 - Semantic HTML structure (`<header>`, `<main>`, `<button>`)
@@ -1562,18 +1622,21 @@ All icons inherit `currentColor` from their parent button, which is `#0a0a0f` (d
 - ARIA pressed state for toggle buttons (`aria-pressed`)
 
 ### Browser Compatibility
+
 - WebKit prefixes for backdrop-filter (`-webkit-backdrop-filter`)
 - WebKit prefixes for mask-composite (`-webkit-mask-composite`)
 - Modern CSS features (backdrop-filter, mask-composite, CSS custom properties)
 - Graceful degradation for older browsers (fallback to solid colors)
 
 ### Performance
+
 - CSS animations use `transform` and `opacity` for GPU acceleration
 - Reduced motion support via media queries (`@media (prefers-reduced-motion: no-preference)`)
 - Efficient gradient animations (background-position instead of recreating gradients)
 - Hardware-accelerated transforms (`translateY`, `scale`, `rotate`)
 
 ### CSS Specificity Notes
+
 - Most styles use class selectors (specificity: 0,1,0)
 - Pseudo-classes add specificity (0,2,0 for `.btn-icon:hover`)
 - Combined classes increase specificity (0,2,0 for `.btn-icon.active.recording`)
@@ -1581,6 +1644,7 @@ All icons inherit `currentColor` from their parent button, which is `#0a0a0f` (d
 - No `!important` declarations used
 
 ### Z-Index Layers
+
 - `body::before` and `body::after`: `z-index: 0` (background)
 - `.chat-interface`: `z-index: 1` (main content)
 - `.chat-interface::after`: `z-index: -1` (border mask)
@@ -1595,7 +1659,9 @@ All icons inherit `currentColor` from their parent button, which is `#0a0a0f` (d
 ## JavaScript Integration & Dynamic UI Behavior
 
 ### JavaScript File Structure
+
 The UI is controlled by `public/js/app.js` (ES6 module). The file handles:
+
 - Dynamic class manipulation
 - Message creation and rendering
 - Button state management
@@ -1605,13 +1671,16 @@ The UI is controlled by `public/js/app.js` (ES6 module). The file handles:
 ### Core JavaScript Functions
 
 #### `setStatus(text, className = '')`
+
 Updates the status indicator in the header.
 
 **Parameters:**
+
 - `text` (string): Status text to display
 - `className` (string): Additional CSS class(es) to apply
 
 **Usage Examples:**
+
 ```javascript
 setStatus('Ready');                           // Default state
 setStatus('Listening…', 'listening');        // Red glow, pulsing
@@ -1621,6 +1690,7 @@ setStatus('Try again — speak a bit longer', 'status-misfire'); // Misfire stat
 ```
 
 **Status Classes Applied:**
+
 - `.status` (base class, always present)
 - `.status.listening` - Red glow, pulsing animation
 - `.status.speaking` - Gold glow, pulsing animation
@@ -1628,13 +1698,16 @@ setStatus('Try again — speak a bit longer', 'status-misfire'); // Misfire stat
 - `.status.status-misfire` - Dimmed gold for VAD misfire
 
 #### `syncMicButton(recording = false, disabled = false)`
+
 Synchronizes microphone button state with STT (Speech-to-Text) state.
 
 **Parameters:**
+
 - `recording` (boolean): Whether microphone is actively recording
 - `disabled` (boolean): Whether button should be disabled
 
 **Behavior:**
+
 - When `recording = true`:
   - Adds classes: `.active`, `.recording`
   - Sets `aria-pressed="true"`
@@ -1647,18 +1720,22 @@ Synchronizes microphone button state with STT (Speech-to-Text) state.
   - Sets `btnMic.disabled = true`
 
 **CSS Classes Applied:**
+
 - `.btn-icon.active` - Enhanced glow effect
 - `.btn-icon.active.recording` - Red gradient background, pulsing animation
 
 #### `appendMessage(role, content, attachments = [])`
+
 Creates and appends a message to the chat container.
 
 **Parameters:**
+
 - `role` (string): Either `'user'` or `'assistant'`
 - `content` (string): Message text content (HTML escaped)
 - `attachments` (array): Array of File objects or attachment objects
 
 **HTML Structure Created:**
+
 ```html
 <div class="message {role}">
   <div class="label">{label}</div>
@@ -1679,10 +1756,12 @@ Creates and appends a message to the chat container.
 ```
 
 **Label Text:**
+
 - `role === 'user'` → Label: "You"
 - `role === 'assistant'` → Label: "JARVIS"
 
 **Attachment Handling:**
+
 - **Images**: Creates `<img>` element with `max-width: 120px`, `max-height: 120px`
 - **Audio**: Creates download button with `.btn-attachment` class
 - **Other files**: Displays file name in `.file-name` span
@@ -1692,28 +1771,33 @@ Creates and appends a message to the chat container.
 ### Event Handlers & UI Interactions
 
 #### Send Button (`btnSend`)
+
 - **Click Handler**: Sends text message, clears input, appends user message
 - **Keyboard**: Enter key (without Shift) triggers send
 - **Disabled State**: Applied when no text or during processing
 
 #### Microphone Button (`btnMic`)
+
 - **Click Handler**: Toggles STT (Speech-to-Text) on/off
 - **State Management**: Uses `syncMicButton()` to update UI
 - **ARIA**: `aria-pressed` toggles between `"true"` and `"false"`
 - **Error Handling**: Shows error status if mic unavailable or API key missing
 
 #### Paperclip Button (`btnPaperclip`)
+
 - **Click Handler**: Triggers hidden file input (`fileInput.click()`)
 - **File Selection**: Updates `pendingAttachments` array
 - **Placeholder Update**: Changes textarea placeholder to show file count
 
 #### Export PDF Button (`btnExportPdf`)
+
 - **Click Handler**: Extracts all messages, creates PDF, triggers download
 - **Message Extraction**: Reads `.label` and `.content` from all `.message` elements
 
 ### Dynamic Class Application Flow
 
 #### Status Indicator States
+
 ```
 Default → setStatus('Ready')
   ↓
@@ -1727,6 +1811,7 @@ Ready → setStatus('Ready')
 ```
 
 #### Microphone Button States
+
 ```
 Idle → syncMicButton(false, false)
   ↓ (click, connecting)
@@ -1740,6 +1825,7 @@ Idle → syncMicButton(false, false) [removes .active .recording]
 ### Message Creation Flow
 
 #### User Message (Text Input)
+
 1. User types and clicks send
 2. `appendMessage('user', text, attachments)` called
 3. Creates `<div class="message user">`
@@ -1750,6 +1836,7 @@ Idle → syncMicButton(false, false) [removes .active .recording]
 8. Sets status back to "Ready"
 
 #### User Message (Voice Input)
+
 1. User speaks, STT detects speech
 2. `onTranscript` callback fires with final text
 3. `appendMessage('user', text)` called
@@ -1763,6 +1850,7 @@ Idle → syncMicButton(false, false) [removes .active .recording]
 ### Attachment Rendering
 
 #### Image Attachments
+
 ```javascript
 const img = document.createElement('img');
 img.src = a.url || URL.createObjectURL(a);
@@ -1771,6 +1859,7 @@ img.alt = 'Attachment';
 ```
 
 #### Audio Attachments
+
 ```javascript
 const block = document.createElement('div');
 block.className = 'attachment-audio';
@@ -1782,6 +1871,7 @@ downloadBtn.textContent = 'Download';
 ```
 
 #### File Attachments
+
 ```javascript
 const span = document.createElement('span');
 span.className = 'file-name';
@@ -1791,6 +1881,7 @@ span.textContent = name;
 ### Configuration & Initialization
 
 #### Window Configuration Object
+
 ```javascript
 window.JARVIS_CONFIG = {
   apiKey: 'sk_car_...',      // Cartesia API key
@@ -1800,6 +1891,7 @@ window.JARVIS_CONFIG = {
 ```
 
 #### Debug Mode
+
 - **URL Parameter**: `?debug=1` or `?debug=true`
 - **Window Variable**: `window.JARVIS_DEBUG = true`
 - **Debug Functions**: Exposes `JARVIS_DEBUG_SEND_TEST()` and `JARVIS_DEBUG_CHECK_CONFIG()` in console
@@ -1807,6 +1899,7 @@ window.JARVIS_CONFIG = {
 ### Required DOM Elements
 
 The JavaScript expects these elements to exist (throws error if missing):
+
 - `chatContainer` (id: `chatContainer`)
 - `statusEl` (id: `status`)
 - `btnSend` (id: `btnSend`)
@@ -1819,6 +1912,7 @@ The JavaScript expects these elements to exist (throws error if missing):
 ### CSS Classes Applied by JavaScript
 
 #### Status Classes
+
 - `.status` (base, always present)
 - `.status.listening` - Applied via `setStatus(text, 'listening')`
 - `.status.speaking` - Applied via `setStatus(text, 'speaking')`
@@ -1826,15 +1920,18 @@ The JavaScript expects these elements to exist (throws error if missing):
 - `.status.status-misfire` - Applied via `setStatus(text, 'status-misfire')`
 
 #### Button Classes
+
 - `.btn-icon.active` - Applied via `btnMic.classList.add('active')`
 - `.btn-icon.active.recording` - Applied via `btnMic.classList.add('active', 'recording')`
 - Both removed via `btnMic.classList.remove('active', 'recording')`
 
 #### Message Classes
+
 - `.message.user` - Applied via `wrap.className = 'message ' + role` when `role === 'user'`
 - `.message.assistant` - Applied via `wrap.className = 'message ' + role` when `role === 'assistant'`
 
 #### Attachment Classes (Created Dynamically)
+
 - `.attachments` - Container div for all attachments
 - `.attachment-audio` - Wrapper for audio file attachments
 - `.btn-attachment` - Download button for audio files
@@ -1843,6 +1940,7 @@ The JavaScript expects these elements to exist (throws error if missing):
 ### JavaScript Dependencies
 
 The UI JavaScript (`app.js`) imports:
+
 - `CartesiaAudioBridge` from `./cartesia-audio-bridge.js`
 - `buildN8nPayload`, `extractReplyFromJson`, `extractFilesFromJson`, `getNaturalFallback` from `./n8n-payload.js`
 - `addOcrToAttachments` from `./ocr-tool.js`
@@ -1854,9 +1952,11 @@ The UI JavaScript (`app.js`) imports:
 ## Complete Copy-Paste Ready Code
 
 ### Full HTML with Inline CSS
+
 The complete HTML file with all styles inline is available in `public/index.html`. Copy the entire `<style>` block and HTML structure from that file.
 
 ### Key JavaScript Classes Used
+
 - `.status.listening` - Applied when listening
 - `.status.speaking` - Applied when speaking
 - `.status.error` - Applied on errors
@@ -1870,7 +1970,9 @@ The complete HTML file with all styles inline is available in `public/index.html
 ## CSS Formatting Notes
 
 ### Exact CSS Formatting
+
 The CSS in `public/index.html` uses:
+
 - 2-space indentation (not tabs)
 - No trailing semicolons on closing braces
 - Comments use `/* */` format
@@ -1879,7 +1981,9 @@ The CSS in `public/index.html` uses:
 ### Special CSS Details
 
 #### Input Wrap Before Pseudo-element
+
 The `.input-wrap::before` rule has specific indentation (note the extra spaces before `background`):
+
 ```css
 .input-wrap::before {
   content: '';
@@ -1892,22 +1996,29 @@ The `.input-wrap::before` rule has specific indentation (note the extra spaces b
   ...
 }
 ```
+
 This extra indentation is preserved from the original source file.
 
 #### Border Image Syntax
+
 The header uses `border-image` with a gradient:
+
 ```css
 border-image: linear-gradient(90deg, transparent, var(--iron-red), var(--gold), var(--iron-red-bright), var(--gold), var(--iron-red), transparent) 1;
 ```
+
 The `1` at the end sets the border-image-slice to 1.
 
 #### Mask Composite
+
 The `.chat-interface::after` and `.input-wrap::before` use mask-composite:
+
 ```css
 -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
 -webkit-mask-composite: xor;
 mask-composite: exclude;
 ```
+
 This creates a border effect using CSS masks.
 
 ---
@@ -1915,6 +2026,7 @@ This creates a border effect using CSS masks.
 ## Verification Checklist
 
 ### HTML Elements
+
 - [x] DOCTYPE declaration
 - [x] HTML lang attribute
 - [x] Meta charset and viewport
@@ -1934,6 +2046,7 @@ This creates a border effect using CSS masks.
 - [x] All ARIA attributes
 
 ### CSS Variables
+
 - [x] All background colors
 - [x] All gold color variants
 - [x] All red/iron-red color variants
@@ -1942,6 +2055,7 @@ This creates a border effect using CSS masks.
 - [x] Easing functions
 
 ### CSS Rules
+
 - [x] Universal selector (*)
 - [x] Body and pseudo-elements
 - [x] Chat interface and pseudo-elements
@@ -1961,6 +2075,7 @@ This creates a border effect using CSS masks.
 - [x] File input hiding
 
 ### JavaScript Integration
+
 - [x] setStatus function documentation
 - [x] syncMicButton function documentation
 - [x] appendMessage function documentation
@@ -1973,6 +2088,7 @@ This creates a border effect using CSS masks.
 - [x] Required DOM elements
 
 ### SVG Icons
+
 - [x] Paperclip icon (full SVG)
 - [x] Send icon (full SVG)
 - [x] Microphone icon (full SVG)
@@ -1980,6 +2096,7 @@ This creates a border effect using CSS masks.
 - [x] Icon styling and transforms
 
 ### Documentation
+
 - [x] Color palette with hex codes
 - [x] Typography specifications
 - [x] Component dimensions
@@ -1995,6 +2112,7 @@ This creates a border effect using CSS masks.
 ## Complete File Reference
 
 ### Source Files
+
 - **HTML**: `public/index.html` - Complete HTML with inline CSS
 - **JavaScript**: `public/js/app.js` - UI control and interaction logic
 - **Audio Bridge**: `public/js/cartesia-audio-bridge.js` - STT/TTS integration
@@ -2004,10 +2122,12 @@ This creates a border effect using CSS masks.
 - **Debug**: `public/js/debug.js` - Debug logging utilities
 
 ### Asset Files
+
 - **STT Processor**: `public/audio/stt-capture-processor.js` - AudioWorklet for STT
 - **TTS Processor**: `public/audio/tts-playback-processor.js` - AudioWorklet for TTS
 
 ### Configuration
+
 - **Environment Variables**: `.env` file (not in repo, use `VITE_` prefix)
 - **Window Config**: `window.JARVIS_CONFIG` object in HTML script tag
 
@@ -2016,6 +2136,7 @@ This creates a border effect using CSS masks.
 **End of UI Specifications**
 
 This document contains every single detail about the JARVIS UI codebase, including:
+
 - All CSS rules and properties
 - All HTML structure and attributes
 - All JavaScript class manipulations

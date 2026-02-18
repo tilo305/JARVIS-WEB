@@ -107,30 +107,36 @@
 ## Key Integration Points
 
 ### 1. Mic Button → Bridge
+
 - **Connection:** `btnMic.addEventListener('click', ...)` → `bridge.startSTT()` / `bridge.stopSTT()`
 - **Status:** ✅ Verified
 
 ### 2. Bridge → AudioWorklet
+
 - **STT:** `audioContext.audioWorklet.addModule('stt-capture-processor.js')` → `new AudioWorkletNode('stt-capture-processor')`
 - **TTS:** `audioContext.audioWorklet.addModule('tts-playback-processor.js')` → `new AudioWorkletNode('tts-playback-processor')`
 - **Status:** ✅ Verified
 
 ### 3. Bridge → VAD
+
 - **Initialization:** `MicVAD.new(vadOptions)` in `startSTT()`
 - **Callbacks:** `onSpeechStart`, `onSpeechEnd`, `onVADMisfire` wired to bridge callbacks
 - **Status:** ✅ Verified
 
 ### 4. Bridge → WebSockets
+
 - **STT:** `connectSTTWebSocket()` → `wss://api.cartesia.ai/stt/websocket`
 - **TTS:** `connectTTS()` → `wss://api.cartesia.ai/tts/websocket`
 - **Status:** ✅ Verified
 
 ### 5. Frontend → Backend (n8n)
+
 - **Connection:** `getLLMReply()` → `fetch(n8nWebhookUrl, { method: 'POST', ... })`
 - **Payload:** `buildN8nPayload()` creates full payload with session_id, attachments, etc.
 - **Status:** ✅ Verified
 
 ### 6. UI State Synchronization
+
 - **Mic Button:** `syncMicButton(recording, disabled)` called on state changes
 - **Status:** `setStatus(text, className)` called on events
 - **Callbacks:** All bridge callbacks update UI appropriately

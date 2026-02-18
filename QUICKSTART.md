@@ -131,11 +131,13 @@ export const CARTESIA_CONFIG = {
 ## Audio Format Requirements
 
 ### STT Input
+
 - **Format**: PCM s16le (signed 16-bit little-endian)
 - **Sample Rate**: 16000 Hz
 - **Chunk Size**: 100ms (1600 samples = 3200 bytes per chunk)
 
 ### TTS Output
+
 - **Format**: PCM s16le
 - **Sample Rate**: 8000 Hz (configurable)
 - **Encoding**: Base64 in WebSocket messages
@@ -159,18 +161,21 @@ node dist/examples/simple-stt.js
 ## Key Implementation Details
 
 ### Continuations for Seamless Audio
+
 - Use same `context_id` for related text chunks
 - Set `continue: true` for intermediate chunks
 - Set `continue: false` for final chunk
 - Maintains prosody across streamed inputs
 
 ### Low Latency Strategy
+
 1. **STT**: Process `is_final: false` transcripts immediately
 2. **TTS**: Stream inputs as soon as received
 3. **Buffering**: Use `max_buffer_delay_ms: 0` if client-side buffering
 4. **Chunks**: Send 100ms audio chunks for optimal STT latency
 
 ### Error Handling
+
 - Automatic reconnection (up to 5 attempts)
 - Context cancellation on errors
 - WebSocket timeout handling (3 minutes)

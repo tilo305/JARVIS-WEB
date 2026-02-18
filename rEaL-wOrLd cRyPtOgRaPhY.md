@@ -15,27 +15,31 @@ A practical guide to cryptography for developers. Covers modern cryptographic te
 ## Key Concepts Relevant to JARVIS-WEB
 
 ### 1. API Key Protection
+
 - Secure key storage and transmission
-- **Applied**: 
+- **Applied**:
   - API key environment variables
   - Never hardcode keys
   - Secure key management
 
 ### 2. Secure WebSocket Connections
+
 - TLS/WSS for WebSocket security
-- **Applied**: 
+- **Applied**:
   - HTTPS requirement for production
   - WSS protocol for WebSocket connections
 
 ### 3. Authentication Tokens
+
 - Token-based authentication
-- **Applied**: 
+- **Applied**:
   - API key as authentication token
   - Token validation
 
 ### 4. Encryption for Sensitive Data
+
 - Encrypting sensitive data in transit
-- **Applied**: 
+- **Applied**:
   - HTTPS for all connections
   - Secure WebSocket connections
 
@@ -44,16 +48,19 @@ A practical guide to cryptography for developers. Covers modern cryptographic te
 ## Key Topics Relevant to JARVIS-WEB
 
 ### API Key Security
+
 - Key storage best practices
 - Key transmission security
 - **Applied**: Environment variable storage
 
 ### WebSocket Security
+
 - TLS/WSS implementation
 - Secure connection establishment
 - **Applied**: HTTPS requirement
 
 ### Data Protection
+
 - Encrypting sensitive data
 - **Applied**: HTTPS enforcement
 
@@ -78,11 +85,13 @@ A practical guide to cryptography for developers. Covers modern cryptographic te
 ## Implementation Status
 
 ✅ **Partially Implemented**:
+
 - API key security practices
 - HTTPS enforcement
 - Secure connection requirements
 
 📋 **Recommended** (from this book):
+
 - Advanced key management
 - Token-based authentication
 - End-to-end encryption for sensitive data
@@ -92,11 +101,13 @@ A practical guide to cryptography for developers. Covers modern cryptographic te
 ## Access Information
 
 **Free Access**:
+
 - Manning Free Content Center - Free chapters available
 - Public libraries - Check digital library access
 - O'Reilly Learning Platform (with subscription)
 
 **Purchase**:
+
 - Manning Publications (official publisher)
 - Amazon, Barnes & Noble
 - ~$40-50 USD

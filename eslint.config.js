@@ -14,6 +14,7 @@ export default tseslint.config(
       "dist/**",
       "dist-public/**",
       "**/dist-public/**",
+      "build/**",
       "coverage/**",
       "*.md",
       "*.min.js",
@@ -49,6 +50,58 @@ export default tseslint.config(
       "no-undef": "off", // TypeScript handles this
       "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
       "no-console": "off",
+    },
+  },
+
+  // Electron (catch-all; main/preload blocks below override for correct sourceType)
+  {
+    files: ["electron/**/*.js"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: {
+        ...globals.node,
+        require: "readonly",
+      },
+    },
+    rules: {
+      "no-console": "off",
+      "no-undef": "off",
+    },
+  },
+
+  // Electron main process (ESM)
+  {
+    files: ["electron/main.js"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: {
+        ...globals.node,
+      },
+    },
+    rules: {
+      "no-console": "off",
+      "no-undef": "off",
+    },
+  },
+
+  // Electron preload (CommonJS in isolated context)
+  {
+    files: ["electron/preload.js"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "commonjs",
+      globals: {
+        ...globals.node,
+        require: "readonly",
+        process: "readonly",
+        contextBridge: "readonly",
+      },
+    },
+    rules: {
+      "no-console": "off",
+      "no-undef": "off",
     },
   },
 

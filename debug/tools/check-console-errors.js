@@ -8,9 +8,9 @@
  *   node debug/tools/check-console-errors.js
  */
 
-import { readFileSync, existsSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { readFileSync, existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '../..');
@@ -127,6 +127,10 @@ function main() {
     {
       path: join(root, 'public/js/cartesia-audio-bridge.js'),
       desc: 'Cartesia Audio Bridge'
+    },
+    {
+      path: join(root, 'public/js/cors-handler.js'),
+      desc: 'CORS Handler (diagnostics)'
     }
   ];
   

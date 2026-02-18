@@ -5,8 +5,8 @@
  * This script is a no-op; kept for compatibility with any docs that mention npm run sync-env.
  */
 import { getProjectRoot } from './load-env-everywhere.mjs';
-import { dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 getProjectRoot(__dirname); // ensure module resolves

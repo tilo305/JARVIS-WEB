@@ -15,25 +15,29 @@ A book focused on secure design patterns for domain-driven design, with emphasis
 ## Key Concepts Relevant to JARVIS-WEB
 
 ### 1. Domain-Driven Security
+
 - Security as part of domain model
 - **Applied**: Security utilities as domain concepts
 
 ### 2. TypeScript/JavaScript Security
+
 - Language-specific security patterns
-- **Applied**: 
+- **Applied**:
   - TypeScript security utilities (`src/security/validation.ts`)
   - JavaScript client-side security (`public/js/security.js`)
 
 ### 3. Secure API Design
+
 - API security principles
-- **Applied**: 
+- **Applied**:
   - Webhook security
   - API key management
   - Rate limiting
 
 ### 4. Node.js Security
+
 - Server-side security patterns
-- **Applied**: 
+- **Applied**:
   - Server security headers
   - Path traversal prevention
   - Secure error handling
@@ -43,16 +47,19 @@ A book focused on secure design patterns for domain-driven design, with emphasis
 ## Key Topics Relevant to JARVIS-WEB
 
 ### Secure Coding Patterns
+
 - Input validation patterns
 - Output sanitization patterns
 - **Applied**: Comprehensive validation utilities
 
 ### API Security
+
 - Authentication patterns
 - Authorization patterns
 - **Applied**: API key security, rate limiting
 
 ### Domain Security
+
 - Security as domain concept
 - **Applied**: Security modules as first-class citizens
 
@@ -77,11 +84,13 @@ A book focused on secure design patterns for domain-driven design, with emphasis
 ## Implementation Status
 
 ✅ **Partially Implemented**:
+
 - TypeScript security utilities
 - JavaScript security patterns
 - Secure API design principles
 
 📋 **Recommended** (from this book):
+
 - Domain-driven security modeling
 - Advanced TypeScript security patterns
 - Secure API design patterns
@@ -91,11 +100,13 @@ A book focused on secure design patterns for domain-driven design, with emphasis
 ## Access Information
 
 **Free Access**:
+
 - Manning Free Content Center - Free chapters available
 - Public libraries - Check digital library access
 - O'Reilly Learning Platform (with subscription)
 
 **Purchase**:
+
 - Manning Publications (official publisher)
 - Amazon, Barnes & Noble
 - ~$40-50 USD

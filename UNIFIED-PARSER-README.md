@@ -21,6 +21,7 @@ The unified parser combines the following parsers:
 ## Usage
 
 ### Parse All Files
+
 ```bash
 node parse-all-files.js
 # or explicitly
@@ -28,6 +29,7 @@ node parse-all-files.js --type=all
 ```
 
 ### Parse Specific File Types
+
 ```bash
 # Backend files only
 node parse-all-files.js --type=backend
@@ -46,6 +48,7 @@ node parse-all-files.js --type=vite
 ```
 
 ### Custom Output File
+
 ```bash
 node parse-all-files.js --output=custom-results.json
 ```
@@ -82,15 +85,18 @@ The parser generates `all-parse-results.json` (or custom filename) with the foll
 ## What Gets Parsed
 
 ### Backend Files
+
 - TypeScript files (`.ts`) in `src/`, `tests/`, `debug/tests/`
 - Extracts: classes, interfaces, types, functions, imports, exports, dependencies
 
 ### Frontend Files
+
 - HTML files - structure, elements, scripts, styles
 - JavaScript/TypeScript files - functions, classes, WebSocket usage, AudioWorklet processors
 - CSS files - rules, selectors, variables, media queries
 
 ### Specialized Parsers
+
 - **Client files** - Identifies STT, TTS, WebSocket clients with endpoints and protocols
 - **Cartesia files** - Cartesia API usage, classes, endpoints
 - **VAD files** - Voice Activity Detection imports and configuration
@@ -160,7 +166,6 @@ You can now use `parse-all-files.js` instead of running individual parsers:
 - ❌ `node parse-frontend-complete.js`
 - ❌ `node parse-client-files.js`
 - ❌ `node parse-cartesia-files.js`
-- ❌ `node parse-websocket-files.js`
 - ❌ `node parse-json-files.js`
 - ❌ `node parse-md-files.js`
 - ❌ `node parse-vite-files.js`

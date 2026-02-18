@@ -24,10 +24,10 @@
  *   node parse-all-files.js --type=bridge      # Parse only bridge files
  */
 
-import { readFileSync, statSync, readdirSync, writeFileSync } from 'fs';
+import { readFileSync, statSync, readdirSync, writeFileSync } from 'node:fs';
 import { glob } from 'glob';
-import { fileURLToPath } from 'url';
-import { dirname, join, relative } from 'path';
+import { fileURLToPath } from 'node:url';
+import { dirname, join, relative } from 'node:path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

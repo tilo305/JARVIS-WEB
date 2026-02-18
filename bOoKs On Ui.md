@@ -13,6 +13,7 @@ Essential reference materials for building modern web interfaces with best pract
 WebGL enables 3D graphics in web browsers without plugins. It follows OpenGL ES 2.0 specification and executes on the GPU.
 
 **The Rendering Pipeline:**
+
 ```
 Vertex Data → Vertex Shader → Primitive Assembly → Rasterization → 
 Fragment Shader → Per-Fragment Operations → Framebuffer
@@ -21,11 +22,13 @@ Fragment Shader → Per-Fragment Operations → Framebuffer
 ### Shaders
 
 **Vertex Shader** - Processes each vertex independently, transforming 3D coordinates to screen space.
+
 - **Attributes:** Per-vertex data (position, color, normals)
 - **Uniforms:** Global values (matrices, time, light direction)
 - **Varyings:** Data passed to fragment shader (interpolated)
 
 **Fragment Shader** - Determines the color of each pixel (fragment).
+
 - Texturing and sampling
 - Lighting calculations
 - Special effects (glow, scan lines, distortion)
@@ -38,6 +41,7 @@ Model Space → World Space → View Space → Clip Space → NDC → Screen Spa
 ```
 
 **Transformation Matrices:**
+
 - **Model Matrix:** Object's position/rotation/scale in world
 - **View Matrix:** Camera's position and orientation
 - **Projection Matrix:** Perspective or orthographic projection
@@ -46,6 +50,7 @@ Model Space → World Space → View Space → Clip Space → NDC → Screen Spa
 ### Drawing Basic Shapes
 
 WebGL can draw only three types of shapes directly:
+
 - **Points:** `gl.POINTS`
 - **Lines:** `gl.LINES`, `gl.LINE_STRIP`, `gl.LINE_LOOP`
 - **Triangles:** `gl.TRIANGLES`, `gl.TRIANGLE_STRIP`, `gl.TRIANGLE_FAN`
@@ -55,6 +60,7 @@ Complex 3D objects are built from triangles. A game character may have tens of t
 ### Buffer Objects
 
 Five steps to pass data to vertex shader:
+
 1. Create buffer object: `gl.createBuffer()`
 2. Bind to target: `gl.bindBuffer(gl.ARRAY_BUFFER, buffer)`
 3. Write data: `gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW)`
@@ -64,6 +70,7 @@ Five steps to pass data to vertex shader:
 ### Typed Arrays
 
 WebGL uses typed arrays for performance:
+
 - `Float32Array` - 32-bit floats (vertex coordinates, colors)
 - `Uint16Array` - 16-bit unsigned integers (indices)
 - `Int8Array`, `Uint8Array`, `Int16Array`, `Int32Array`, `Uint32Array`, `Float64Array`
@@ -71,6 +78,7 @@ WebGL uses typed arrays for performance:
 ### Transformation Matrices
 
 **Rotation Matrix (Z-axis):**
+
 ```
 [cos θ  -sin θ  0  0]
 [sin θ   cos θ  0  0]
@@ -79,6 +87,7 @@ WebGL uses typed arrays for performance:
 ```
 
 **Translation Matrix:**
+
 ```
 [1  0  0  Tx]
 [0  1  0  Ty]
@@ -87,6 +96,7 @@ WebGL uses typed arrays for performance:
 ```
 
 **Scale Matrix:**
+
 ```
 [Sx  0   0   0]
 [0   Sy  0   0]
@@ -97,16 +107,19 @@ WebGL uses typed arrays for performance:
 ### Lighting
 
 **Types of Light:**
+
 - **Directional Light:** Light from specific direction (e.g., sun)
 - **Point Light:** Light from specific position
 - **Ambient Light:** General environmental light
 
 **Reflection Types:**
+
 - **Diffuse Reflection:** Surface color from light direction
 - **Ambient Reflection:** Base illumination
 - **Specular Reflection:** Shiny highlights
 
 **Phong Lighting Formula:**
+
 ```glsl
 vec3 color = ambient + diffuse * nDotL + specular * pow(sDotR, shininess);
 ```
@@ -114,18 +127,21 @@ vec3 color = ambient + diffuse * nDotL + specular * pow(sDotR, shininess);
 ### Advanced Techniques
 
 **Alpha Blending:**
+
 ```javascript
 gl.enable(gl.BLEND);
 gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 ```
 
 **Depth Testing (Hidden Surface Removal):**
+
 ```javascript
 gl.enable(gl.DEPTH_TEST);
 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 ```
 
 **Texture Mapping:**
+
 ```javascript
 // 1. Load image
 const image = new Image();
@@ -156,18 +172,21 @@ Microinteractions are the smallest unit of user interaction - single-use-case pr
 #### 1. Notifications and Alerts
 
 **Principles:**
+
 - Visualize quantitative information
 - Use notification as a nudge
 - Enable appropriate medium of interaction
 - Maintain functional continuity
 
 **Key Strategies:**
+
 - Show progress visually (progress bars, circular indicators)
 - Use color coding for different states
 - Reduce complexity by converting continuous data to discrete units
 - Time notifications strategically for maximum engagement
 
 **Examples:**
+
 - **Progress Indicators:** Show download/upload status with animated bars
 - **Status Updates:** Display battery, network, system status in real-time
 - **Smart Nudges:** Send motivational notifications at optimal times
@@ -175,18 +194,21 @@ Microinteractions are the smallest unit of user interaction - single-use-case pr
 #### 2. Keeping Context
 
 **Principles:**
+
 - Maintain continuity within sequence of interactions
 - Extend experiences across media
 - Keep in touch with the moment
 - Interact with physical objects through virtual interfaces
 
 **Key Strategies:**
+
 - Use animations to maintain context between steps
 - Sync data across user's device ecosystem
 - Make products aware of real-world context (time, location, events)
 - Create relationships between physical objects through digital interfaces
 
 **Examples:**
+
 - **Sequential Flow:** Multi-step forms with continuous visual feedback
 - **Cross-Device Sync:** Content automatically synchronized across devices
 - **Contextual Awareness:** UI adapts to time, location, or events
@@ -195,18 +217,21 @@ Microinteractions are the smallest unit of user interaction - single-use-case pr
 #### 3. Setting Smart Defaults
 
 **Principles:**
+
 - Set preferences that reduce complexity
 - Bring forward recent and repetitive actions
 - Anticipate probable user actions
 - Drive selection among large pool of choices
 
 **Key Strategies:**
+
 - Organize cluttered lists automatically
 - Prioritize content based on detected context
 - Show recently used items first
 - Predict and suggest based on behavioral patterns
 
 **Examples:**
+
 - **Auto-categorization:** Automatically sort content into categories
 - **Recent Actions:** Show last-used items first
 - **Auto-suggest:** Predict common responses or actions
@@ -215,17 +240,20 @@ Microinteractions are the smallest unit of user interaction - single-use-case pr
 #### 4. Interacting with Data Elements
 
 **Principles:**
+
 - Provide appropriate input method
 - Provide live feedback
 - Navigate through content efficiently
 
 **Key Strategies:**
+
 - Use sliders for range inputs instead of typing
 - Provide word suggestions for better text input
 - Enable live preview before committing actions
 - Use multi-touch gestures for exploring details
 
 **Examples:**
+
 - **Range Selection:** Price slider with live value display
 - **Auto-complete:** Suggestions while typing
 - **Live Preview:** Filter preview before applying
@@ -234,17 +262,20 @@ Microinteractions are the smallest unit of user interaction - single-use-case pr
 #### 5. Writing, Linking, Sharing Content
 
 **Principles:**
+
 - Highlight content that needs focus
 - Make links informative
 - Give real-time feedback of actions
 
 **Key Strategies:**
+
 - Enlarge or highlight focus area
 - Dim unnecessary background features
 - Provide URL previews when sharing links
 - Show typing status in real-time
 
 **Examples:**
+
 - **Focus Mode:** Hide UI elements during reading/writing
 - **Link Previews:** Show image/title when sharing URLs
 - **Status Indicators:** "Typing..." indicator in messaging
@@ -253,18 +284,21 @@ Microinteractions are the smallest unit of user interaction - single-use-case pr
 #### 6. Preventing Human Error
 
 **Principles:**
+
 - Provide assistive information adjacent to inputs
 - Provide buffer step/time before critical outcomes
 - Reduce cognitive load
 - Create opportunities for error rectification
 
 **Key Strategies:**
+
 - Show input format hints that disappear after entry
 - Add confirmation step before destructive actions
 - Auto-suggest to reduce memory requirements
 - Highlight errors without blocking workflow
 
 **Examples:**
+
 - **Input Hints:** Sample format shown in empty fields
 - **Confirmation Dialogs:** "Save changes?" before exiting
 - **Auto-complete:** Suggestions reduce typos
@@ -273,30 +307,35 @@ Microinteractions are the smallest unit of user interaction - single-use-case pr
 ### Design Strategies Summary
 
 **For Notifications:**
+
 1. Use best-suited visualization (graph, pie chart, timeline)
 2. Color-code elements by status or functionality
 3. Add visual appeal with icons or illustrations
 4. Provide smart reasoning backed by data
 
 **For Context:**
+
 1. Identify individual steps in complex tasks
 2. Show what needs to be done at each step
 3. Use intuitive patterns (animations, transitions)
 4. Generate device-specific interactions
 
 **For Defaults:**
+
 1. Organize content into simple categories
 2. Suggest grouped choices to reduce decisions
 3. Auto-detect and adapt to user's situation
 4. Provide configuration options
 
 **For Input:**
+
 1. Use URL previews before sharing
 2. Have WYSIWYG editors for visual data
 3. Animate icons to indicate task nature
 4. Detect and display content while typing
 
 **For Error Prevention:**
+
 1. Provide hints before and during input
 2. Add extra step before critical actions
 3. Use different interaction types at decision points
@@ -328,6 +367,7 @@ Interfaces are means to users' ends. Users don't want to use your interface - th
 ### Information Architecture
 
 **Four System Screen Types:**
+
 1. **OVERVIEW** - List/grid of options
 2. **FOCUS** - Single thing in detail
 3. **MAKE** - Tools to create something
@@ -336,12 +376,14 @@ Interfaces are means to users' ends. Users don't want to use your interface - th
 **Essential Patterns:**
 
 **Dashboard Pattern:**
+
 - At-a-glance view of key metrics
 - Real-time data updates
 - Customizable widgets
 - Critical for monitoring applications
 
 **Hub and Spoke Pattern:**
+
 ```
         Section A
               |
@@ -349,16 +391,19 @@ Section D - [CORE] - Section B
               |
         Section C
 ```
+
 - Central hub connects to all subsystems
 - Users return to center
 - Clear navigation paths
 
 **Canvas Plus Palette:**
+
 - Large workspace + tool palette
 - Separate tools from work area
 - Ideal for creative or control interfaces
 
 **Alternative Views:**
+
 - Multiple ways to view same data
 - List, grid, map, chart views
 - Essential for data analysis
@@ -376,19 +421,23 @@ Section D - [CORE] - Section B
 ### Layout Patterns
 
 **Visual Framework:**
+
 - Consistent header, footer, sidebars
 - Users learn once, use everywhere
 
 **Center Stage:**
+
 - Main content in center
 - Supporting info on sides
 - Focus on primary content
 
 **Grid of Equals:**
+
 - Items of equal importance
 - Good for galleries and dashboards
 
 **Responsive Patterns:**
+
 - Vertical Stack (mobile-first)
 - Generous Borders (touch-friendly)
 - Bottom Navigation (thumb-zone)
@@ -396,16 +445,19 @@ Section D - [CORE] - Section B
 ### Data Display Patterns
 
 **Two-Panel Selector:**
+
 - List on left, details on right
 - Master-detail pattern
 - Efficient for browsing
 
 **List Inlay:**
+
 - Expand items inline
 - Quick preview without navigation
 - Excellent for notifications
 
 **Thumbnail Grid:**
+
 - Visual browsing
 - Good for media content
 - Visual hierarchy
@@ -413,16 +465,19 @@ Section D - [CORE] - Section B
 ### Input Patterns
 
 **Forgiving Format:**
+
 - Accept multiple input formats
 - Auto-detect and convert
 - User-friendly validation
 
 **Autocompletion:**
+
 - Predict and suggest completions
 - Essential for search and forms
 - Reduces typing and errors
 
 **Input Hints:**
+
 - Placeholder text
 - Contextual help
 - Format indicators
@@ -430,21 +485,25 @@ Section D - [CORE] - Section B
 ### Action Patterns
 
 **Prominent "Done" Button:**
+
 - Clear primary action
 - Visually distinct
 - One-click completion
 
 **Smart Menu Items:**
+
 - Context-aware options
 - Only show relevant actions
 - Reduce cognitive load
 
 **Action Panel:**
+
 - Group related actions
 - Slide-in from side
 - Quick access without modal
 
 **Hover Tools:**
+
 - Show on mouse hover
 - Context-sensitive
 - Reduce UI clutter
@@ -469,6 +528,7 @@ Section D - [CORE] - Section B
 ### Timing Guidelines
 
 **Duration Standards:**
+
 - **Instant** 100ms - Button press feedback
 - **Quick** 200ms - Toggle switches, checkboxes
 - **Fast** 300ms - Panel open/close, dropdowns
@@ -481,11 +541,13 @@ Section D - [CORE] - Section B
 ### Animation Best Practices
 
 **Performance Optimized Properties:**
+
 - `transform` - Use for position/scale/rotation
 - `opacity` - Use for fade effects
 - **Avoid animating:** `width`, `height`, `left`, `top`, `margin` (causes layout reflow)
 
 **60 FPS Guidelines:**
+
 - Use GPU-accelerated properties (`transform`, `opacity`)
 - Avoid properties that trigger layout recalculation
 - Use `will-change` sparingly for known animations
@@ -500,6 +562,7 @@ Section D - [CORE] - Section B
 **Server-Side Rendering (SSR)** renders components on the server before sending HTML to the client, providing SEO benefits, faster initial loads, and better performance.
 
 **SSR Architecture:**
+
 ```
 1. 📡 REQUEST ARRIVES → Server receives HTTP request
 2. 🏗️ SERVER-SIDE RENDERING → React renders on Node.js (NO browser APIs)
@@ -587,6 +650,7 @@ const screenWidth = isBrowser ? window.screen.width : 1920;
 ## Quick Reference
 
 ### WebGL Key Methods
+
 - `gl.createBuffer()` - Create buffer
 - `gl.bindBuffer(target, buffer)` - Bind buffer
 - `gl.bufferData(target, data, usage)` - Write data
@@ -597,6 +661,7 @@ const screenWidth = isBrowser ? window.screen.width : 1920;
 - `gl.enable(gl.BLEND)` - Enable blending
 
 ### Microinteraction Checklist
+
 - [ ] Provides immediate feedback
 - [ ] Reduces cognitive load
 - [ ] Maintains context through transitions
@@ -606,6 +671,7 @@ const screenWidth = isBrowser ? window.screen.width : 1920;
 - [ ] Includes buffer for critical actions
 
 ### Interface Pattern Checklist
+
 - [ ] Clear entry points
 - [ ] Easy escape hatches
 - [ ] Progress indicators for multi-step

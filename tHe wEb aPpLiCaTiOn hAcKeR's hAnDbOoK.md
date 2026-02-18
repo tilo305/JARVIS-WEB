@@ -15,39 +15,44 @@ A comprehensive guide to web application security testing and exploitation. Whil
 ## Key Concepts Relevant to JARVIS-WEB
 
 ### 1. File Upload Security
+
 - File upload vulnerabilities
 - MIME type spoofing
 - Path traversal attacks
-- **Applied**: 
+- **Applied**:
   - Comprehensive file validation
   - Magic bytes verification
   - Filename sanitization
 
 ### 2. XSS Prevention
+
 - Cross-Site Scripting attacks
 - XSS prevention techniques
-- **Applied**: 
+- **Applied**:
   - Webhook response sanitization
   - HTML entity escaping
   - Output encoding
 
 ### 3. CSRF Protection
+
 - Cross-Site Request Forgery
-- **Applied**: 
+- **Applied**:
   - Security headers
   - Origin validation (recommended)
 
 ### 4. Client-Side Security
+
 - Browser security
 - AudioWorklet security context
-- **Applied**: 
+- **Applied**:
   - HTTPS requirement
   - Security headers
   - CSP configuration
 
 ### 5. CORS Security
+
 - Cross-Origin Resource Sharing
-- **Applied**: 
+- **Applied**:
   - CORS headers
   - Origin validation (recommended)
 
@@ -56,23 +61,26 @@ A comprehensive guide to web application security testing and exploitation. Whil
 ## Key Chapters Relevant to JARVIS-WEB
 
 ### File Upload Vulnerabilities
+
 - **Relevance**: File upload security
-- **Applied**: 
+- **Applied**:
   - Extension validation
   - MIME type validation
   - Magic bytes verification
   - Size limits
 
 ### XSS Attacks
+
 - **Relevance**: Webhook response security
-- **Applied**: 
+- **Applied**:
   - Output sanitization
   - HTML escaping
   - Content Security Policy
 
 ### Client-Side Attacks
+
 - **Relevance**: Browser security
-- **Applied**: 
+- **Applied**:
   - Security headers
   - HTTPS enforcement
   - CSP configuration
@@ -98,12 +106,14 @@ A comprehensive guide to web application security testing and exploitation. Whil
 ## Implementation Status
 
 ✅ **Fully Implemented**:
+
 - File upload security
 - XSS prevention
 - Client-side security
 - Security headers
 
 📋 **Recommended** (from this book):
+
 - CSRF token implementation
 - Advanced CORS validation
 - Security testing procedures
@@ -113,11 +123,13 @@ A comprehensive guide to web application security testing and exploitation. Whil
 ## Access Information
 
 **Free Access**:
+
 - Internet Archive (archive.org) - May be available for borrowing
 - Public libraries - Check digital library access
 - O'Reilly Learning Platform (with subscription)
 
 **Purchase**:
+
 - Wiley (official publisher)
 - Amazon, Barnes & Noble
 - ~$50-60 USD

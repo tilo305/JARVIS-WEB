@@ -3,9 +3,9 @@
  * Downloads and formats OWASP guides properly
  */
 
-import { writeFile } from 'fs/promises';
-import { join } from 'path';
-import https from 'https';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import https from 'node:https';
 
 const BOOKS_DIR = process.cwd();
 

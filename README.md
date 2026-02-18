@@ -33,6 +33,7 @@ VITE_N8N_WEBHOOK_URL=https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-
 **n8n LLM integration:** The chat UI sends user messages to the n8n webhook (POST JSON `{ "message": "..." }`). Your n8n workflow should return a JSON response with a reply field (`output`, `reply`, `result`, `text`, or `message`). The webhook URL is configured in `src/config.ts` and defaults to the value above; override with `VITE_N8N_WEBHOOK_URL` in `.env`.
 
 **File creation:** When the user asks for a PDF, image, or text file, your n8n workflow can return a `files` array (or `createFiles`) alongside the reply. Each item must have `type` and type-specific fields; the app will generate and trigger a download. Supported types:
+
 - **pdf**: `{ type: "pdf", title?: "Title", content: "Body text", filename?: "report.pdf" }`.
 - **image**: `{ type: "image", data: "base64...", mime?: "image/png", filename?: "image.png" }`.
 - **text**: `{ type: "text", content: "...", filename?: "notes.txt" }`.
@@ -52,6 +53,7 @@ Opens at `http://localhost:3000` with the Iron Man–themed chat: chat history, 
 ## Configuration
 
 Edit `src/config.ts` to customize (aligned with **cArTeSiA dOcS.md** for optimal latency):
+
 - API key and voice ID
 - **n8n webhook URL** (`N8N_WEBHOOK_URL`) for LLM responses
 - **TTS model**: default `sonic-turbo` (40ms first byte) for live real-time; use `sonic-3` for 90ms
@@ -114,20 +116,22 @@ Run the example files:
 npm run example
 
 # Simple TTS
-node dist/examples/simple-tts.js
+node dist/src/examples/simple-tts.js
 
 # Simple STT
-node dist/examples/simple-stt.js
+node dist/src/examples/simple-stt.js
 ```
 
 ## Audio Format Requirements
 
 ### STT Input
+
 - **Format**: PCM s16le (signed 16-bit little-endian)
 - **Sample Rate**: 16000 Hz
 - **Chunk Size**: 100ms intervals (1600 samples = 3200 bytes)
 
 ### TTS Output
+
 - **Format**: PCM s16le
 - **Sample Rate**: 8000 Hz (configurable)
 - **Encoding**: Base64 encoded in WebSocket messages
@@ -156,6 +160,7 @@ npm run serve
 ```
 
 Features:
+
 - **Live streaming STT**: VAD gates when to stream; stt-capture-processor streams 100ms chunks during speech; pre-speech buffer (800ms) for utterance onset
 - **Partial transcripts**: `onPartialTranscript` delivers live text as user speaks
 - **Barge-in**: User speaking cancels TTS playback and processes new input
@@ -165,6 +170,49 @@ Features:
 VAD config (`public/js/vad-config.js`) aligns with Voice Bot Design heuristics: `redemptionMs`, `minSpeechMs`, `preSpeechPadMs`, etc.
 
 See `aUdiO dOcS.md` for implementation details. See `bOoK oN vOiCe BoT dEsIgN.md` for VAD rationale.
+
+## Electron (desktop app)
+
+The same chat UI runs as a desktop app via Electron. The main process loads the Vite dev server in development or the built `dist-public` when packaged; the preload script exposes `window.electronAPI` (e.g. `isElectron`, `platform`, `invokeN8nWebhook`) so the renderer can use the n8n webhook without CORS.
+
+**Development (Vite + Electron):**
+
+```bash
+npm run electron
+```
+
+Starts the Vite dev server and launches Electron once `http://localhost:3000` is ready. Uses the same `.env` (Vite injects `VITE_*` at build/dev).
+
+**Run built app (no dev server):**
+
+```bash
+npm run vite:build
+npm run electron:built
+```
+
+**Build for Electron (one shot):**
+
+```bash
+npm run electron:build
+```
+
+**Package as local app (installers):**
+
+Create distributable installers for Windows, macOS, or Linux:
+
+```bash
+npm install
+npm run dist        # Build for current platform
+npm run dist:win    # Windows: .exe installer + portable
+npm run dist:mac    # macOS: .dmg
+npm run dist:linux  # Linux: AppImage
+```
+
+Output goes to `release/`. For packaged builds, put a `.env` file (with `CARTESIA_API_KEY`, `VITE_N8N_WEBHOOK_URL`, etc.) next to the installed executable to override defaults.
+
+---
+
+Validates paths with `node debug/tools/validate-electron-paths.js` after a build. See `docs/ELECTRON-DOCS.md` for official Electron docs and this project’s setup.
 
 ## Documentation
 

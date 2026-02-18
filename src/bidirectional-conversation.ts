@@ -166,19 +166,41 @@ export class BidirectionalConversation {
   }
 
   /**
+   * Strip markdown and symbols so TTS speaks only words (no "asterisk", "bold", etc.).
+   * Matches public/js/app.js stripMarkdownForTTS for consistency.
+   */
+  private stripMarkdownForTTS(text: string): string {
+    if (typeof text !== 'string' && text != null) text = String(text);
+    if (!text || !text.trim()) return '';
+    const t = text
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/\*([^*]+)\*/g, '$1')
+      .replace(/__([^_]+)__/g, '$1')
+      .replace(/_([^_]+)_/g, '$1')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/~~([^~]+)~~/g, '$1')
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      .replace(/\*+/g, '')
+      .replace(/_+/g, ' ')
+      .replace(/\s+/g, ' ');
+    return t.trim();
+  }
+
+  /**
    * Speak text using TTS with optimal streaming (cArTeSiA dOcS: stream as soon as STT/LLM produces text).
    * Splits into sentences and uses continue:true/false for prosody continuity.
    * Optimized for minimal latency: sends chunks immediately without batching.
+   * Strips markdown so TTS does not speak "asterisk", "bold", or other symbols.
    */
   private speakText(text: string, contextId: string): void {
-    // Validate input
-    if (!text || !text.trim()) {
-      console.warn('[Conversation] Empty text provided to speakText');
+    const safeText = this.stripMarkdownForTTS(text);
+    if (!safeText) {
+      console.warn('[Conversation] Empty text after stripMarkdownForTTS');
       return;
     }
 
     // Split text into sentences for continuations (verbatim spacing preserved)
-    const sentences = this.splitIntoSentences(text);
+    const sentences = this.splitIntoSentences(safeText);
     
     if (sentences.length > 1) {
       // Stream multiple sentences with continuations
@@ -186,7 +208,7 @@ export class BidirectionalConversation {
       this.ttsClient.streamTextChunks(sentences, contextId);
     } else {
       // Single sentence - send immediately
-      this.ttsClient.sendText(text, contextId, false);
+      this.ttsClient.sendText(safeText, contextId, false);
     }
   }
 

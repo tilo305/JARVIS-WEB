@@ -11,8 +11,8 @@
  * - Whitespace trimming
  */
 
-import { readFileSync, existsSync } from 'fs';
-import { join } from 'path';
+import { readFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { getProjectRoot } from './load-env-everywhere.mjs';
 
 /**
@@ -207,8 +207,8 @@ export function parseMultipleEnvFiles(filePaths, existingEnv = process.env) {
 /**
  * CLI usage: node scripts/parse-env.mjs [file-path]
  */
-import { fileURLToPath } from 'url';
-import { resolve } from 'path';
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 
 // Check if this module is being run directly
 const currentFile = fileURLToPath(import.meta.url);

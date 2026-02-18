@@ -3,8 +3,8 @@
  * Converts HTML chapters to markdown content
  */
 
-import { readFile, readdir, writeFile } from 'fs/promises';
-import { join } from 'path';
+import { readFile, readdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 const BOOK_DIR = 'temp-google-book/raw';
 const OUTPUT_FILE = 'bUiLdInG sEcUrE aNd ReLiAbLe SyStEmS.md';

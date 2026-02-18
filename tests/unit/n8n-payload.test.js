@@ -2,26 +2,21 @@
  * Unit tests for n8n payload builder — ensures full payload is always sent.
  */
 import { describe, it, expect } from '@jest/globals';
-import { buildN8nPayload, getClientLocation, getNaturalFallback, extractReplyFromJson, extractFilesFromJson } from '../../public/js/n8n-payload.js';
-
-const REQUIRED_KEYS = [
-  'message',
-  'session_id',
-  'sessionId',
-  'timestamp',
-  'timezone',
-  'location',
-  'message_id',
-  'messageId',
-  'source',
-  'attachments',
-];
+import {
+  buildN8nPayload,
+  validateN8nPayload,
+  N8N_PAYLOAD_REQUIRED_KEYS,
+  getClientLocation,
+  getNaturalFallback,
+  extractReplyFromJson,
+  extractFilesFromJson,
+} from '../../public/js/n8n-payload.js';
 
 describe('n8n-payload', () => {
   describe('buildN8nPayload', () => {
     it('should include all required keys (session_id, timezone, location, etc.)', () => {
       const payload = buildN8nPayload('Hello');
-      for (const key of REQUIRED_KEYS) {
+      for (const key of N8N_PAYLOAD_REQUIRED_KEYS) {
         expect(payload).toHaveProperty(key);
       }
     });
@@ -89,6 +84,54 @@ describe('n8n-payload', () => {
       expect(payload.conversationHistory).toBeUndefined();
       expect(payload.intent).toBeUndefined();
       expect(payload.contextEnrichment).toBeUndefined();
+    });
+
+    it('should include agenticHints when provided', () => {
+      const payload = buildN8nPayload('Plan my day', {
+        agenticHints: { planMode: true, refineMode: false },
+      });
+      expect(payload.agenticHints).toEqual({ planMode: true, refineMode: false });
+    });
+
+    it('should not include agenticHints when not provided', () => {
+      const payload = buildN8nPayload('Hello');
+      expect(payload.agenticHints).toBeUndefined();
+    });
+  });
+
+  describe('validateN8nPayload', () => {
+    it('should pass for payload built by buildN8nPayload', () => {
+      const payload = buildN8nPayload('Hello', { source: 'text' });
+      expect(validateN8nPayload(payload).valid).toBe(true);
+    });
+    it('should pass for voice payload', () => {
+      const payload = buildN8nPayload('Hi', { source: 'voice' });
+      expect(validateN8nPayload(payload).valid).toBe(true);
+    });
+    it('should fail when message is missing', () => {
+      const payload = buildN8nPayload('x');
+      delete payload.message;
+      const r = validateN8nPayload(payload);
+      expect(r.valid).toBe(false);
+      expect(r.errors.some((e) => e.includes('message'))).toBe(true);
+    });
+    it('should fail when message/query/input are inconsistent', () => {
+      const payload = buildN8nPayload('x');
+      payload.query = 'y';
+      const r = validateN8nPayload(payload);
+      expect(r.valid).toBe(false);
+      expect(r.errors.some((e) => e.includes('same value'))).toBe(true);
+    });
+    it('should fail when source is invalid', () => {
+      const payload = buildN8nPayload('x');
+      payload.source = 'invalid';
+      const r = validateN8nPayload(payload);
+      expect(r.valid).toBe(false);
+      expect(r.errors.some((e) => e.includes('source'))).toBe(true);
+    });
+    it('should fail for non-object', () => {
+      expect(validateN8nPayload(null).valid).toBe(false);
+      expect(validateN8nPayload(undefined).valid).toBe(false);
     });
   });
 

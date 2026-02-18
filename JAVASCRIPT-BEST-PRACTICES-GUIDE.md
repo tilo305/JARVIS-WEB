@@ -23,6 +23,7 @@
 ### Module Structure
 
 ✅ **DO:**
+
 - Use ES6 modules (`import`/`export`)
 - Keep modules focused on a single responsibility
 - Export only what's needed
@@ -45,6 +46,7 @@ export default {
 ### Naming Conventions
 
 ✅ **DO:**
+
 - Use `camelCase` for variables and functions
 - Use `PascalCase` for classes
 - Use `SCREAMING_SNAKE_CASE` for constants

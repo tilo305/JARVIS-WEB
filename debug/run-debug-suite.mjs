@@ -3,16 +3,26 @@
  * Run full debug suite: lint, test, build.
  * Per zEn DeBuGgEr.md - all tests, debugging, errors and fixes.
  */
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { exec } from 'node:child_process';
+import { promisify } from 'node:util';
 
 const execAsync = promisify(exec);
 
 const steps = [
   { name: 'Lint', script: 'npm run lint:check' },
+  { name: 'Strip-Markdown Sync', script: 'node debug/tools/validate-strip-markdown-sync.js' },
+  { name: 'Terminal Logging', script: 'node debug/tools/validate-terminal-logging.mjs' },
+  { name: 'CORS Handler', script: 'node debug/tools/validate-cors-handler.js' },
+  { name: 'Agentic Patterns', script: 'node debug/tools/validate-agentic-patterns.js' },
+  { name: 'Security Modules', script: 'node debug/tools/validate-security-modules.mjs' },
   { name: 'Test', script: 'npm test -- --watchAll=false' },
   { name: 'TypeScript Build', script: 'npm run build' },
   { name: 'Vite Build', script: 'npm run vite:build' },
+  { name: 'Electron Paths', script: 'node debug/tools/validate-electron-paths.js' },
+  { name: 'NPM Audit Fix', script: 'node debug/tools/validate-npm-audit-fix.mjs' },
+  { name: 'Electron Integration', script: 'node debug/tools/verify-electron-integration.mjs' },
+  { name: 'Electron Built Smoke', script: 'node debug/tools/smoke-electron-built.mjs' },
+  { name: 'Kill All Tasks', script: 'npm run kill:all' },
 ];
 
 async function run(script) {

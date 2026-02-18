@@ -2,8 +2,8 @@
  * Test script to verify .env file is loaded correctly by all components
  */
 import { loadEnvEverywhere, getProjectRoot } from './load-env-everywhere.mjs';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = getProjectRoot(__dirname);
@@ -69,8 +69,8 @@ console.log('');
 
 // Test 3: Check .env file exists
 console.log('Test 3: Checking .env file exists...');
-import { existsSync } from 'fs';
-import { join } from 'path';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 
 const envPath = join(rootDir, '.env');
 if (existsSync(envPath)) {
