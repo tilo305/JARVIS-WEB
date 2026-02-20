@@ -15,7 +15,7 @@ export const N8N_PAYLOAD_REQUIRED_KEYS = [
 ];
 
 /** Keys checked (in order) for reply text in n8n webhook JSON response */
-export const N8N_REPLY_KEYS = ['output', 'reply', 'result', 'text', 'message', 'response', 'answer', 'content', 'body'];
+export const N8N_REPLY_KEYS = ['output', 'reply', 'result', 'text', 'message', 'response', 'answer', 'content', 'body', 'webhooks'];
 
 /**
  * Extract reply string from n8n webhook JSON response.
@@ -118,6 +118,19 @@ export function getNaturalFallback(userMessage) {
   if (m === 'goodbye' || m === 'bye' || m === 'see you') return "Goodbye, sir. I'll be here when you need me.";
   if (m === 'thanks' || m === 'thank you' || m === 'thanks!') return "You're welcome, sir.";
   if (m === 'yes' || m === 'no') return "Understood, sir.";
+  // Time/date fallback when n8n returns no reply (e.g. voice "What time is it?")
+  const timePatterns = ['what time is it', "what's the time", 'current time', 'time please', 'what time', 'the time'];
+  if (timePatterns.some((p) => m === p || m.includes(p))) {
+    const d = new Date();
+    const t = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    return `The current time is ${t}, sir.`;
+  }
+  const datePatterns = ["what's the date", 'what date is it', 'current date', 'today\'s date', 'the date'];
+  if (datePatterns.some((p) => m === p || m.includes(p))) {
+    const d = new Date();
+    const dateStr = d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    return `Today is ${dateStr}, sir.`;
+  }
   return null;
 }
 
@@ -131,6 +144,7 @@ export function getNaturalFallback(userMessage) {
  * - source: 'voice' | 'text'
  * - attachments: array of { name, type, size, data? } — data is base64 file content when present
  * - locale, language: browser locale/language
+ * - client_ip, isp: optional; when using server proxy, server injects client IP and ISP (parsed from IP).
  *
  * @param {string} message - User message text
  * @param {Object} [options] - Optional overrides
@@ -141,6 +155,8 @@ export function getNaturalFallback(userMessage) {
  * @param {string} [options.intent] - Agentic: detected intent (e.g. greeting)
  * @param {Object} [options.contextEnrichment] - Agentic: context (e.g. viewportWidth)
  * @param {Object} [options.agenticHints] - Optional { planMode, refineMode } for workflow selection
+ * @param {string} [options.client_ip] - Client IP (injected by server proxy when present)
+ * @param {string} [options.isp] - Internet Service Provider (parsed by server proxy from client IP)
  * @returns {Object} Full payload object
  */
 export function buildN8nPayload(message, options = {}) {
@@ -191,6 +207,8 @@ export function buildN8nPayload(message, options = {}) {
   if (options.agenticHints != null && typeof options.agenticHints === 'object') {
     payload.agenticHints = options.agenticHints;
   }
+  if (typeof options.client_ip === 'string' && options.client_ip) payload.client_ip = options.client_ip;
+  if (typeof options.isp === 'string' && options.isp) payload.isp = options.isp;
   return payload;
 }
 

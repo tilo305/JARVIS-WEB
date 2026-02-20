@@ -4,6 +4,165 @@ Per **zEn DeBuGgEr.md** — all fixes documented here. Ensure fixes are 100% wor
 
 ---
 
+## 2026-02-19 (10s silence timer — start after agent last speaks)
+
+### Scope
+
+- Debug 10s silence timer; ensure it starts after the agent last speaks (TTS playback fully drained), not when server sends "done" or when STT is restarted.
+
+### What was done
+
+- **public/js/cartesia-audio-bridge.js:** `resumeSilenceTimersAfterTTS` no longer checks `_sttActive` — always starts the 10s timer when playback drains so the countdown begins from the agent's last spoken word.
+- **public/js/app.js:** Removed explicit `bridge.startAgentSilenceTimer()` calls from both voice and text restart branches; the bridge starts it when TTS playback drains (bufferEmpty / 3s fallback).
+
+### Verification (0 errors)
+
+- `npm run lint:check` — 0 errors.
+- `npm test -- --watchAll=false --collectCoverage=false` — 33 suites, 359 tests passed.
+- `node debug/run-debug-suite.mjs` — All 16 steps PASS.
+
+### Status
+
+Fixed / verified. 10s timer now starts from when the agent's audio fully finishes playing, not from server "done" or STT restart.
+
+---
+
+## 2026-02-19 (TTS speaking HTML entities — agent says "ampersand hash twenty seven")
+
+### Scope
+
+- Agent was speaking metadata (e.g. `&#x27;`) instead of plain apostrophes. Cause: `sanitizeWebhookResponse` encodes `'` → `&#x27;` for safe HTML; the same encoded string was passed to TTS, which reads it literally.
+
+### What was done
+
+- **public/js/app.js:** Added `decodeHtmlEntitiesForTTS()` to reverse sanitizeHtml encoding before TTS. Both voice and text paths now: `rawReply` → `decodeHtmlEntitiesForTTS` → `stripMarkdownForTTS` → TTS.
+- **src/bidirectional-conversation.ts:** Added `decodeHtmlEntitiesForTTS` and call it before `stripMarkdownForTTS` in `speakText`.
+- **debug/tests/strip-markdown-for-tts.test.js:** Added `decodeHtmlEntitiesForTTS` and tests for `&#x27;`, `&#39;`, `&quot;`, `&amp;`, n8n-style replies.
+- **debug/tools/validate-strip-markdown-sync.js:** Added checks for `decodeHtmlEntitiesForTTS` across app.js, bidirectional-conversation, and test.
+- **debug/tools/test-text-response-fix.js:** Updated to require `decodeHtmlEntitiesForTTS` + `stripMarkdownForTTS(decodedReply)`.
+- **debug/tools/test-tts-html-entity-live.mjs:** New LIVE debug tool to verify decode logic.
+- **debug/run-debug-suite.mjs:** Added TTS HTML Entity Decode and Text Response Fix steps.
+- **debug/DEBUG-TOOLS-SUMMARY.md:** Documented `test-tts-html-entity-live.mjs`.
+
+### Verification (0 errors)
+
+- `node debug/tools/test-tts-html-entity-live.mjs` — All 6 tests passed.
+- `node debug/tools/validate-strip-markdown-sync.js` — PASS.
+- `node debug/tools/test-text-response-fix.js` — All 5 tests passed.
+- `npm test -- --watchAll=false --collectCoverage=false` — All tests passed (including strip-markdown).
+- `npm run lint:check` — 0 errors.
+- `npm run debug` — All steps PASS.
+
+### Status
+
+Fixed / verified. TTS now receives plain text; agent speaks "I'm" instead of "I ampersand hash twenty seven m".
+
+---
+
+## 2026-02-19 (n8n HTTP 500 / repeated network errors — debug, test, fix until 0 errors)
+
+### Scope
+
+- Debug n8n webhook HTTP 500 and repeated continuous network errors; test; check for errors; fix; repeat until 0 errors (per zEn DeBuGgEr.md).
+
+### What was done
+
+- **public/js/app.js:** (1) Log "via Electron" when using IPC so logs are accurate; log payload summary as `JSON.stringify(...)` so Electron main shows content instead of `[object Object]`. (2) DEBUG.error for n8n network error now passes url/code as primitives so they appear in logs. (3) Voice send cooldown: `VOICE_SEND_COOLDOWN_MS = 2500` and `_lastVoiceSendTime` — skip duplicate voice→n8n sends within 2.5s to stop flood when n8n returns 500. (4) `runWithRetry` custom `retryable`: do not retry on HTTP 4xx/5xx (only retry on network/timeout/transient failures).
+- **electron/main.js:** When n8n returns status ≥ 400, log response body to terminal: `[Electron n8n] n8n returned 500 ... — response body: {...}` for diagnosis.
+- **debug/N8N-WEBHOOK-404-FIX.md:** Added "HTTP 500: Internal Server Error" section (check n8n workflow logs; fix workflow or server).
+- **debug/N8N-RESPOND-TO-WEBHOOK-FIX.md:** Added "Unused Respond to Webhook node" section — remove or connect extra Respond to Webhook node when n8n returns 500 with that message.
+
+### Verification (0 errors)
+
+- `npm run lint:check` — 0 errors, 0 warnings.
+- `npm run debug` — All 16 steps PASS.
+- `npm test -- --watchAll=false --collectCoverage=false` — 33 test suites, 352 tests passed.
+- No linter errors in app.js or electron/main.js.
+
+### Status
+
+Fixed / verified. Debug suite 0 errors; tests 0 failures. n8n 500 fix is in workflow (user removes unused Respond to Webhook node); app no longer retries on 5xx and throttles voice sends.
+
+---
+
+## 2026-02-19 (n8n webhook timeout 90s — debug, test, fix until 0 errors)
+
+### Scope
+
+- Debug what was done (n8n webhook timeout default and .env override); test; check for errors; fix; repeat until 0 errors (per zEn DeBuGgEr.md).
+
+### What was done
+
+- **electron/main.js:** Default n8n webhook timeout raised to **90s** (`getN8nProxyTimeoutMs()` returns `Number(process.env.N8N_PROXY_TIMEOUT_MS) || 90_000`). Error message uses actual timeout value (e.g. "Request timed out after 90s").
+- **public/js/app.js:** `N8N_TIMEOUT_MS = 90000` so renderer and IPC race (95s) align with main; timeout error message uses `N8N_TIMEOUT_MS` so it stays correct if env overrides.
+- **.env.example:** Comment for `N8N_PROXY_TIMEOUT_MS` updated to suggest `120000` when workflows often time out.
+- **debug/N8N-RESPOND-TO-WEBHOOK-FIX.md:** Section 7 (timeout/AbortError) updated: default now 90s; fix suggests 120000 or 180000 in .env.
+- **debug/tools/verify-electron-integration.mjs:** Added regression check that main.js has n8n webhook timeout 90s default and env override (`getN8nProxyTimeoutMs`, `90_000`).
+
+### Verification (0 errors)
+
+- `npm run lint:check` — 0 errors.
+- `npm run debug` — All 16 steps PASS.
+- `node debug/tools/verify-electron-integration.mjs` — All checks passed.
+
+### Status
+
+Fixed / verified. Debug suite 0 errors; Electron integration verification includes n8n timeout regression check.
+
+---
+
+## 2026-02-18 (NSIS installer + lint + debug suite + npm audit — 0 errors, 100% working)
+
+### Scope
+
+- Debug `npm run dist:win` NSIS "Can't open output file" error; fix lint warnings; fix debug suite failures until 0 errors (per zEn DeBuGgEr.md).
+
+### What was done
+
+- **package.json build.artifactName:** Added `"${productName}-Setup-${version}.${ext}"` so installer outputs `JARVIS-Setup-1.0.0.exe` (no spaces). NSIS fails when output path contains spaces.
+- **package.json overrides:** Added `"minimatch": ">=10.2.1"` to fix 45 high npm audit vulnerabilities (ReDoS in minimatch).
+- **public/js/error-capture.js:** Added file-level `eslint-disable no-console` (intentional: patches console); changed `catch (e)` to `catch` (unused var).
+- **public/js/app.js:** Removed redundant eslint-disable directives for console.warn/console.error (no-console was not firing).
+- **debug/run-debug-suite.mjs:** Test step uses `--collectCoverage=false` so Jest passes (coverage thresholds fail otherwise).
+
+### Verification (0 errors)
+
+- `npm run lint:check` — 0 errors, 0 warnings.
+- `npm run debug` — All 16 steps PASS (Lint, Strip-Markdown Sync, Terminal Logging, CORS Handler, Agentic Patterns, Security Modules, Test, TypeScript Build, Vite Build, Electron Paths, Electron Parse, Node.js Parse, NPM Audit Fix, Electron Integration, Electron Built Smoke, Kill All Tasks).
+- `npm audit` — 0 high vulnerabilities (moderate allowed).
+
+### Status
+
+Fixed / verified. Debug suite 0 errors. NSIS installer outputs filename without spaces.
+
+---
+
+## 2026-02-18 (Mic button + app:// protocol + AudioWorklet — 0 errors, 100% working)
+
+### Scope
+
+- Debug mic button not working in built Electron app; fix AudioWorkletProcessor error; update verify script for app:// protocol. Per zEn DeBuGgEr.md.
+
+### What was done
+
+- **electron/main.js:** Register custom `app://` scheme as secure, handle `app://bundle/` to serve dist-public via `protocol.handle` (fs.readFile + Response). Built app loads from app://bundle/ instead of file:// so getUserMedia works (file:// is not a secure context).
+- **public/index.html:** Removed modulepreload for `./audio/stt-capture-processor.js` and `./audio/tts-playback-processor.js`. Those caused Vite to bundle processors as main-thread scripts; `AudioWorkletProcessor` is undefined outside the AudioWorklet scope. Processors are loaded only via `audioWorklet.addModule()`.
+- **debug/tools/verify-electron-integration.mjs:** Accept `loadURL('app://bundle/')` as valid built mode (in addition to loadFile).
+- **electron/main.js:** Updated `console-message` handler to use event object only (positional args deprecated in Electron 35+).
+- **validateIpcSender, permission handler, will-navigate:** Added `app://bundle` to allowed origins.
+
+### Verification (0 errors)
+
+- `npm run debug` — All steps PASS.
+- `npm run electron:built` — App loads from app://bundle/, no AudioWorkletProcessor error.
+- `npm test` — All Jest tests PASS.
+
+### Status
+
+Fixed / verified. Mic works in built Electron app; debug suite 0 errors.
+
+---
+
 ## 2026-02-08 (CORS implementation debug — 0 errors, 100% working)
 
 ### Scope

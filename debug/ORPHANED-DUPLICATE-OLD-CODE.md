@@ -158,6 +158,8 @@ Same URL string appears in `src/config.ts`, `public/js/app.js` (getConfig fallba
 
 **Still in use (app.js import chain):** `app.js` → cartesia-audio-bridge, vad-config, n8n-payload, ocr-tool, file-creator, debug.js, utils (error-handling, performance, debug), security.js, agentic-patterns.js, cors-handler.js.
 
+**Removed (orphaned):** `src/security/` (headers.ts, validation.ts) — never imported; server.js and scripts/security-config.mjs implement security headers and validation.
+
 ---
 
 ## 10. Current Status (2026-02-07)

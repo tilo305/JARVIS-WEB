@@ -1,8 +1,21 @@
 /**
- * Regression tests for TTS markdown stripping (agent must not read asterisks/meta-words).
- * Behavior must match public/js/app.js stripMarkdownForTTS().
+ * Regression tests for TTS markdown stripping and HTML entity decoding.
+ * Behavior must match public/js/app.js stripMarkdownForTTS() and decodeHtmlEntitiesForTTS().
  * Per zEn DeBuGgEr.md - debug folder tests.
  */
+
+function decodeHtmlEntitiesForTTS(text) {
+  if (typeof text !== 'string' && text != null) text = String(text);
+  if (!text || !text.trim()) return text;
+  return text
+    .replace(/&#x27;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&#x2F;/g, '/')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
+}
 
 function stripMarkdownForTTS(text) {
   if (typeof text !== 'string' && text != null) text = String(text);
@@ -67,5 +80,37 @@ describe('stripMarkdownForTTS (TTS no asterisks)', () => {
 
   it('strips standalone underscores (TTS would read as "underscore")', () => {
     expect(stripMarkdownForTTS('Hello _ there')).toBe('Hello there');
+  });
+});
+
+describe('decodeHtmlEntitiesForTTS (TTS no HTML entities)', () => {
+  it('decodes &#x27; to apostrophe', () => {
+    expect(decodeHtmlEntitiesForTTS("I&#x27;m ready")).toBe("I'm ready");
+  });
+
+  it('decodes &#39; to apostrophe', () => {
+    expect(decodeHtmlEntitiesForTTS("don&#39;t")).toBe("don't");
+  });
+
+  it('decodes &quot; to double quote', () => {
+    expect(decodeHtmlEntitiesForTTS('&quot;Hello&quot;')).toBe('"Hello"');
+  });
+
+  it('decodes &amp; to ampersand', () => {
+    expect(decodeHtmlEntitiesForTTS('Tom &amp; Jerry')).toBe('Tom & Jerry');
+  });
+
+  it('decodes sanitized n8n reply (multiple entities)', () => {
+    const sanitized = "I&#x27;m ready when you are, sir. Just let me know what you&#x27;d like to begin with.";
+    expect(decodeHtmlEntitiesForTTS(sanitized)).toBe("I'm ready when you are, sir. Just let me know what you'd like to begin with.");
+  });
+
+  it('returns empty/whitespace as-is', () => {
+    expect(decodeHtmlEntitiesForTTS('')).toBe('');
+    expect(decodeHtmlEntitiesForTTS('   ').trim()).toBe('');
+  });
+
+  it('leaves plain text unchanged', () => {
+    expect(decodeHtmlEntitiesForTTS('Hello world')).toBe('Hello world');
   });
 });

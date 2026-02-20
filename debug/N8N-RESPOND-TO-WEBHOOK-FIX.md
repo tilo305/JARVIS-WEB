@@ -1,5 +1,28 @@
 # No Text or Voice in Chat: n8n Respond to Webhook Fix
 
+**If you see HTTP 404 from the n8n webhook:** See **`debug/N8N-WEBHOOK-404-FIX.md`** for the 404-specific checklist (workflow ON, production URL, .env). Run `node debug/tools/n8n-webhook-live.mjs` to verify the webhook is reachable.
+
+**If you see HTTP 500 and "Unused Respond to Webhook node":** See **"Unused Respond to Webhook node"** below — you have an extra, disconnected Respond to Webhook node in the workflow; remove it or connect it.
+
+---
+
+## "Unused Respond to Webhook node" (HTTP 500)
+
+**Symptom:** n8n returns **HTTP 500** with body: `{"code":0,"message":"Unused Respond to Webhook node found in the workflow"}`. The app may then retry or repeat sends and flood the logs.
+
+**Cause:** The workflow is set to respond via a **Respond to Webhook** node, but there is at least one **Respond to Webhook** node that is **not connected** in the execution path (e.g. a duplicate or an old node left on the canvas).
+
+**Fix:**
+
+1. Open the workflow in n8n.
+2. Find every **Respond to Webhook** node. You must have **exactly one** that is **in the path**: Webhook → … → (your logic) → **Respond to Webhook**.
+3. **Remove** any other Respond to Webhook nodes that are not connected, or **connect** the one that should run so it receives data from your AI/script node.
+4. Save and set the workflow to **Active**.
+
+After this, the webhook will return 200 and the repeated errors stop.
+
+---
+
 **Symptom:** The frontend shows no assistant text in the chat and no voice (TTS) plays. The Webhook receives the request (e.g. "Hello from JARVIS debug") but the frontend never gets a reply.
 
 **Causes (check both):**
@@ -37,7 +60,7 @@ After this, each request that hits the Webhook will get a response when the **Re
 
 | Use this (production) | Not this (test) |
 |------------------------|-----------------|
-| `https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4` | `https://n8n.hempstarai.com/webhook-test/e7278dba-076f-4fe9-8c8f-0241e4103ac4` |
+| `https://n8n.hempstarai.com/webhook/7600d4d1-e268-4c35-a853-b39ce7014e96` | `https://n8n.hempstarai.com/webhook-test/7600d4d1-e268-4c35-a853-b39ce7014e96` |
 
 - **Production** (`/webhook/...`) runs your active workflow and returns the Respond to Webhook body (e.g. `[{ "output": "Hello, sir. ..." }]`).
 - **Test** (`/webhook-test/...`) is for the n8n editor "Test workflow" and may not return that same response to an external app.
@@ -112,3 +135,17 @@ If the JARVIS log shows **Body preview: {}** and **Response keys: (empty)**:
 2. In **Respond to Webhook**, set **Respond With** to "First Incoming Item" (or "JSON" with a body that includes one of the keys: `output`, `reply`, `result`, `text`, `message`, `response`, `answer`, `content`, `body`).
 3. Use the **production** webhook URL (`/webhook/...`), not `/webhook-test/...`.
 4. **Activate** the workflow and test again.
+
+---
+
+## 7. "Request timed out after Ns" / AbortError (Electron or browser)
+
+**Symptom:** Log shows `Request timed out after 90s` (or similar) or `AbortError`. The n8n workflow runs but takes longer than the app’s timeout.
+
+**Cause:** The default n8n webhook timeout is **90 seconds**. If your workflow (e.g. AI/LLM) often takes longer, the request is aborted before n8n responds.
+
+**Fix:**
+
+1. In `.env` set a higher value, e.g. `N8N_PROXY_TIMEOUT_MS=120000` (2 min) or `180000` (3 min). This is used by the server proxy and by the **Electron** main process.
+2. Restart the app (or Electron) so the new value is loaded.
+3. Optionally optimize the n8n workflow (faster model, streaming, or a quick “I’m thinking” reply) so most replies stay under the timeout.

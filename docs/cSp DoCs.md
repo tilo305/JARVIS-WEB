@@ -249,7 +249,7 @@ Use CSP **hashes** instead of nonces, or convert external scripts to inline bloc
 - **`scripts/csp-utils.mjs`**: `generateCspNonce()`, `buildStrictCspPolicy()`, `injectNonceIntoHtml()`.
 - **`public/index.html`**: All `<script>` tags have `nonce="{{CSP_NONCE}}"`; meta tag fallback for Vite dev (includes `object-src 'none'`, `base-uri 'none'`).
 - **`electron/main.js`**: For `file://` only, sets CSP with `object-src 'none'`, `base-uri 'none'`, `script-src 'self' 'unsafe-inline' 'strict-dynamic'`. For `http://localhost`, preserves server's CSP.
-- **`src/security/headers.ts`**: `buildStrictCsp()` for nonce-based policy; `getSecurityHeaders({ csp })` accepts pre-built CSP.
+- **`scripts/csp-utils.mjs`** and **`server.js`**: `buildStrictCspPolicy()`, `generateCspNonce()`; `getSecurityHeaders()` in server.js applies headers.
 
 ### Optional next steps
 

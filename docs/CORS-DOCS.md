@@ -158,7 +158,7 @@ When set, the server responds to `OPTIONS` preflight and adds CORS headers to re
 - **Configuration and n8n:** `docs/CORS-CONFIGURATION.md` — how to configure n8n (Set node, webhook settings, or reverse proxy) so the browser can call the webhook.
 - **Implementation summary:** `docs/CORS-IMPLEMENTATION-SUMMARY.md` — CORS handler, diagnostics, and debug helpers.
 - **Debugging:** `docs/SERVER-CORS-DEBUGGING.md` — server-side CORS debugging.
-- **Security headers:** `src/security/headers.ts` — optional CORS-related headers when `allowedOrigins` is set (e.g. `Access-Control-Allow-Origin`, `-Methods`, `-Headers`, `-Max-Age`).
+- **Security headers:** `server.js` (`getSecurityHeaders`) and `scripts/security-config.mjs` — CORS-related headers when `allowedOrigins` is set (e.g. `Access-Control-Allow-Origin`, `-Methods`, `-Headers`).
 - **App logic:** `public/js/app.js` — uses main-process webhook when in Electron to avoid CORS; in browser, shows CORS-aware error messages and points to the debug guide.
 
 ### Quick checklist for “CORS or network” errors

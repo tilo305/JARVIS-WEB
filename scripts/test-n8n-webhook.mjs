@@ -14,7 +14,7 @@ const message = process.argv[2] || 'Hello from JARVIS test script';
 const url =
   process.env.VITE_N8N_WEBHOOK_URL ||
   process.env.N8N_WEBHOOK_URL ||
-  'https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4';
+  'https://n8n.hempstarai.com/webhook/7600d4d1-e268-4c35-a853-b39ce7014e96';
 
 /** Same payload shape as buildN8nPayload (minimal required + optional) */
 const payload = {

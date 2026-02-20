@@ -2,6 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <!-- Error capture MUST run first so console patches are active before any other script -->
+  <script src="./js/error-capture.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- CSP is set via HTTP header by server.js / Electron. Meta fallback for Vite dev (requires unsafe-inline for HMR). -->
   <!-- CSP: no strict-dynamic for file:// (Electron built). server.js overrides with nonce-based. -->
@@ -10,6 +12,10 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%23FF1800' opacity='0.3'/><circle cx='16' cy='16' r='10' fill='none' stroke='%23FFFF00' stroke-width='2'/><circle cx='16' cy='16' r='4' fill='%23FF1C00'/></svg>" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://api.cartesia.ai" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="modulepreload" href="./js/app.js">
+  <!-- AudioWorklet processors: NOT modulepreload — loaded via addModule() in worklet scope; preloading would bundle them as main-thread scripts (AudioWorkletProcessor undefined). -->
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet">
   <!-- Modern UI v2.0 - Enhanced Iron Man Theme with Glassmorphism -->
   <style>
@@ -1252,215 +1258,113 @@
     // For static HTML, set window.JARVIS_CONFIG.apiKey before this script runs
     window.JARVIS_CONFIG.apiKey = window.JARVIS_CONFIG.apiKey || '';
     window.JARVIS_CONFIG.voiceId = window.JARVIS_CONFIG.voiceId || '95131c95-525c-463b-893d-803bafdf93c4';
-    
+    // n8n webhook — used when not in Electron (Electron gets URL from main process .env)
+    window.JARVIS_CONFIG.n8nWebhookUrl = window.JARVIS_CONFIG.n8nWebhookUrl || 'https://n8n.hempstarai.com/webhook/7600d4d1-e268-4c35-a853-b39ce7014e96';
+
+    // Set initial greeting immediately so "{{ now }}" is never visible (front-end ↔ UI integration)
+    (function () {
+      var el = document.getElementById('initialGreeting');
+      if (el) {
+        var h = new Date().getHours();
+        var part = (h >= 5 && h < 12) ? 'morning' : (h >= 12 && h < 17) ? 'afternoon' : 'evening';
+        el.textContent = 'Good ' + part + ', sir. How may I assist you?';
+      }
+    })();
+
     // Enable debug: ?debug=1 in URL, or set window.JARVIS_DEBUG = true
     if (/[?&]debug=1/.test(location.search) || /[?&]debug=true/.test(location.search)) {
       window.JARVIS_DEBUG = true;
     }
 
-    // Console error + warning capture (errors and warnings)
+    // Console error + warning capture — core patches in error-capture.js (loads first in head)
+    // This block adds log/info/debug/assert patches and UI; skips error/warn if already patched
     (function() {
       'use strict';
       
+      const capturedLogs = window.__JARVIS_CAPTURED_LOGS || [];
       const maxEntries = 2000;
-      window.__JARVIS_CAPTURED_LOGS = window.__JARVIS_CAPTURED_LOGS || [];
-      const capturedLogs = window.__JARVIS_CAPTURED_LOGS;
-      const captured = capturedLogs;
-      
-      // Track captured entries to avoid duplicates
-      const capturedEntrySet = new Set();
-      
-      // Helper to format timestamp
-      function formatTimestamp() {
-        const now = new Date();
-        return now.toLocaleTimeString('en-US', { 
-          hour12: false, 
-          hour: '2-digit', 
-          minute: '2-digit', 
-          second: '2-digit',
-          fractionalSecondDigits: 3
-        });
-      }
-      
-      // Helper to stringify objects
-      function stringifyArg(arg) {
-        if (arg === null) return 'null';
-        if (arg === undefined) return 'undefined';
-        if (typeof arg === 'string') return arg;
-        if (typeof arg === 'object') {
-          try {
-            // Check if it's an Error object
-            if (arg instanceof Error) {
-              let errorStr = `Error: ${arg.name || 'Error'}\nMessage: ${arg.message || '(no message)'}`;
-              if (arg.stack) {
-                errorStr += `\nStack:\n${arg.stack}`;
-              }
-              if (arg.cause) {
-                errorStr += `\nCause: ${stringifyArg(arg.cause)}`;
-              }
-              return errorStr;
-            }
-            // Check if it's an n8n diagnostic object
-            if (arg.issue || arg.issueDescription || arg.diagnostics || arg.diagnosticSteps || 
-                arg.webhookUrl || arg.dataKeys || (arg.status && (arg.issue || arg.diagnostics))) {
-              return '\n[n8n Configuration Diagnostic]\n' + JSON.stringify(arg, null, 2);
-            }
-            return JSON.stringify(arg, null, 2);
-          } catch (e) {
-            return String(arg);
-          }
-        }
-        return String(arg);
-      }
-      
-      // Helper to format log entry with better handling of multiple arguments
-      function formatLogEntry(level, args) {
-        const timestamp = formatTimestamp();
-        if (args.length === 0) {
-          return `[${timestamp}] ${level}\n(no message)`;
-        }
-        // Use newlines for better readability when multiple arguments
-        const message = Array.from(args).map(stringifyArg).join('\n');
-        return `[${timestamp}] ${level}\n${message}`;
-      }
-      
-      // Helper to capture log entry (with duplicate prevention)
-      function captureLogEntry(entry) {
-        // Create a hash based on content (first 200 chars) to detect exact duplicates
-        // Only prevent duplicates if they're identical and within 100ms (to prevent spam)
-        const contentHash = entry.substring(0, 200);
-        const timeWindow = Math.floor(Date.now() / 100); // 100ms windows
-        const entryHash = contentHash + '|' + timeWindow;
-        
-        if (!capturedEntrySet.has(entryHash)) {
-          capturedEntrySet.add(entryHash);
+      const installed = window.__JARVIS_LOG_CAPTURE_INSTALLED;
+      const captureEntry = window.__JARVIS_CAPTURE_ENTRY || (function() {
+        function fallbackCapture(entry) {
           capturedLogs.push(entry);
-          if (captured.length > maxEntries) {
-            capturedLogs.splice(0, capturedLogs.length - maxEntries);
-          }
-          updateLogCount();
-          // Clean up old hashes periodically (keep last 2000)
-          if (capturedEntrySet.size > 2000) {
-            const entries = Array.from(capturedEntrySet);
-            entries.slice(0, entries.length - 1000).forEach(hash => capturedEntrySet.delete(hash));
-          }
+          if (capturedLogs.length > maxEntries) capturedLogs.splice(0, capturedLogs.length - maxEntries);
+          var ce = document.getElementById('logCount');
+          if (ce) { ce.textContent = capturedLogs.length > 99 ? '99+' : String(capturedLogs.length); ce.style.display = 'block'; }
+        }
+        return fallbackCapture;
+      })();
+      const formatTimestamp = window.__JARVIS_CAPTURE_FORMAT_TS || function() {
+        const n = new Date();
+        return n.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 });
+      };
+      const stringifyArg = window.__JARVIS_CAPTURE_STRINGIFY || function(a) {
+        if (a == null) return String(a);
+        if (typeof a === 'string') return a;
+        if (a instanceof Error) return (a.stack || a.message || String(a));
+        try { return JSON.stringify(a, null, 2); } catch (e) { return String(a); }
+      };
+      const formatLogEntry = window.__JARVIS_CAPTURE_FORMAT_ENTRY || function(level, args) {
+        const msg = args.length === 0 ? '(no message)' : Array.from(args).map(stringifyArg).join('\n');
+        return '[' + formatTimestamp() + '] ' + level + '\n' + msg;
+      };
+      
+      if (!installed) {
+        var originalError = console.error;
+        var originalWarn = console.warn;
+        console.error = function() {
+          originalError.apply(console, arguments);
+          captureEntry(formatLogEntry('ERROR', arguments));
+        };
+        console.warn = function() {
+          originalWarn.apply(console, arguments);
+          captureEntry(formatLogEntry('WARN', arguments));
+        };
+        window.addEventListener('unhandledrejection', function(e) {
+          var s = '[' + formatTimestamp() + '] UNHANDLED PROMISE REJECTION\n';
+          if (e.reason instanceof Error) s += (e.reason.stack || e.reason.message || String(e.reason));
+          else s += JSON.stringify(e.reason, null, 2);
+          captureEntry(s);
+          originalError('[JARVIS] Unhandled Promise Rejection:', e.reason);
+        }, true);
+        window.addEventListener('error', function(e) {
+          var s = '[' + formatTimestamp() + '] UNCAUGHT EXCEPTION\n' + (e.message || '(no message)') + '\n' + (e.filename || '') + ':' + (e.lineno || '') + ':' + (e.colno || '');
+          if (e.error && e.error.stack) s += '\n' + e.error.stack;
+          captureEntry(s);
+        }, true);
+      }
+      
+      var originalLog = console.log;
+      var originalInfo = console.info;
+      var originalDebug = console.debug;
+      var originalAssert = console.assert;
+      
+      function maybeCapture(level, args) {
+        if (args.length > 0 && typeof args[0] === 'string' && (args[0].includes('[JARVIS]') || args[0].includes('n8n') || args[0].includes('webhook'))) {
+          captureEntry(formatLogEntry(level, args));
         }
       }
       
-      // Intercept console.error
-      const originalError = console.error;
-      console.error = function(...args) {
-        originalError.apply(console, args);
-        const entry = formatLogEntry('ERROR', args);
-        captureLogEntry(entry);
+      console.log = function() {
+        originalLog.apply(console, arguments);
+        maybeCapture('LOG', arguments);
       };
-      
-      // Intercept console.warn
-      const originalWarn = console.warn;
-      console.warn = function(...args) {
-        originalWarn.apply(console, args);
-        const entry = formatLogEntry('WARN', args);
-        captureLogEntry(entry);
-        
-        // Special handling for n8n warnings
-        if (args.length > 0 && typeof args[0] === 'string' && 
-            (args[0].includes('[JARVIS]') || args[0].includes('n8n') || args[0].includes('webhook'))) {
-          if (args.length > 1 && typeof args[1] === 'object') {
-            const diagnostic = stringifyArg(args[1]);
-            const diagnosticEntry = `[${formatTimestamp()}] WARN\n[n8n Diagnostic Details]\n${diagnostic}`;
-            captureLogEntry(diagnosticEntry);
-          }
-        }
+      console.info = function() {
+        originalInfo.apply(console, arguments);
+        maybeCapture('INFO', arguments);
       };
-      
-      // Intercept console.log for JARVIS messages
-      const originalLog = console.log;
-      console.log = function(...args) {
-        originalLog.apply(console, args);
-        // Only capture JARVIS-related logs
-        if (args.length > 0 && typeof args[0] === 'string' && 
-            (args[0].includes('[JARVIS]') || args[0].includes('n8n') || args[0].includes('webhook'))) {
-          const entry = formatLogEntry('LOG', args);
-          captureLogEntry(entry);
-        }
+      console.debug = function() {
+        originalDebug.apply(console, arguments);
+        maybeCapture('DEBUG', arguments);
       };
-
-      // Intercept console.info and console.debug (same filter so no JARVIS message is missed)
-      const originalInfo = console.info;
-      console.info = function(...args) {
-        originalInfo.apply(console, args);
-        if (args.length > 0 && typeof args[0] === 'string' && 
-            (args[0].includes('[JARVIS]') || args[0].includes('n8n') || args[0].includes('webhook'))) {
-          const entry = formatLogEntry('INFO', args);
-          captureLogEntry(entry);
-        }
-      };
-      const originalDebug = console.debug;
-      console.debug = function(...args) {
-        originalDebug.apply(console, args);
-        if (args.length > 0 && typeof args[0] === 'string' && 
-            (args[0].includes('[JARVIS]') || args[0].includes('n8n') || args[0].includes('webhook'))) {
-          const entry = formatLogEntry('DEBUG', args);
-          captureLogEntry(entry);
-        }
-      };
-      
-      // Capture unhandled promise rejections
-      window.addEventListener('unhandledrejection', function(event) {
-        const timestamp = formatTimestamp();
-        let errorInfo = `[${timestamp}] UNHANDLED PROMISE REJECTION\n`;
-        
-        if (event.reason instanceof Error) {
-          errorInfo += `Error: ${event.reason.name || 'Error'}\n`;
-          errorInfo += `Message: ${event.reason.message || '(no message)'}\n`;
-          if (event.reason.stack) {
-            errorInfo += `Stack:\n${event.reason.stack}`;
-          }
-        } else if (typeof event.reason === 'object' && event.reason !== null) {
-          errorInfo += `Reason: ${JSON.stringify(event.reason, null, 2)}`;
-        } else {
-          errorInfo += `Reason: ${String(event.reason)}`;
-        }
-        
-        captureLogEntry(errorInfo);
-        // Also log to console for visibility
-        originalError('[JARVIS] Unhandled Promise Rejection:', event.reason);
-      });
-      
-      // Capture uncaught exceptions
-      window.addEventListener('error', function(event) {
-        const timestamp = formatTimestamp();
-        let errorInfo = `[${timestamp}] UNCAUGHT EXCEPTION\n`;
-        errorInfo += `Message: ${event.message || '(no message)'}\n`;
-        errorInfo += `Source: ${event.filename || 'unknown'}:${event.lineno || '?'}:${event.colno || '?'}\n`;
-        if (event.error) {
-          if (event.error instanceof Error) {
-            errorInfo += `Error: ${event.error.name || 'Error'}\n`;
-            if (event.error.stack) {
-              errorInfo += `Stack:\n${event.error.stack}`;
-            }
-          } else {
-            errorInfo += `Error: ${stringifyArg(event.error)}`;
-          }
-        }
-        
-        captureLogEntry(errorInfo);
-        // Don't prevent default - let browser handle it normally
-      });
-      
-      // Capture console.assert failures
-      const originalAssert = console.assert;
-      console.assert = function(condition, ...args) {
+      console.assert = function(condition) {
         if (!condition) {
-          originalAssert.apply(console, [condition, ...args]);
-          const entry = formatLogEntry('ASSERT FAILED', args.length > 0 ? args : ['Assertion failed']);
-          captureLogEntry(entry);
-        } else {
-          originalAssert.apply(console, [condition, ...args]);
+          var args = Array.prototype.slice.call(arguments, 1);
+          captureEntry(formatLogEntry('ASSERT FAILED', args.length ? args : ['Assertion failed']));
         }
+        originalAssert.apply(console, arguments);
       };
       
-      // Update log count badge
+      // Update log count badge (for fallback path when error-capture.js not loaded)
       function updateLogCount() {
         const countEl = document.getElementById('logCount');
         if (countEl) {
@@ -1629,7 +1533,7 @@
       window.JARVIS_GET_LOGS = () => capturedLogs;
       window.JARVIS_CLEAR_LOGS = () => {
         capturedLogs.length = 0;
-        capturedEntrySet.clear();
+        if (window.__JARVIS_CAPTURE_ENTRY_SET) window.__JARVIS_CAPTURE_ENTRY_SET.clear();
         updateLogCount();
       };
       
@@ -1827,46 +1731,23 @@
   </script>
   <script type="module" src="./js/app.js" nonce="{{CSP_NONCE}}"></script>
   <script nonce="{{CSP_NONCE}}">
-    // Set timestamp on initial message and update greeting with time of day
+    // Set timestamp on initial message (greeting is set earlier in page by IIFE)
     (function() {
-      function getTimeOfDay() {
-        const hour = new Date().getHours();
-        if (hour >= 5 && hour < 12) return 'morning';
-        if (hour >= 12 && hour < 17) return 'afternoon';
-        // Evening: 5:00 PM - 4:59 AM (hours 17-4)
-        return 'evening';
-      }
-
       function setInitialTimestamp() {
         const initialTimestamp = document.getElementById('initialTimestamp');
         if (initialTimestamp) {
           const now = new Date();
-          const timestamp = now.toLocaleTimeString('en-US', { 
-            hour12: true, 
-            hour: 'numeric', 
+          initialTimestamp.textContent = now.toLocaleTimeString('en-US', {
+            hour12: true,
+            hour: 'numeric',
             minute: '2-digit'
           });
-          initialTimestamp.textContent = timestamp;
         }
       }
-
-      function setInitialGreeting() {
-        const initialGreeting = document.getElementById('initialGreeting');
-        if (initialGreeting) {
-          const timeOfDay = getTimeOfDay();
-          initialGreeting.textContent = initialGreeting.textContent.replace('{{ now }}', timeOfDay);
-        }
-      }
-
-      function initialize() {
-        setInitialTimestamp();
-        setInitialGreeting();
-      }
-      
       if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initialize);
+        document.addEventListener('DOMContentLoaded', setInitialTimestamp);
       } else {
-        initialize();
+        setInitialTimestamp();
       }
     })();
   </script>

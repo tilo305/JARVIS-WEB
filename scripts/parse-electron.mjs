@@ -26,6 +26,53 @@ const args = process.argv.slice(2);
 const outputFile = args.find((a) => a.startsWith('--output='))?.split('=')[1] || 'electron-parse-results.json';
 
 // ---------------------------------------------------------------------------
+// CSP PARSER
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a CSP policy string into directive name -> value.
+ * @param {string} cspString - e.g. "default-src 'self'; script-src 'self' 'unsafe-inline'"
+ * @returns {{ directives: Record<string, string>, raw: string }}
+ */
+function parseCspPolicy(cspString) {
+  const directives = {};
+  if (!cspString || typeof cspString !== 'string') return { directives, raw: '' };
+  const raw = cspString.trim();
+  raw.split(';').forEach((part) => {
+    const trimmed = part.trim();
+    if (!trimmed) return;
+    const firstSpace = trimmed.indexOf(' ');
+    const name = firstSpace > 0 ? trimmed.slice(0, firstSpace).trim() : trimmed;
+    const value = firstSpace > 0 ? trimmed.slice(firstSpace + 1).trim() : '';
+    if (name) directives[name] = value;
+  });
+  return { directives, raw };
+}
+
+/**
+ * Extract CSP policy string from main.js content (array of strings joined by '; ').
+ * @param {string} content - main.js file content
+ * @returns {string|null} CSP string or null
+ */
+function extractCspFromMainJs(content) {
+  // Match: const cspDirectives = [ ... ].join or const csp = [ ... ].join (non-greedy to avoid backtracking)
+  const arrayMatch = content.match(/const\s+(?:cspDirectives|csp)\s*=\s*\[([\s\S]*?)\]\s*\.join\s*\(\s*['"];\s*['"]\s*\)/s);
+  if (arrayMatch) {
+    const inner = arrayMatch[1];
+    const parts = inner.match(/"[^"]*"/g);
+    if (parts && parts.length) {
+      return parts.map((p) => p.slice(1, -1)).join('; ');
+    }
+  }
+  // Fallback: collect quoted directive strings
+  const quotedDirectives = content.match(/"([a-z-]+-src\s+[^"]+)"|"(object-src|base-uri|frame-ancestors|form-action|upgrade-insecure)[^"]*"/g);
+  if (quotedDirectives && quotedDirectives.length) {
+    return quotedDirectives.map((q) => q.replace(/^"|"$/g, '')).join('; ');
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // PARSERS
 // ---------------------------------------------------------------------------
 
@@ -47,6 +94,9 @@ function parseMainJs(content) {
       n8n: false,
       mcp: false,
       vite: false,
+      audioworklet: false,
+      cartesia: false,
+      vad: false,
     },
     functions: [],
     constants: [],
@@ -108,14 +158,23 @@ function parseMainJs(content) {
   result.security.setWindowOpenHandler = /setWindowOpenHandler/.test(content);
   result.security.willAttachWebview = /will-attach-webview/.test(content);
   if (/Content-Security-Policy|ContentSecurityPolicy|csp/.test(content)) {
-    const cspMatch = content.match(/"default-src[^"]+"/);
-    result.security.csp = cspMatch ? 'present' : 'dynamic';
+    const cspRaw = extractCspFromMainJs(content);
+    if (cspRaw) {
+      const { directives, raw } = parseCspPolicy(cspRaw);
+      result.security.csp = { raw, directives, parsed: true };
+    } else {
+      const cspMatch = content.match(/"default-src[^"]+"/);
+      result.security.csp = { parsed: false, detected: cspMatch ? 'present' : 'dynamic' };
+    }
   }
 
   // Integrations
   result.integrations.n8n = /n8n-webhook|handleN8nWebhook|invokeN8nWebhook/.test(content);
   result.integrations.mcp = /mcp-list-tools|mcp-call|handleMcpListTools|handleMcpCall/.test(content);
   result.integrations.vite = /VITE_DEV_PORT|localhost.*3000|loadURL|loadFile/.test(content);
+  result.integrations.vad = /\bVAD\b|vad-web|MicVAD|vad-config|voice\s*activity\s*detection/i.test(content);
+  result.integrations.cartesia = /cartesia\.ai|Cartesia|CARTESIA_API_KEY|CARTESIA_VOICE_ID|wss:\/\/api\.cartesia\.ai/.test(content);
+  result.integrations.audioworklet = /AudioWorklet|audioworklet|getUserMedia.*AudioWorklet/.test(content);
 
   // Top-level functions
   const fnRegex = /(?:async\s+)?function\s+(\w+)\s*\(/g;
@@ -257,9 +316,18 @@ console.log(`Files: ${results.summary.files.join(', ') || 'none'}`);
 console.log(`IPC channels: ${results.summary.ipcChannels.map((c) => `${c.channel} (${c.type})`).join(', ') || 'none'}`);
 console.log(`contextBridge APIs: ${results.summary.contextBridgeApis.join(', ') || 'none'}`);
 if (results.main?.integrations) {
-  console.log(`Integrations: n8n=${results.main.integrations.n8n}, mcp=${results.main.integrations.mcp}, vite=${results.main.integrations.vite}`);
+  console.log(`Integrations: n8n=${results.main.integrations.n8n}, mcp=${results.main.integrations.mcp}, vite=${results.main.integrations.vite}, audioworklet=${results.main.integrations.audioworklet}, cartesia=${results.main.integrations.cartesia}, vad=${results.main.integrations.vad}`);
+}
+if (results.main?.security?.csp) {
+  const c = results.main.security.csp;
+  if (c.parsed && c.directives) {
+    console.log(`CSP: parsed (${Object.keys(c.directives).length} directives): ${Object.keys(c.directives).join(', ')}`);
+  } else {
+    console.log(`CSP: detected (${c.detected || 'dynamic'})`);
+  }
 }
 if (results.summary.errors.length > 0) {
   console.log(`\nErrors: ${results.summary.errors.length}`);
+  process.exit(1);
 }
 console.log(`\n✓ Results saved to: ${outputFile}`);

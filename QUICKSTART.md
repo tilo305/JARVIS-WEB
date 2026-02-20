@@ -193,7 +193,7 @@ console.log(`End-to-End: ${metrics.endToEndLatency}ms`);
 
 ## n8n LLM Integration
 
-The project includes an n8n webhook for LLM responses. Configure `N8N_WEBHOOK_URL` in `src/config.ts` (default: `https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4`).
+The project includes an n8n webhook for LLM responses. Configure `N8N_WEBHOOK_URL` in `src/config.ts` (default: `https://n8n.hempstarai.com/webhook/7600d4d1-e268-4c35-a853-b39ce7014e96`).
 
 - **Request**: POST JSON `{ "message": "<user text>" }`
 - **Response**: Your n8n workflow should return JSON with a reply field: `output`, `reply`, `result`, `text`, or `message`

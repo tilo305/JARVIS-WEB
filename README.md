@@ -27,7 +27,7 @@ Create a `.env` file in the project root with your Cartesia credentials (require
 ```
 CARTESIA_API_KEY=sk_car_xxxx
 CARTESIA_VOICE_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-VITE_N8N_WEBHOOK_URL=https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4
+VITE_N8N_WEBHOOK_URL=https://n8n.hempstarai.com/webhook/7600d4d1-e268-4c35-a853-b39ce7014e96
 ```
 
 **n8n LLM integration:** The chat UI sends user messages to the n8n webhook (POST JSON `{ "message": "..." }`). Your n8n workflow should return a JSON response with a reply field (`output`, `reply`, `result`, `text`, or `message`). The webhook URL is configured in `src/config.ts` and defaults to the value above; override with `VITE_N8N_WEBHOOK_URL` in `.env`.

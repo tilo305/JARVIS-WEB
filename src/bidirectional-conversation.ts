@@ -166,6 +166,23 @@ export class BidirectionalConversation {
   }
 
   /**
+   * Decode HTML entities so TTS speaks plain text (not "ampersand hash twenty seven").
+   * Matches public/js/app.js decodeHtmlEntitiesForTTS.
+   */
+  private decodeHtmlEntitiesForTTS(text: string): string {
+    if (typeof text !== 'string' && text != null) text = String(text);
+    if (!text || !text.trim()) return text;
+    return text
+      .replace(/&#x27;/g, "'")
+      .replace(/&#39;/g, "'")
+      .replace(/&quot;/g, '"')
+      .replace(/&#x2F;/g, '/')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&');
+  }
+
+  /**
    * Strip markdown and symbols so TTS speaks only words (no "asterisk", "bold", etc.).
    * Matches public/js/app.js stripMarkdownForTTS for consistency.
    */
@@ -193,7 +210,8 @@ export class BidirectionalConversation {
    * Strips markdown so TTS does not speak "asterisk", "bold", or other symbols.
    */
   private speakText(text: string, contextId: string): void {
-    const safeText = this.stripMarkdownForTTS(text);
+    const decoded = this.decodeHtmlEntitiesForTTS(text);
+    const safeText = this.stripMarkdownForTTS(decoded);
     if (!safeText) {
       console.warn('[Conversation] Empty text after stripMarkdownForTTS');
       return;

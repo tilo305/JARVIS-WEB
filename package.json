@@ -17,7 +17,7 @@
     "electron:built": "cross-env USE_BUILT=1 ELECTRON_DISABLE_SECURITY_WARNINGS=1 electron electron/main.js",
     "dev:electron": "npm run electron",
     "kill:all": "node scripts/kill-all-tasks.mjs",
-    "electron:build": "npm run vite:build && node debug/tools/validate-electron-paths.js && npm run electron:built",
+    "electron:build": "npm run vite:build && node debug/tools/validate-electron-paths.js && cross-env ELECTRON_SMOKE_TEST=1 npm run electron:built",
     "electron:validate": "node debug/tools/validate-electron-paths.js",
     "electron:verify": "node debug/tools/verify-electron-integration.mjs",
     "app:dir": "electron-builder --dir",
@@ -47,13 +47,17 @@
     "test:all": "jest --coverage --verbose --watchAll=false",
     "test:ci": "jest --coverage --ci --watchAll=false",
     "ci": "npm run build && npm run lint:check && npm run test:coverage",
-    "verify": "npm run lint:check && npm run build && npm test",
-    "check": "npm run lint:check && npm run build && npm test -- --watchAll=false && npm run vite:build",
+    "verify": "npm run lint:check && npm run build && npm run parse:electron && npm run parse:nodejs && npm test",
+    "check": "npm run lint:check && npm run build && npm run parse:electron && npm run parse:nodejs && npm test -- --watchAll=false && npm run vite:build",
     "debug": "node debug/run-debug-suite.mjs",
     "parse:electron": "node scripts/parse-electron.mjs",
+    "parse:nodejs": "node scripts/parse-nodejs.mjs",
     "parse:ipc": "node scripts/parse-ipc.mjs",
     "test:debug": "jest --coverage > debug/results/latest-test-run.txt 2>&1",
     "test:n8n-webhook": "node scripts/test-n8n-webhook.mjs",
+    "sample:voice": "node scripts/generate-sample-voice-payload.mjs",
+    "sample:postman": "node scripts/generate-postman-collection.mjs",
+    "sample:record": "node scripts/record-voice-sample.mjs",
     "postinstall": "electron-builder install-app-deps"
   },
   "keywords": [
@@ -70,7 +74,11 @@
     "node": ">=18.0.0"
   },
   "overrides": {
-    "tar": ">=7.5.8"
+    "tar": ">=7.5.8",
+    "minimatch": ">=10.2.1",
+    "test-exclude": {
+      "minimatch": "5.1.2"
+    }
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
@@ -94,21 +102,23 @@
     "concurrently": "^9.1.2",
     "cross-env": "^10.1.0",
     "electron": "40.2.1",
+    "electron-builder": "^26.7.0",
     "eslint": "^9.39.2",
     "globals": "^17.3.0",
     "jest": "^30.2.0",
     "kill-port": "^2.0.0",
+    "naudiodon": "^2.3.6",
     "ts-jest": "^29.4.6",
     "typescript": "^5.3.3",
     "typescript-eslint": "^8.54.0",
     "vite": "^7.3.1",
     "vite-plugin-static-copy": "^3.2.0",
-    "wait-on": "^8.0.1",
-    "electron-builder": "^26.7.0"
+    "wait-on": "^8.0.1"
   },
   "build": {
     "appId": "com.jarvis.web",
     "productName": "JARVIS",
+    "artifactName": "${productName}-Setup-${version}.${ext}",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -120,14 +130,21 @@
       "package.json"
     ],
     "win": {
-      "target": ["nsis", "portable"]
+      "target": [
+        "nsis",
+        "portable"
+      ]
     },
     "mac": {
-      "target": ["dmg"],
+      "target": [
+        "dmg"
+      ],
       "category": "public.app-category.productivity"
     },
     "linux": {
-      "target": ["AppImage"]
+      "target": [
+        "AppImage"
+      ]
     }
   }
 }

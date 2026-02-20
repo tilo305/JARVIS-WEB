@@ -949,10 +949,10 @@ async function parseAllFiles() {
         if (clientStats.clientType && clientStats.clientType !== 'other') {
           results.client.push(fileResult);
         }
-        if (cartesiaStats.hasCartesiaImport || cartesiaStats.hasCartesiaClass) {
+        if (cartesiaStats.hasCartesiaImport || cartesiaStats.hasCartesiaClass || cartesiaStats.cartesiaEndpoints?.length > 0 || cartesiaStats.hasCartesiaConfig) {
           results.cartesia.push(fileResult);
         }
-        if (vadStats.hasVADImport || vadStats.hasVADConfig) {
+        if (vadStats.hasVADImport || vadStats.hasVADConfig || vadStats.hasMicVAD) {
           results.vad.push(fileResult);
         }
         if (wsStats.hasWebSocket) {
@@ -1105,7 +1105,7 @@ async function parseAllFiles() {
   console.log(`Total size: ${results.summary.totalSizeKB} KB`);
   console.log(`\nBy category:`);
   console.log(`  Backend: ${results.summary.byType.backend}`);
-  console.log(`  Frontend: ${results.summary.byType.frontend.html + results.summary.byType.frontend.javascript + results.summary.byType.frontend.css} (HTML: ${results.summary.byType.frontend.html}, JS/TS: ${results.summary.byType.frontend.javascript}, CSS: ${results.summary.byType.frontend.css}, AudioWorklet: ${results.summary.byType.frontend.audioworklet})`);
+  console.log(`  Frontend: ${results.summary.byType.frontend.html + results.summary.byType.frontend.javascript + results.summary.byType.frontend.css + results.summary.byType.frontend.audioworklet} (HTML: ${results.summary.byType.frontend.html}, JS/TS: ${results.summary.byType.frontend.javascript}, CSS: ${results.summary.byType.frontend.css}, AudioWorklet: ${results.summary.byType.frontend.audioworklet})`);
   console.log(`  Client: ${results.summary.byType.client}`);
   console.log(`  Cartesia: ${results.summary.byType.cartesia}`);
   console.log(`  VAD: ${results.summary.byType.vad}`);

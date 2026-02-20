@@ -2,6 +2,7 @@ node_modules/
 dist/
 dist-public/
 coverage/
+release/
 *.pcm
 *.wav
 *.log

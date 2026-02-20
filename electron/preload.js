@@ -1,7 +1,8 @@
 /**
  * Electron preload script — bridges main process to renderer (UI) in a secure way.
  * Exposes only safe APIs via contextBridge so the frontend can detect Electron
- * and integrate with Cartesia, AudioWorklet, and VAD correctly (e.g. secure context).
+ * and integrate with Cartesia, AudioWorklet, and VAD correctly. Secure context (app://) is required
+ * for getUserMedia and AudioWorklet; the bridge uses window.location.origin + '/audio/' for processor paths.
  *
  * Context isolation is kept ON; no nodeIntegration in renderer.
  * Sandbox is ON: no Node built-ins (path, dotenv) — n8n URL comes from main via IPC.
@@ -55,4 +56,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   invokeMcpCall: (tool, args) => ipcRenderer.invoke('mcp-call', { tool, args }),
   /** Write text to clipboard (works in sandboxed renderer; delegates to main). */
   writeClipboardText: (text) => ipcRenderer.invoke('write-clipboard', text),
+  /** Get media access status (microphone) for permission diagnostics. */
+  getMediaAccessStatus: () => ipcRenderer.invoke('get-media-access-status'),
+  /** Open system privacy settings for microphone (Windows: ms-settings, macOS: System Preferences). */
+  openMicPrivacySettings: () => ipcRenderer.invoke('open-mic-privacy-settings'),
 });

@@ -161,6 +161,21 @@ describe('n8n-payload', () => {
       expect(getNaturalFallback('  ')).toBeNull();
       expect(getNaturalFallback('what is the weather')).toBeNull();
     });
+    it('should return time fallback for time queries', () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-02-19T19:09:00'));
+      expect(getNaturalFallback('What time is it?')).toBe('The current time is 7:09 PM, sir.');
+      expect(getNaturalFallback("what's the time")).toBe('The current time is 7:09 PM, sir.');
+      expect(getNaturalFallback('current time')).toBe('The current time is 7:09 PM, sir.');
+      jest.useRealTimers();
+    });
+    it('should return date fallback for date queries', () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-02-19T12:00:00'));
+      expect(getNaturalFallback("what's the date")).toMatch(/^Today is .+, sir\.$/);
+      expect(getNaturalFallback('the date')).toMatch(/^Today is .+, sir\.$/);
+      jest.useRealTimers();
+    });
   });
 
   describe('extractReplyFromJson', () => {

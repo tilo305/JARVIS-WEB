@@ -16,24 +16,24 @@ describe('Copy log capture (public/index.html)', () => {
 
   it('has console error + warning capture comment', () => {
     expect(html).toMatch(/Console error \+ warning capture/);
-    expect(html).toMatch(/errors and warnings/);
+    expect(html).toMatch(/errors? and warnings?/i);
   });
 
   it('captures both console.error and console.warn', () => {
     expect(html).toMatch(/console\.error\s*=\s*function/);
     expect(html).toMatch(/console\.warn\s*=\s*function/);
-    expect(html).toMatch(/captureLogEntry\s*\(/);
+    expect(html).toMatch(/captureEntry\s*\(|captureLogEntry\s*\(/);
     expect(html).toMatch(/formatLogEntry\s*\(\s*['"]ERROR['"]/);
     expect(html).toMatch(/formatLogEntry\s*\(\s*['"]WARN['"]/);
   });
 
   it('uses formatLogEntry for error and warn to capture message and stack', () => {
-    expect(html).toMatch(/function formatLogEntry/);
+    expect(html).toMatch(/formatLogEntry|function formatLogEntry/);
     expect(html).toMatch(/formatLogEntry\s*\(\s*level\s*,\s*args\s*\)/);
   });
 
-  it('captureLogEntry pushes to captured array', () => {
-    expect(html).toMatch(/captureLogEntry\s*\(entry\)/);
+  it('captureEntry pushes to captured array', () => {
+    expect(html).toMatch(/captureEntry\s*\(entry\)|capturedLogs\.push\s*\(\s*entry\s*\)/);
     expect(html).toMatch(/capturedLogs\.push\s*\(\s*entry\s*\)/);
   });
 
@@ -60,6 +60,6 @@ describe('Copy log capture (public/index.html)', () => {
 
   it('limits stored entries (maxEntries)', () => {
     expect(html).toMatch(/maxEntries\s*=\s*\d+/);
-    expect(html).toMatch(/captured\.length\s*>\s*maxEntries/);
+    expect(html).toMatch(/capturedLogs\.length\s*>\s*maxEntries/);
   });
 });

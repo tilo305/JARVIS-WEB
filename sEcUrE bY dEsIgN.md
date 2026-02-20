@@ -23,7 +23,7 @@ A book focused on secure design patterns for domain-driven design, with emphasis
 
 - Language-specific security patterns
 - **Applied**:
-  - TypeScript security utilities (`src/security/validation.ts`)
+  - Server-side security (server.js, scripts/security-config.mjs)
   - JavaScript client-side security (`public/js/security.js`)
 
 ### 3. Secure API Design

@@ -33,6 +33,7 @@ npm run test:integration
 | `test-text-response-fix.js` | Text response handling |
 | `test-timestamp-live.js` | Timestamp checks |
 | `test-greeting-live.html` | Browser greeting/time-of-day test |
+| `n8n-webhook-live.mjs` | LIVE n8n webhook test (404 diagnostic). Run: `node debug/tools/n8n-webhook-live.mjs [message]` |
 
 ## Browser debug pages (`public/debug/`)
 
@@ -47,4 +48,5 @@ npm run test:integration
 - `ORPHANED-DUPLICATE-OLD-CODE.md` — Audit of removed/duplicate code
 - `CONSOLE-ERROR-CHECK-GUIDE.md` — Console error checking
 - `errors-and-fixes.md` — Error fixes log
+- `N8N-WEBHOOK-404-FIX.md` — n8n HTTP 404 checklist (workflow ON, production URL, .env)
 - `N8N-RESPOND-TO-WEBHOOK-FIX.md` — n8n webhook response fix (referenced by app and docs)

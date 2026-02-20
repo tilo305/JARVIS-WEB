@@ -6,15 +6,15 @@
  * - Preload (preload.js): Exposes electronAPI (isElectron, platform, invokeN8nWebhook, invokeMcp*) via contextBridge.
  * - Vite: Serves/bundles public/ (app.js, cartesia-audio-bridge, vad-config, audio/*).
  * - Cartesia: STT/TTS WebSockets run in renderer; API key from Vite define / .env.
- * - AudioWorklet: Processors loaded from absolute URL (http or file://); bridge uses file:// in built app.
+ * - AudioWorklet: Processors loaded from app://bundle/audio/ (built) or http://localhost/audio/ (dev); bridge uses window.location.origin + '/audio/' in Electron.
  * - VAD: @ricky0123/vad-web runs in renderer; same MediaStream as STT pipeline.
  * - n8n webhook: Renderer can call invokeN8nWebhook so the request is made from main (no CORS).
  * - MCP (Desktop Commander): Renderer can call invokeMcpListTools / invokeMcpCall; main runs same bridge as server.js (no HTTP server needed).
  */
-import { app, BrowserWindow, ipcMain, Menu, dialog, session, clipboard } from 'electron';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { pathToFileURL } from 'node:url';
+import { app, BrowserWindow, ipcMain, Menu, dialog, session, clipboard, protocol, systemPreferences, shell } from 'electron';
+import { readFile } from 'node:fs/promises';
+import { dirname, resolve, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 // Ensure every console.error and console.warn from main process is logged to the terminal
 const ts = () => new Date().toISOString();
@@ -39,8 +39,11 @@ process.on('unhandledRejection', (reason) => {
   _err('[Electron Main] unhandledRejection:', reason);
 });
 
-const N8N_PROXY_TIMEOUT_MS = 30000;
-const DEFAULT_N8N_WEBHOOK = 'https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4';
+/** n8n webhook timeout (ms). Override with N8N_PROXY_TIMEOUT_MS in .env. Default 90s for slow AI/LLM workflows. */
+function getN8nProxyTimeoutMs() {
+  return Number(process.env.N8N_PROXY_TIMEOUT_MS) || 90_000;
+}
+const DEFAULT_N8N_WEBHOOK = 'https://n8n.hempstarai.com/webhook/7600d4d1-e268-4c35-a853-b39ce7014e96';
 
 /** Only allow HTTPS webhook URLs to avoid SSRF and protocol abuse. */
 function isAllowedWebhookUrl(url) {
@@ -96,8 +99,9 @@ async function handleN8nWebhook(event, arg) {
   if (validationError) {
     throw new Error(`Invalid n8n payload: ${validationError}`);
   }
+  const timeoutMs = getN8nProxyTimeoutMs();
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), N8N_PROXY_TIMEOUT_MS);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, {
       method: 'POST',
@@ -120,11 +124,14 @@ async function handleN8nWebhook(event, arg) {
         }
       }
     }
+    if (res.status >= 400) {
+      console.error('[Electron n8n] n8n returned', res.status, res.statusText, '— response body:', JSON.stringify(data));
+    }
     return { status: res.status, statusText: res.statusText, data };
   } catch (err) {
     clearTimeout(timeoutId);
     if (err.name === 'AbortError') {
-      const e = new Error('Request timed out after 30s');
+      const e = new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s`);
       e.name = 'AbortError';
       throw e;
     }
@@ -143,6 +150,12 @@ async function handleN8nWebhook(event, arg) {
 const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const VITE_DEV_PORT = Number(process.env.PORT) || 3000;
 
+// Register app:// as secure scheme (BEFORE app.ready) so getUserMedia works in built app.
+// file:// is not a secure context; microphone access fails.
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true } },
+]);
+
 /** Allowed origins for IPC and navigation (Electron security checklist #13, #17). */
 const ALLOWED_ORIGINS = new Set([
   `http://localhost:${VITE_DEV_PORT}`,
@@ -158,6 +171,7 @@ function validateIpcSender(frame) {
   if (!frame || !frame.url) return false;
   try {
     const u = new URL(frame.url);
+    if (u.protocol === 'app:' && u.hostname === 'bundle') return true;
     if (u.protocol === 'file:') {
       return u.pathname.includes('dist-public') || u.pathname.includes('index.html');
     }
@@ -212,6 +226,9 @@ const useBuilt =
   app.isPackaged;
 const isDev = !useBuilt && (process.env.NODE_ENV === 'development' || !app.isPackaged);
 
+/** Smoke test: load app, verify it starts, then exit 0. Used by electron:build in CI/automated runs. */
+const isSmokeTest = process.env.ELECTRON_SMOKE_TEST === '1' || process.env.ELECTRON_SMOKE_TEST === 'true';
+
 /** Preload script path — bridges main to renderer (contextBridge only). Must be absolute. */
 const PRELOAD_PATH = resolve(__dirname, 'preload.js');
 
@@ -244,18 +261,17 @@ function createWindow() {
     mainWindow = null;
   });
 
-  // Forward every renderer console message to terminal (every error and warning + log/info/debug)
-  // Supports (event, level, message, line, sourceId) or event object with same props
-  mainWindow.webContents.on('console-message', (event, levelOrUndef, messageOrUndef, lineOrUndef, sourceIdOrUndef) => {
-    const level = levelOrUndef ?? event?.level ?? 0;
-    const message = messageOrUndef ?? event?.message ?? '';
-    const line = lineOrUndef ?? event?.line;
-    const sourceId = sourceIdOrUndef ?? event?.sourceId;
+  // Forward every renderer console message to terminal (use event object; positional args deprecated in Electron 35+)
+  mainWindow.webContents.on('console-message', (e) => {
+    const level = e?.level ?? 0;
+    const message = e?.message ?? '';
+    const line = e?.line ?? e?.lineNumber;
+    const sourceId = e?.sourceId;
     const src = sourceId != null && line != null ? ` ${sourceId}:${line}` : '';
     const prefix = `[Renderer]${src}`;
-    if (level === 3) {
+    if (level === 3 || (typeof level === 'string' && level === 'error')) {
       console.error(prefix, message);
-    } else if (level === 2) {
+    } else if (level === 2 || (typeof level === 'string' && level === 'warning')) {
       console.warn(prefix, message);
     } else {
       console.log(prefix, message);
@@ -329,8 +345,15 @@ function createWindow() {
     });
     mainWindow.webContents.openDevTools();
   } else {
-    const indexHtml = resolve(__dirname, '..', 'dist-public', 'index.html');
-    mainWindow.loadFile(indexHtml);
+    mainWindow.loadURL('app://bundle/');
+  }
+
+  if (isSmokeTest) {
+    mainWindow.webContents.once('did-finish-load', () => {
+      console.log('[Electron] Smoke test: app loaded OK, exiting with 0');
+      process.exitCode = 0;
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.close();
+    });
   }
 }
 
@@ -343,9 +366,55 @@ function handleSetTitle(event, title) {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // Preload .env so get-n8n-webhook-url and MCP handlers have env ready without first-call delay
+  await loadEnvForElectron();
+
+  // Handle app://bundle/ — serve dist-public with secure context for getUserMedia
+  // When packaged, use app.getAppPath() so paths resolve correctly (e.g. inside app.asar on Windows)
+  const appRoot = app.isPackaged ? app.getAppPath() : resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const distPublic = join(appRoot, 'dist-public');
+  if (useBuilt) {
+    console.log('[Electron] Built mode: serving app from', distPublic);
+  }
+  const mimeByExt = {
+    '.html': 'text/html; charset=utf-8',
+    '.js': 'application/javascript',
+    '.css': 'text/css',
+    '.json': 'application/json',
+  };
+  protocol.handle('app', async (req) => {
+    const u = new URL(req.url);
+    if (u.hostname !== 'bundle') return new Response('Not Found', { status: 404 });
+    let pathname = (u.pathname || '/').replace(/^\/+/, '') || 'index.html';
+    const fullPath = resolve(join(distPublic, pathname));
+    const distResolved = resolve(distPublic);
+    if (!fullPath.startsWith(distResolved)) {
+      return new Response('Forbidden', { status: 403 });
+    }
+    try {
+      const buf = await readFile(fullPath);
+      const ext = pathname.slice(pathname.lastIndexOf('.'));
+      const contentType = mimeByExt[ext] || 'application/octet-stream';
+      return new Response(buf, { headers: { 'Content-Type': contentType } });
+    } catch (err) {
+      if (err.code === 'ENOENT') {
+        console.error('[Electron app://] Not found:', pathname, '→', fullPath);
+        return new Response('Not Found', { status: 404 });
+      }
+      console.error('[Electron app://] Error reading', pathname, err.message || err);
+      return new Response('Error', { status: 500 });
+    }
+  });
+
   // --- Electron security checklist: session & navigation ---
   const ses = session.defaultSession;
+
+  // #5: Permission check (sync) — must return true for getUserMedia to proceed
+  ses.setPermissionCheckHandler((_webContents, permission) => {
+    if (permission === 'media' || permission === 'microphone') return true;
+    return false;
+  });
 
   // #5: Handle permission requests (notifications, etc.) — only allow for our app origins
   ses.setPermissionRequestHandler((webContents, permission, callback) => {
@@ -353,7 +422,9 @@ app.whenReady().then(() => {
     let allowed = false;
     try {
       const u = new URL(url);
-      if (u.protocol === 'file:' && (u.pathname.includes('dist-public') || u.pathname.includes('index.html'))) {
+      if (u.protocol === 'app:' && u.hostname === 'bundle') {
+        allowed = permission === 'media' || permission === 'microphone' || permission === 'notifications';
+      } else if (u.protocol === 'file:' && (u.pathname.includes('dist-public') || u.pathname.includes('index.html'))) {
         allowed = permission === 'media' || permission === 'microphone' || permission === 'notifications';
       } else if ((u.hostname === 'localhost' || u.hostname === '127.0.0.1') && (u.protocol === 'http:' || u.protocol === 'https:')) {
         allowed = permission === 'media' || permission === 'microphone' || permission === 'notifications';
@@ -371,7 +442,7 @@ app.whenReady().then(() => {
       const u = new URL(details.url);
       if (u.protocol === 'file:') {
         // No strict-dynamic: we cannot inject nonces for file://. Use host allowlist.
-        const csp = [
+        const cspDirectives = [
           "default-src 'self'",
           "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net",
           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
@@ -382,8 +453,10 @@ app.whenReady().then(() => {
           "object-src 'none'",
           "base-uri 'none'",
           "frame-ancestors 'none'",
-        ].join('; ');
-        headers['Content-Security-Policy'] = [csp];
+        ];
+        // Parsed CSP: single policy string (Chromium expects header value as array of strings)
+        const cspParsed = cspDirectives.join('; ');
+        headers['Content-Security-Policy'] = [cspParsed];
       }
       // For http(s): leave existing CSP from server (nonce-based when using server.js)
     } catch { /* invalid URL */ }
@@ -396,6 +469,7 @@ app.whenReady().then(() => {
       try {
         const u = new URL(navigationUrl);
         const ok =
+          (u.protocol === 'app:' && u.hostname === 'bundle') ||
           (u.protocol === 'file:' && (u.pathname.includes('dist-public') || u.pathname.includes('index.html'))) ||
           ((u.hostname === 'localhost' || u.hostname === '127.0.0.1') && u.protocol === 'http:');
         if (!ok) event.preventDefault();
@@ -437,6 +511,32 @@ app.whenReady().then(() => {
       return true;
     }
     return false;
+  });
+  ipcMain.handle('get-media-access-status', (event) => {
+    if (!validateIpcSender(event.senderFrame)) {
+      throw new Error('Invalid IPC sender');
+    }
+    try {
+      const mic = systemPreferences.getMediaAccessStatus('microphone');
+      return { microphone: mic || 'unknown' };
+    } catch {
+      return { microphone: 'unknown' };
+    }
+  });
+  ipcMain.handle('open-mic-privacy-settings', (event) => {
+    if (!validateIpcSender(event.senderFrame)) {
+      throw new Error('Invalid IPC sender');
+    }
+    try {
+      if (process.platform === 'win32') {
+        shell.openExternal('ms-settings:privacy-microphone');
+      } else if (process.platform === 'darwin') {
+        shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone');
+      }
+      return true;
+    } catch {
+      return false;
+    }
   });
   createWindow();
 });

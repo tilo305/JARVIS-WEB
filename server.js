@@ -177,6 +177,26 @@ function getClientIp(req) {
   return req.socket?.remoteAddress || 'unknown';
 }
 
+/** Whether IP is local/private (skip ISP lookup). */
+function isPrivateOrLocalIp(ip) {
+  if (!ip || ip === 'unknown') return true;
+  if (ip === '::1' || ip === '::ffff:127.0.0.1') return true;
+  if (ip.startsWith('127.') || ip.startsWith('10.') || ip.startsWith('192.168.') || ip.startsWith('172.')) return true;
+  return false;
+}
+
+/** Resolve ISP for a public IP (ip-api.com, fields=isp). Returns null on skip/failure. */
+async function getIspForIp(ip) {
+  if (isPrivateOrLocalIp(ip)) return null;
+  try {
+    const res = await fetch(`http://ip-api.com/json/${encodeURIComponent(ip)}?fields=isp`, { signal: AbortSignal.timeout(3000) });
+    const data = await res.json().catch(() => ({}));
+    return typeof data?.isp === 'string' ? data.isp : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Check MCP API auth: no secret = allow all; otherwise require X-MCP-Secret or Authorization: Bearer <secret>. */
 function checkMcpAuth(req) {
   if (!MCP_API_SECRET) return true;
@@ -280,12 +300,19 @@ const server = createServer(async (req, res) => {
         res.end(JSON.stringify({ error: 'Forbidden', message: 'Webhook URL not allowed' }));
         return;
       }
+      const payload = body?.body ?? body;
+      const payloadObj = payload && typeof payload === 'object' ? { ...payload } : payload;
+      if (payloadObj && typeof payloadObj === 'object') {
+        payloadObj.client_ip = clientIp;
+        const isp = await getIspForIp(clientIp);
+        if (isp) payloadObj.isp = isp;
+      }
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), SEC.n8nProxy.timeoutMs);
       const fetchRes = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body?.body ?? body),
+        body: JSON.stringify(payloadObj ?? payload),
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
@@ -409,6 +436,9 @@ server.listen(PORT, () => {
   console.log(`Server: http://localhost:${PORT}`);
   console.log(`WebSocket: ws://localhost:${PORT}${WS_PATH} (bridged)`);
   console.log(`Serving: ${PUBLIC_DIR === DIST_PUBLIC ? 'dist-public (production build)' : 'public (development)'}`);
+  if (SEC.n8nProxy.enabled) {
+    console.log('N8n: POST /api/n8n-proxy enabled (UI ↔ n8n webhook bridged)');
+  }
   if (ENABLE_MCP) {
     console.log('MCP: Desktop Commander bridge enabled at POST /api/mcp/call and GET /api/mcp/tools');
   }

@@ -32,13 +32,14 @@ if (safeReplyTextCount >= 2) {
   process.exit(1);
 }
 
-// Test 2: Both handlers use stripMarkdownForTTS before TTS
-console.log('Test 2: Checking TTS markdown stripping...');
-const stripMarkdownCount = (appJs.match(/stripMarkdownForTTS\(rawReply\)/g) || []).length;
-if (stripMarkdownCount >= 2) {
-  console.log(`  ✅ Both handlers strip markdown before TTS (found ${stripMarkdownCount})`);
+// Test 2: Both handlers use decodeHtmlEntitiesForTTS then stripMarkdownForTTS before TTS
+console.log('Test 2: Checking TTS HTML entity decode + markdown stripping...');
+const decodeCount = (appJs.match(/decodeHtmlEntitiesForTTS/g) || []).length;
+const stripMarkdownCount = (appJs.match(/stripMarkdownForTTS\(decodedReply\)/g) || []).length;
+if (decodeCount >= 2 && stripMarkdownCount >= 2) {
+  console.log(`  ✅ Both handlers decode HTML entities and strip markdown before TTS (decode: ${decodeCount}, strip: ${stripMarkdownCount})`);
 } else {
-  console.log(`  ❌ Missing stripMarkdownForTTS before TTS (found ${stripMarkdownCount}, expected 2)`);
+  console.log(`  ❌ Missing decodeHtmlEntitiesForTTS or stripMarkdownForTTS(decodedReply) (decode: ${decodeCount}, strip: ${stripMarkdownCount}, expected 2 each)`);
   process.exit(1);
 }
 
@@ -52,13 +53,16 @@ if (trimCheckCount >= 2) {
   process.exit(1);
 }
 
-// Test 4: Both handlers use appendMessage with safeReplyText
+// Test 4: Both handlers use appendMessage with reply text (displayText decoded for display, or safeReplyText)
+// We use displayText = decodeHtmlEntitiesForTTS(safeReplyText) so chat shows "It's" not "It&#x27;s"
 console.log('Test 4: Checking appendMessage usage...');
-const appendCount = (appJs.match(/appendMessage\('assistant', safeReplyText\)/g) || []).length;
+const appendDisplayText = (appJs.match(/appendMessage\('assistant', displayText\)/g) || []).length;
+const appendSafeReply = (appJs.match(/appendMessage\('assistant', safeReplyText\)/g) || []).length;
+const appendCount = appendDisplayText + appendSafeReply;
 if (appendCount >= 2) {
-  console.log(`  ✅ Both handlers use safeReplyText for appendMessage (found ${appendCount})`);
+  console.log(`  ✅ Both handlers use reply text for appendMessage (displayText: ${appendDisplayText}, safeReplyText: ${appendSafeReply})`);
 } else {
-  console.log(`  ❌ Missing safeReplyText in appendMessage (found ${appendCount}, expected 2)`);
+  console.log(`  ❌ Missing reply text in appendMessage (found ${appendCount}, expected 2)`);
   process.exit(1);
 }
 

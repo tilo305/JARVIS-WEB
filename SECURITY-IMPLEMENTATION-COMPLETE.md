@@ -75,7 +75,8 @@ Comprehensive security improvements have been implemented in JARVIS-WEB based on
 
 **Files Created**:
 
-- `src/security/validation.ts` - Server-side validation (TypeScript)
+- `server.js` - Server-side security headers and validation (getSecurityHeaders, path protection)
+- `scripts/security-config.mjs` - Security configuration
 - `public/js/security.js` - Client-side validation (JavaScript)
 
 **Files Modified**:
@@ -160,7 +161,7 @@ Comprehensive security improvements have been implemented in JARVIS-WEB based on
 
 **Files Created**:
 
-- `src/security/validation.ts` - Server-side utilities
+- `server.js`, `scripts/security-config.mjs` - Server-side security utilities
 - `public/js/security.js` - Client-side utilities
 
 **Security Principles**:
@@ -301,9 +302,8 @@ Comprehensive security improvements have been implemented in JARVIS-WEB based on
 
 ### New Files
 
-- ✅ `src/security/validation.ts` - Server-side security utilities
-- ✅ `src/security/headers.ts` - Security headers configuration
 - ✅ `public/js/security.js` - Client-side security utilities
+- ✅ `server.js` - Security headers (getSecurityHeaders) and path protection
 - ✅ `docs/SECURITY-IMPLEMENTATION.md` - Comprehensive security guide
 - ✅ `SECURITY-SUMMARY.md` - Quick reference
 - ✅ `SECURITY-IMPLEMENTATION-COMPLETE.md` - This file

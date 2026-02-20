@@ -32,11 +32,14 @@
 | **validate-strip-markdown-sync.js** | Ensures stripMarkdownForTTS (no asterisk/underscore TTS) stays in sync in app.js, bidirectional-conversation, and tests. Run: `node debug/tools/validate-strip-markdown-sync.js` |
 | **validate-cors-handler.js** | Validates cors-handler.js exports and app.js integration. Run: `node debug/tools/validate-cors-handler.js` |
 | **validate-electron-paths.js** | Verifies electron/main.js, electron/preload.js, and dist-public/index.html exist (run after vite:build). Run: `node debug/tools/validate-electron-paths.js` |
+| **validate-npm-audit-fix.mjs** | Checks package.json overrides (tar, etc.) and electron-builder 26.x; runs npm audit and warns if high vulns exist (does not fail suite—transitive devDeps often need breaking changes to fix). Run: `node debug/tools/validate-npm-audit-fix.mjs` |
+| **n8n-webhook-live.mjs** | LIVE test: POSTs to n8n webhook (same payload as app). Use when you see "HTTP 404: Not Found". Run: `node debug/tools/n8n-webhook-live.mjs [message]`. See `debug/N8N-WEBHOOK-404-FIX.md`. |
 | **verify-electron-integration.mjs** | Verifies Electron ↔ Vite, preload bridge, frontend, backend wiring. Run: `npm run electron:verify` or `node debug/tools/verify-electron-integration.mjs` |
 | **smoke-electron-built.mjs** | Spawns Electron with USE_BUILT=1, checks stderr for path/load errors (live smoke test). Run: `node debug/tools/smoke-electron-built.mjs` |
 | **kill-all-tasks** (npm) | Kills Vite (port 3000), Electron, and related Node processes. Run: `npm run kill:all` (script: `scripts/kill-all-tasks.mjs`). |
 | **test-copy-log-reset.js** | Tests copy-log reset behavior. |
-| **test-text-response-fix.js** | Tests text response handling. |
+| **test-text-response-fix.js** | Tests text response handling (decodeHtmlEntitiesForTTS, stripMarkdownForTTS). |
+| **test-tts-html-entity-live.mjs** | LIVE: Verifies TTS receives plain text (no HTML entities like &#x27;). Run: `node debug/tools/test-tts-html-entity-live.mjs` |
 | **test-timestamp-live.js** | Timestamp display checks. |
 | **test-greeting-live.html** | Browser-based greeting/time-of-day test (open in browser). |
 
@@ -52,7 +55,7 @@
 
 ### Jest / debug tests (`debug/tests/`)
 
-- **debug/tests/** — STT, TTS, bidirectional, integration, audio format, greeting, timestamp, strip-markdown, **cors-handler**, websocket optimization, **draggable-chat-interface**, **electron-integration** (main/preload/bridge wiring).
+- **debug/tests/** — STT, TTS, bidirectional, integration, audio format, greeting, timestamp, strip-markdown, **cors-handler**, websocket optimization, **draggable-chat-interface**, **electron-integration** (main/preload/bridge wiring), **voice-mic-off-on-error** (regression: mic turns off when TTS/voice flow errors).
 - Run with full suite: `npm test`
 - Integration only (no coverage): `npm run test:integration`
 
@@ -71,6 +74,8 @@ npm run test:integration   # Cartesia integration tests only (debug/tests/integr
 ## Related documentation
 
 - `debug/README.md` — Debug suite overview
+- `debug/N8N-WEBHOOK-404-FIX.md` — When n8n returns HTTP 404 (workflow active, production URL, .env)
+- `debug/N8N-RESPOND-TO-WEBHOOK-FIX.md` — No reply text/voice (Respond to Webhook node, response keys)
 - `debug/ORPHANED-DUPLICATE-OLD-CODE.md` — Audit of duplicates and removals
 - `debug/CONSOLE-ERROR-CHECK-GUIDE.md` — Console error checking
 - `debug/errors-and-fixes.md` — Error fixes log

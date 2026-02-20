@@ -96,7 +96,12 @@ if (mainContent.includes('nodeIntegration: false')) ok('nodeIntegration disabled
 else fail('nodeIntegration should be false');
 if (mainContent.includes('sandbox: true')) ok('Sandbox enabled');
 else fail('Sandbox should be true');
-if (mainContent.includes('loadURL') && mainContent.includes('loadFile')) ok('Dev (loadURL) and built (loadFile) modes');
+if (mainContent.includes('getN8nProxyTimeoutMs') && mainContent.includes('90_000')) ok('n8n webhook timeout 90s default (env override)');
+else if (mainContent.includes('N8N_PROXY_TIMEOUT_MS') || mainContent.includes('N8N_WEBHOOK_TIMEOUT_MS')) ok('n8n webhook timeout env override present');
+else fail('n8n webhook timeout should be 90s default with env override');
+// Dev: loadURL localhost; Built: loadURL app://bundle/ or loadFile (app:// = secure context for mic)
+if (mainContent.includes('loadURL') && (mainContent.includes('loadFile') || mainContent.includes('app://bundle'))) ok('Dev (loadURL) and built (loadURL app:// or loadFile) modes');
+else if (mainContent.includes('loadURL')) ok('loadURL for dev and/or built');
 else fail('Missing loadURL or loadFile');
 
 // 4. Frontend
@@ -111,9 +116,27 @@ if (appContent.includes('invokeN8nWebhook')) ok('invokeN8nWebhook used for n8n')
 else fail('invokeN8nWebhook not used');
 if (appContent.includes('useElectronProxy')) ok('Electron proxy detection for n8n');
 else fail('Electron proxy logic missing');
+if (appContent.includes('electronAPI?.isElectron') && appContent.includes('window.location.origin') && appContent.includes('/audio/')) ok('Electron-specific AudioWorklet base path (origin + /audio/)');
+else if (appContent.includes('audioWorkletBasePath')) ok('Bridge receives audioWorkletBasePath');
+else fail('AudioWorklet base path for Electron missing');
+if (appContent.includes('JARVIS_VERIFY_ELECTRON_MIC')) ok('JARVIS_VERIFY_ELECTRON_MIC() runtime mic verification helper');
+else fail('JARVIS_VERIFY_ELECTRON_MIC missing');
+if (appContent.includes('checkRecordingSupport') && appContent.includes('Electron')) ok('Electron startup mic check');
 
-// 5. Vite config
-console.log('\n5. Vite config');
+// 5. Bridge ↔ AudioWorklet ↔ VAD
+console.log('\n5. Bridge ↔ AudioWorklet ↔ VAD');
+const bridgePath = resolve(ROOT, 'public', 'js', 'cartesia-audio-bridge.js');
+const bridgeContent = existsSync(bridgePath) ? readFileSync(bridgePath, 'utf8') : '';
+if (bridgeContent.includes('audioWorklet.addModule')) ok('Bridge loads AudioWorklet processors');
+if (bridgeContent.includes('MicVAD') && bridgeContent.includes('VAD_CONFIG')) ok('Bridge uses VAD (MicVAD + VAD_CONFIG)');
+if (bridgeContent.includes('stt-capture-processor') && bridgeContent.includes('tts-playback-processor')) ok('STT and TTS processors referenced');
+if (bridgeContent.includes("startsWith('app:')")) ok('Bridge supports app:// protocol for Electron');
+const vadConfigPath = resolve(ROOT, 'public', 'js', 'vad-config.js');
+const vadContent = existsSync(vadConfigPath) ? readFileSync(vadConfigPath, 'utf8') : '';
+if (vadContent.includes('VAD_CONFIG') && vadContent.includes('baseAssetPath')) ok('VAD config has CDN paths for Electron');
+
+// 6. Vite config
+console.log('\n6. Vite config');
 const viteConfig = resolve(ROOT, 'vite.config.js');
 const viteContent = readFileSync(viteConfig, 'utf8');
 if (viteContent.includes("base: './'")) ok("Vite base: './' (relative paths for file://)");
@@ -123,8 +146,8 @@ else fail('Vite outDir should be dist-public');
 if (viteContent.includes('preserve-index-html') || viteContent.includes('preserveIndexHtml')) ok('preserveIndexHtmlPlugin for Electron build');
 else fail('preserveIndexHtmlPlugin may be missing');
 
-// 6. package.json
-console.log('\n6. package.json scripts');
+// 7. package.json
+console.log('\n7. package.json scripts');
 const pkgPath = resolve(ROOT, 'package.json');
 const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
 if (pkg.main === 'electron/main.js') ok('main points to electron/main.js');

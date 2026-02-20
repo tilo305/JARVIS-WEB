@@ -19,7 +19,7 @@ Based on comprehensive research from **Building Secure and Reliable Systems**, *
   - Magic bytes verification (prevents MIME spoofing)
   - Size limits per file type
   - Filename sanitization
-- **Files**: `src/security/validation.ts`, `public/js/security.js`
+- **Files**: `server.js`, `public/js/security.js`
 
 ### 3. ✅ Webhook Response Sanitization
 
@@ -49,7 +49,7 @@ Based on comprehensive research from **Building Secure and Reliable Systems**, *
   - `sanitizeHtml()` - XSS prevention
   - `sanitizeFilename()` - Path traversal prevention
   - `isValidUrl()` - SSRF prevention
-- **Files**: `src/security/validation.ts`, `public/js/security.js`
+- **Files**: `server.js`, `public/js/security.js`
 
 ### 6. ✅ Rate Limiting
 

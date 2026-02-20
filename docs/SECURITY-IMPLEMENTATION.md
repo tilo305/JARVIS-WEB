@@ -44,7 +44,7 @@ This document describes the comprehensive security improvements implemented in J
 
 **Files Created**:
 
-- `src/security/validation.ts` - Server-side validation utilities
+- `server.js` and `scripts/security-config.mjs` - Server-side security and validation
 - `public/js/security.js` - Client-side validation utilities
 
 **Files Modified**:

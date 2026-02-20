@@ -9,7 +9,7 @@ This document summarizes all n8n webhook usage across the project (single webhoo
 | Item | Value |
 |------|--------|
 | **Number of distinct webhooks** | **1** |
-| **Default URL** | `https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4` |
+| **Default URL** | `https://n8n.hempstarai.com/webhook/7600d4d1-e268-4c35-a853-b39ce7014e96` |
 | **Method** | `POST` |
 | **Content-Type** | `application/json` |
 | **Expected response** | JSON with one of: `output`, `reply`, `result`, `text`, `message`, `response`, `answer`, `content` |
@@ -42,7 +42,7 @@ All n8n requests use `buildN8nPayload(message, options)` to ensure session_id, t
 ```ts
 // src/config.ts (lines 6–7)
 export const N8N_WEBHOOK_URL =
-  'https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4';
+  'https://n8n.hempstarai.com/webhook/7600d4d1-e268-4c35-a853-b39ce7014e96';
 ```
 
 ### 2.2 Frontend (browser)
@@ -145,7 +145,7 @@ So the n8n workflow should return at least one of these keys with a string value
 **Valid URL format** (enforced in `tests/unit/config.test.ts`):
 
 - Regex: `^https:\/\/.+\/webhook\/[a-f0-9-]+$`
-- Example: `https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4`
+- Example: `https://n8n.hempstarai.com/webhook/7600d4d1-e268-4c35-a853-b39ce7014e96`
 
 ---
 
@@ -167,7 +167,7 @@ So the n8n workflow should return at least one of these keys with a string value
 ## 8. Conclusion
 
 - There is **one n8n webhook** in the project:  
-  `https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4`.
+  `https://n8n.hempstarai.com/webhook/7600d4d1-e268-4c35-a853-b39ce7014e96`.
 - It is **POST**ed to from:
   - **Chat UI** (`app.js`) with full payload (message, session_id, timestamp, timezone, message_id, source, attachments).
   - **Bidirectional example** and **debug/live** code with minimal `{ message }` payload.

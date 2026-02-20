@@ -71,20 +71,53 @@ describe('CartesiaAudioBridge', () => {
     expect(source).toMatch(/VAD_CONFIG\.silenceClosingDelayAfterTtsMs/);
   });
 
+  it('must support skipAgentSilenceTimerOnComplete so closing message TTS does not restart 10s timer (fire once)', () => {
+    const source = readFileSync(BRIDGE_PATH, 'utf8');
+    expect(source).toMatch(/_skipNextAgentSilenceTimerStart/);
+    expect(source).toMatch(/skipAgentSilenceTimerOnComplete/);
+    expect(source).toMatch(/resumeSilenceTimersAfterTTS/);
+    const resumeIdx = source.indexOf('resumeSilenceTimersAfterTTS(afterPlaybackDrain');
+    const skipCheckIdx = source.indexOf('_skipNextAgentSilenceTimerStart', resumeIdx);
+    expect(skipCheckIdx).toBeGreaterThan(-1);
+  });
+
   it('playTTSChunk must use transferable for Int16Array (zero-copy to AudioWorklet)', () => {
     const source = readFileSync(BRIDGE_PATH, 'utf8');
     expect(source).toMatch(/postMessage\s*\(\s*\{\s*type:\s*['"]audio['"]\s*,\s*samples:\s*pcmInt16\s*\}\s*,\s*\[\s*pcmInt16\.buffer\s*\]\s*\)/);
   });
 
+  it('must suppress benign "Invalid context ID" when TTS context was cancelled (e.g. filler cut off)', () => {
+    const source = readFileSync(BRIDGE_PATH, 'utf8');
+    expect(source).toMatch(/invalid context id/i);
+    expect(source).toMatch(/does not exist or may have already been cancelled/i);
+    expect(source).toMatch(/isBenignCancel/);
+  });
+
   it('_bargeIn must clear TTS buffer first for natural bidirectional flow', () => {
     const source = readFileSync(BRIDGE_PATH, 'utf8');
-    const bargeInMatch = source.match(/_bargeIn\s*\(\)\s*\{([^}]+)\}/);
-    expect(bargeInMatch).toBeTruthy();
-    const body = bargeInMatch[1];
+    const idx = source.indexOf('_bargeIn() {');
+    expect(idx).toBeGreaterThan(-1);
+    const start = source.indexOf('{', idx);
+    expect(start).toBeGreaterThan(-1);
+    let braceCount = 0;
+    let end = start;
+    for (let i = start; i < source.length; i++) {
+      if (source[i] === '{') braceCount++;
+      if (source[i] === '}') {
+        braceCount--;
+        if (braceCount === 0) {
+          end = i;
+          break;
+        }
+      }
+    }
+    const body = source.substring(start + 1, end);
     const clearTTSIdx = body.indexOf('clearTTSBuffer');
-    const cancelIdx = body.indexOf('cancel') || body.indexOf('context_id');
+    const cancelIdx = body.indexOf('cancel');
+    const contextIdIdx = body.indexOf('context_id');
+    const cancelOrContextIdx = cancelIdx >= 0 ? cancelIdx : (contextIdIdx >= 0 ? contextIdIdx : body.length);
     expect(clearTTSIdx).toBeGreaterThan(-1);
-    expect(clearTTSIdx).toBeLessThan(cancelIdx === -1 ? body.length : cancelIdx);
+    expect(clearTTSIdx).toBeLessThan(cancelOrContextIdx);
   });
 
   describe('streamTextChunks optimization', () => {

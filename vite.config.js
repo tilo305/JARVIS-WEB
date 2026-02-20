@@ -7,26 +7,60 @@ import { loadEnvEverywhere } from './scripts/load-env-everywhere.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+/** Inline error-capture.js in build so Vite does not warn "can't be bundled without type=module". */
+function inlineErrorCapturePlugin() {
+  return {
+    name: 'inline-error-capture',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'pre',
+      handler(html, ctx) {
+        if (ctx.server) return html;
+        const scriptTag = '<script src="./js/error-capture.js"></script>';
+        if (!html.includes(scriptTag)) return html;
+        const path = join(__dirname, 'public', 'js', 'error-capture.js');
+        const content = readFileSync(path, 'utf8');
+        const inline = `<script>${content}</script>`;
+        return html.replace(scriptTag, inline);
+      },
+    },
+  };
+}
+
 const CARTESIA_VERSION = '2025-04-16'; // Must match src/config.ts API_VERSION
 const STT_WS = 'wss://api.cartesia.ai/stt/websocket';
 const TTS_WS = 'wss://api.cartesia.ai/tts/websocket';
 const WS_CHECK_MS = 30_000;
 
-/** Vite plugin: ensure built index.html preserves full source (chat-interface, JARVIS_CONFIG, favicon, etc.). Uses relative script path so Electron file:// and static servers both work. */
+/** Vite plugin: ensure built index.html preserves full source (chat-interface, JARVIS_CONFIG, favicon, etc.). Uses relative script path so Electron file:// and static servers both work. Inlines error-capture.js in the written file. */
 function preserveIndexHtmlPlugin() {
   return {
     name: 'preserve-index-html',
     apply: 'build',
     writeBundle(options, bundle) {
       const outDir = options.dir || join(__dirname, 'dist-public');
-      const jsChunk = Object.keys(bundle).find((k) => k.startsWith('assets/') && k.endsWith('.js'));
+      // Prefer entry chunk (app.js → assets/app-*.js); fallback to first assets/*.js
+      const jsChunk =
+        Object.keys(bundle).find((k) => k.startsWith('assets/') && k.includes('app-') && k.endsWith('.js')) ||
+        Object.keys(bundle).find((k) => k.startsWith('assets/') && k.endsWith('.js'));
       if (!jsChunk) return;
       const scriptSrc = './' + jsChunk;
       const sourcePath = join(__dirname, 'public', 'index.html');
       let html = readFileSync(sourcePath, 'utf8');
+      // Inline error-capture.js so built HTML does not request it (works in Electron app:// and avoids script-tag warning)
+      const scriptTag = '<script src="./js/error-capture.js"></script>';
+      if (html.includes(scriptTag)) {
+        const capturePath = join(__dirname, 'public', 'js', 'error-capture.js');
+        html = html.replace(scriptTag, `<script>${readFileSync(capturePath, 'utf8')}</script>`);
+      }
       html = html.replace(
         /<script\s+type="module"\s+src="[^"]*"([^>]*)><\/script>/,
         (_, extra) => `<script type="module" crossorigin src="${scriptSrc}"${extra}></script>`
+      );
+      // Ensure built index has modulepreload for the chunk (replace dev modulepreload for ./js/app.js)
+      html = html.replace(
+        /<link\s+rel="modulepreload"\s+href="\.\/js\/app\.js"\s*\/?>/,
+        `<link rel="modulepreload" href="${scriptSrc}">`
       );
       writeFileSync(join(outDir, 'index.html'), html);
     },
@@ -137,6 +171,7 @@ export default defineConfig(({ mode }) => {
     publicDir: false,
     envDir, // Ensures dev/build both read root .env
     plugins: [
+      inlineErrorCapturePlugin(),
       preserveIndexHtmlPlugin(),
       devCspPlugin(),
       blockEnvFilesPlugin(),
@@ -146,6 +181,7 @@ export default defineConfig(({ mode }) => {
           { src: 'debug/*.html', dest: 'debug' },
           { src: 'js/n8n-payload.js', dest: 'js' },
           { src: 'js/debug.js', dest: 'js' },
+          { src: 'js/error-capture.js', dest: 'js' },
         ],
       }),
       cartesiaWebSocketStatusPlugin(),
@@ -155,6 +191,15 @@ export default defineConfig(({ mode }) => {
       outDir: join(__dirname, 'dist-public'),
       emptyOutDir: true,
       chunkSizeWarningLimit: 4096,
+      rollupOptions: {
+        // Single JS entry so Rollup bundles app + all deps (including @ricky0123/vad-web) into one chunk for Electron
+        input: join(__dirname, 'public', 'js', 'app.js'),
+        output: {
+          entryFileNames: 'assets/[name]-[hash].js',
+          chunkFileNames: 'assets/[name]-[hash].js',
+          assetFileNames: 'assets/[name]-[hash][extname]',
+        },
+      },
     },
     optimizeDeps: {
       include: [],
@@ -173,7 +218,7 @@ export default defineConfig(({ mode }) => {
     },
     // Expose env to frontend (from root .env). Use both VITE_* and non-VITE_ names so the same value shows up no matter what is looking for it.
     define: (() => {
-      const defaultN8n = 'https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4';
+      const defaultN8n = 'https://n8n.hempstarai.com/webhook/7600d4d1-e268-4c35-a853-b39ce7014e96';
       const cartesiaApiKey = env.VITE_CARTESIA_API_KEY || env.CARTESIA_API_KEY || '';
       const cartesiaVoiceId = env.VITE_CARTESIA_VOICE_ID || env.CARTESIA_VOICE_ID || '95131c95-525c-463b-893d-803bafdf93c4';
       const n8nWebhookUrl = env.VITE_N8N_WEBHOOK_URL || env.N8N_WEBHOOK_URL || defaultN8n;
