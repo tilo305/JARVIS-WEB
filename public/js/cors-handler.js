@@ -1,270 +1,134 @@
 /**
- * CORS Handler and Diagnostics
- * 
+ * CORS diagnostic and configuration utilities for JARVIS-WEB.
  * Based on MDN CORS documentation: https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS
- * 
- * This module provides:
- * - CORS preflight testing (OPTIONS request)
- * - CORS error detection and diagnostics
- * - Comprehensive error reporting
- * 
- * @module cors-handler
+ *
+ * Used for:
+ * - Detecting CORS-related errors in fetch failures
+ * - Diagnosing preflight (OPTIONS) and POST CORS configuration
+ * - Providing server configuration guidance (n8n, reverse proxy)
  */
-
 'use strict';
 
 /**
- * Test CORS preflight (OPTIONS request) for a given URL.
- * According to MDN, POST requests with application/json trigger preflight.
- * 
- * @param {string} url - The URL to test
- * @param {string} origin - The origin making the request (defaults to window.location.origin)
- * @returns {Promise<{success: boolean, headers: Object, error?: string}>>}
+ * Test OPTIONS (preflight) request to a URL.
+ * Returns diagnostic info about whether the server allows CORS preflight.
+ * @param {string} url - Full webhook/API URL to test
+ * @param {string} [origin] - Origin to send (defaults to current window.origin or 'http://localhost:3000')
+ * @returns {Promise<{ ok: boolean, status: number, headers: Record<string, string>, error?: string }>}
  */
-export async function testCORSPreflight(url, origin = window.location.origin) {
+export async function testCORSPreflight(url, origin) {
+  const o = origin || (typeof window !== 'undefined' ? window.origin : 'http://localhost:3000');
+  const result = { ok: false, status: 0, headers: {} };
+
   try {
-    /* eslint-disable-next-line no-console -- intentional: diagnostic tool */
-    console.log('[JARVIS] CORS: Testing preflight (OPTIONS) request', { url, origin });
-    
-    const response = await fetch(url, {
+    const res = await fetch(url, {
       method: 'OPTIONS',
       headers: {
-        'Origin': origin,
+        Origin: o,
         'Access-Control-Request-Method': 'POST',
         'Access-Control-Request-Headers': 'content-type',
       },
-      mode: 'cors',
     });
-    
-    const corsHeaders = {
-      'Access-Control-Allow-Origin': response.headers.get('Access-Control-Allow-Origin'),
-      'Access-Control-Allow-Methods': response.headers.get('Access-Control-Allow-Methods'),
-      'Access-Control-Allow-Headers': response.headers.get('Access-Control-Allow-Headers'),
-      'Access-Control-Max-Age': response.headers.get('Access-Control-Max-Age'),
-    };
-    
-    const success = response.ok && corsHeaders['Access-Control-Allow-Origin'] !== null;
-    
-    /* eslint-disable-next-line no-console -- intentional: diagnostic tool */
-    console.log('[JARVIS] CORS: Preflight test result', {
-      success,
-      status: response.status,
-      statusText: response.statusText,
-      corsHeaders,
-      url,
-      origin
-    });
-    
-    return {
-      success,
-      status: response.status,
-      statusText: response.statusText,
-      headers: corsHeaders,
-      allHeaders: Object.fromEntries(response.headers.entries()),
-    };
-  } catch (error) {
-    /* eslint-disable-next-line no-console -- intentional: diagnostic tool */
-    console.error('[JARVIS] CORS: Preflight test failed', {
-      error: error.message,
-      errorName: error.name,
-      url,
-      origin
-    });
-    
-    return {
-      success: false,
-      error: error.message,
-      errorName: error.name,
-      headers: {},
-    };
+    result.status = res.status;
+    result.ok = res.ok;
+    res.headers.forEach((v, k) => { result.headers[k.toLowerCase()] = v; });
+    return result;
+  } catch (err) {
+    result.error = err instanceof Error ? err.message : String(err);
+    return result;
   }
 }
 
 /**
- * Comprehensive CORS diagnostics for a given URL.
- * Tests both preflight and actual request capabilities.
- * 
- * @param {string} url - The URL to diagnose
- * @param {Object} [options] - Options
- * @param {string} [options.origin] - Origin to test from (defaults to window.location.origin)
- * @param {Object} [options.testPayload] - Test payload for POST request
- * @returns {Promise<Object>} Diagnostic results
+ * Full CORS diagnostics: preflight + actual POST.
+ * @param {string} url - Full webhook/API URL
+ * @param {{ origin?: string, body?: string }} [options]
+ * @returns {Promise<{
+ *   preflight: { ok: boolean, status: number, headers: Record<string, string>, error?: string },
+ *   post: { ok: boolean, status: number, corsBlocked?: boolean, error?: string }
+ * }>}
  */
 export async function diagnoseCORS(url, options = {}) {
-  const origin = options.origin || window.location.origin;
-  const testPayload = options.testPayload || { message: 'CORS test', source: 'diagnostic' };
-  
-  const diagnostics = {
-    url,
-    origin,
-    protocol: window.location.protocol,
-    isHttps: window.location.protocol === 'https:',
-    isLocalhost: origin.includes('localhost') || origin.includes('127.0.0.1'),
-    webhookIsHttps: url.startsWith('https://'),
-    mixedContent: window.location.protocol === 'http:' && url.startsWith('https://'),
-    timestamp: new Date().toISOString(),
-    preflight: null,
-    actualRequest: null,
-    recommendations: [],
-  };
-  
-  /* eslint-disable-next-line no-console -- intentional: diagnostic tool */
-  console.log('[JARVIS] CORS: Starting comprehensive diagnostics', diagnostics);
-  
-  // Test 1: Preflight (OPTIONS)
-  diagnostics.preflight = await testCORSPreflight(url, origin);
-  
-  // Test 2: Actual POST request
+  const origin = options.origin || (typeof window !== 'undefined' ? window.origin : 'http://localhost:3000');
+  const body = options.body || JSON.stringify({ message: '[CORS diagnostic] test', sessionId: 'cors-test' });
+
+  const preflight = await testCORSPreflight(url, origin);
+  const post = { ok: false, status: 0 };
+
+  if (!preflight.ok && preflight.error) {
+    return { preflight, post };
+  }
+
   try {
-    /* eslint-disable-next-line no-console -- intentional: diagnostic tool */
-    console.log('[JARVIS] CORS: Testing actual POST request', { url, origin });
-    
-    const response = await fetch(url, {
+    const res = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Origin': origin,
-      },
-      body: JSON.stringify(testPayload),
-      mode: 'cors',
+      headers: { 'Content-Type': 'application/json' },
+      body,
     });
-    
-    const responseHeaders = {
-      'Access-Control-Allow-Origin': response.headers.get('Access-Control-Allow-Origin'),
-      'Access-Control-Allow-Credentials': response.headers.get('Access-Control-Allow-Credentials'),
-    };
-    
-    diagnostics.actualRequest = {
-      success: response.ok,
-      status: response.status,
-      statusText: response.statusText,
-      corsHeaders: responseHeaders,
-      hasCORSHeaders: responseHeaders['Access-Control-Allow-Origin'] !== null,
-    };
-    
-    /* eslint-disable-next-line no-console -- intentional: diagnostic tool */
-    console.log('[JARVIS] CORS: Actual request test result', diagnostics.actualRequest);
-  } catch (error) {
-    diagnostics.actualRequest = {
-      success: false,
-      error: error.message,
-      errorName: error.name,
-      isCORS: error.message === 'Failed to fetch' || error.name === 'TypeError',
-    };
-    
-    /* eslint-disable-next-line no-console -- intentional: diagnostic tool */
-    console.error('[JARVIS] CORS: Actual request test failed', diagnostics.actualRequest);
+    post.ok = res.ok;
+    post.status = res.status;
+    return { preflight, post };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    post.error = msg;
+    post.corsBlocked = detectCORSError(err, url);
+    return { preflight, post };
   }
-  
-  // Generate recommendations
-  if (!diagnostics.preflight.success) {
-    diagnostics.recommendations.push({
-      severity: 'error',
-      issue: 'Preflight (OPTIONS) request failed',
-      solution: 'Configure n8n server to respond to OPTIONS requests with CORS headers',
-      details: 'The server must respond to OPTIONS requests with: Access-Control-Allow-Origin, Access-Control-Allow-Methods, Access-Control-Allow-Headers',
-    });
-  }
-  
-  if (diagnostics.actualRequest && !diagnostics.actualRequest.success && diagnostics.actualRequest.isCORS) {
-    diagnostics.recommendations.push({
-      severity: 'error',
-      issue: 'CORS error on actual POST request',
-      solution: 'Configure n8n server to include Access-Control-Allow-Origin header in POST responses',
-      details: 'The server must include Access-Control-Allow-Origin header in the response',
-    });
-  }
-  
-  if (diagnostics.mixedContent) {
-    diagnostics.recommendations.push({
-      severity: 'warning',
-      issue: 'Mixed content detected (HTTP page → HTTPS webhook)',
-      solution: 'Serve the frontend over HTTPS or use HTTP webhook',
-      details: 'Browsers may block mixed content requests',
-    });
-  }
-  
-  if (!diagnostics.preflight.success && diagnostics.actualRequest && diagnostics.actualRequest.isCORS) {
-    diagnostics.recommendations.push({
-      severity: 'info',
-      issue: 'CORS configuration needed',
-      solution: 'Add CORS headers to n8n webhook responses',
-      details: 'See docs/CORS-CONFIGURATION.md for n8n server configuration',
-    });
-  }
-  
-  /* eslint-disable-next-line no-console -- intentional: diagnostic tool */
-  console.log('[JARVIS] CORS: Diagnostics complete', diagnostics);
-  
-  return diagnostics;
 }
 
 /**
- * Detect if an error is CORS-related.
- * Based on MDN: CORS failures result in errors but specifics are not available to JavaScript.
- * 
- * @param {Error} error - The error to check
- * @param {string} url - The URL that was requested
- * @returns {Object} CORS detection result
+ * Detect if an error is likely CORS-related.
+ * Browsers don't expose CORS details to JS; we infer from common error messages.
+ * @param {unknown} error - Caught error (Error, string, etc.)
+ * @param {string} [url] - URL that was fetched (for logging)
+ * @returns {boolean}
  */
 export function detectCORSError(error, url) {
-  const errorMessage = error?.message || String(error);
-  const errorName = error?.name;
-  
-  // CORS errors typically manifest as "Failed to fetch" TypeError
-  // But this is also generic for network errors, so we need additional checks
-  const isGenericNetworkError = errorMessage === 'Failed to fetch' && errorName === 'TypeError';
-  
-  // Check if it's likely CORS (cross-origin request)
-  const origin = window.location.origin;
-  const urlOrigin = new URL(url).origin;
-  const isCrossOrigin = origin !== urlOrigin;
-  
-  return {
-    isLikelyCORS: isGenericNetworkError && isCrossOrigin,
-    isNetworkError: isGenericNetworkError,
-    isCrossOrigin: isCrossOrigin,
-    origin,
-    urlOrigin,
-    errorMessage,
-    errorName,
-    recommendation: isGenericNetworkError && isCrossOrigin
-      ? 'This is likely a CORS error. The server must include Access-Control-Allow-Origin header.'
-      : isGenericNetworkError
-        ? 'This is a network error. Check server availability, DNS, and firewall settings.'
-        : 'Unknown error type.',
-  };
+  if (!error) return false;
+  const msg = typeof error === 'string' ? error : (error instanceof Error ? error.message : String(error));
+  const lower = msg.toLowerCase();
+  const corsIndicators = [
+    'cors',
+    'cross-origin',
+    'failed to fetch',
+    'networkerror',
+    'network error',
+    'access-control-allow-origin',
+    'blocked by cors policy',
+  ];
+  const likely = corsIndicators.some((ind) => lower.includes(ind));
+  /* eslint-disable no-console -- intentional: user-facing CORS diagnostic */
+  if (likely && typeof console !== 'undefined' && console.warn) {
+    console.warn('[JARVIS] Likely CORS error detected:', msg, url ? `(url: ${url})` : '');
+  }
+  /* eslint-enable no-console */
+  return likely;
 }
 
 /**
- * Get CORS configuration recommendations for n8n server.
- * 
- * @param {string} origin - The origin that needs access
- * @returns {Object} Server configuration recommendations
+ * Get server-side CORS configuration guidance for n8n / reverse proxy.
+ * @param {string} [origin] - Client origin (e.g. http://localhost:3000)
+ * @returns {string}
  */
-export function getCORSConfigurationGuide(origin = window.location.origin) {
-  return {
-    origin,
-    requiredHeaders: {
-      'Access-Control-Allow-Origin': origin === '*' ? '*' : origin,
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-      'Access-Control-Max-Age': '86400', // 24 hours
-    },
-    n8nConfiguration: {
-      description: 'Configure n8n webhook to allow CORS requests',
-      steps: [
-        'In n8n workflow, add a "Set" node before the webhook response',
-        'Set headers: Access-Control-Allow-Origin, Access-Control-Allow-Methods, Access-Control-Allow-Headers',
-        'For OPTIONS requests (preflight), return 200 with CORS headers and empty body',
-        'For POST requests, include Access-Control-Allow-Origin in response headers',
-      ],
-      exampleHeaders: {
-        'Access-Control-Allow-Origin': origin,
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      },
-    },
-    documentation: 'https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS',
-  };
+export function getCORSConfigurationGuide(origin) {
+  const o = origin || (typeof window !== 'undefined' ? window.origin : 'http://localhost:3000');
+  return `
+CORS Configuration Guide for JARVIS-WEB → n8n Webhook
+──────────────────────────────────────────────────────
+Client origin: ${o}
+
+1. Server must respond to OPTIONS (preflight) with:
+   - Access-Control-Allow-Origin: ${o}  (or * for non-credentialed)
+   - Access-Control-Allow-Methods: POST, OPTIONS
+   - Access-Control-Allow-Headers: Content-Type
+   - Status: 200 or 204
+
+2. Server must include in POST response:
+   - Access-Control-Allow-Origin: ${o}  (or *)
+
+3. n8n: Add a Set node before Respond to Webhook with these headers,
+   and handle OPTIONS with early return. See docs/CORS-CONFIGURATION.md
+
+4. Electron: Use main process fetch (invokeN8nWebhook) to bypass CORS.
+`;
 }

@@ -49,20 +49,6 @@ const DEBUG = {
 /**
  * Escape HTML special characters to prevent XSS
  * @param {string} s - String to escape
- * @returns {string} - Escaped string
- */
-export function escapeHtml(s) {
-  const div = document.createElement('div');
-  div.textContent = s;
-  return div.innerHTML;
-}
-
-DEBUG.init();
-export { DEBUG };
-
-/**
- * Escape HTML special characters to prevent XSS
- * @param {string} s - String to escape
  * @returns {string} Escaped HTML string
  */
 export function escapeHtml(s) {
@@ -71,3 +57,6 @@ export function escapeHtml(s) {
   div.textContent = s;
   return div.innerHTML;
 }
+
+DEBUG.init();
+export { DEBUG };

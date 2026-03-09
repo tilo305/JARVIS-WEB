@@ -79,9 +79,29 @@ This document describes how patterns from *Agentic Design Patterns: A Hands-On G
 - Retries up to 3 times with exponential backoff for `AbortError`, `Failed to fetch`, timeout, etc.
 - Non-retryable errors fail immediately.
 
-### 6. Prompt Chaining / Tool Use (Chapters 1, 5)
+### 6. Prompt Chaining (Chapter 1)
 
-**Purpose**: The n8n workflow can use `conversationHistory`, `intent`, and `attachments` to drive multi-step or tool-using flows. The client supplies the structured payload; chaining and tool use are implemented in n8n.
+**Purpose**: Break complex processing into sequential steps before sending to n8n.
+
+**Implementation**:
+- `extractEntities(message)` extracts dates, times, numbers, emails, keywords from user text.
+- `runPromptChainPipeline(message)` runs the pipeline: extract entities → build `agenticHints`.
+- `agenticHints` includes `planMode` (for calendar/search/email intents) and `hasDateTimeContext` (when date/time entities found).
+- `extractedEntities` and `agenticHints` are sent in every payload for n8n workflow routing and context.
+
+### 7. Reflection (Chapter 4)
+
+**Purpose**: Self-correction—validate assistant replies and apply fallbacks when quality is poor.
+
+**Implementation**:
+- `validateAndRefineReply(userMessage, reply, getFallback)` checks for empty, too-short, or low-quality replies.
+- Low-quality patterns: "Noted, sir.", "I don't have access", "As an AI I can't...", etc.
+- When detected, applies `getNaturalFallback(userMessage)` for time/date and other queries.
+- Integrated in `getLLMReply()` after `extractReplyFromJson()`.
+
+### 8. Tool Use (Chapter 5)
+
+**Purpose**: The n8n workflow can use `conversationHistory`, `intent`, `attachments`, and `extractedEntities` to drive multi-step or tool-using flows. The client supplies the structured payload; tool execution is implemented in n8n.
 
 ## n8n Payload Shape
 
@@ -98,7 +118,8 @@ The full payload sent to the webhook includes:
 | `conversationHistory` | Recent turns (Memory) |
 | `intent` | Classified intent (Routing) |
 | `contextEnrichment` | Device/environment hints |
-| `agenticHints` | Optional `{ planMode, refineMode }` for workflow selection |
+| `agenticHints` | Optional `{ planMode, hasDateTimeContext }` for workflow selection |
+| `extractedEntities` | `{ dates, times, numbers, emails, keywords }` from prompt chain |
 
 ## n8n Workflow Tips
 

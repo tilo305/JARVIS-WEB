@@ -2,12 +2,28 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <!-- Error capture MUST run first so console patches are active before any other script -->
+  <script type="module" src="./js/error-capture.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- CSP is set via HTTP header by server.js / Electron. Meta fallback for Vite dev (requires unsafe-inline for HMR). -->
+  <!-- CSP: no strict-dynamic for file:// (Electron built). server.js overrides with nonce-based. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' wss://api.cartesia.ai wss: https: http://localhost http://127.0.0.1 blob:; img-src 'self' data: blob:; media-src 'self' blob:; object-src 'none'; base-uri 'none';">
   <title>JARVIS — Voice &amp; Chat</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%23FF1800' opacity='0.3'/><circle cx='16' cy='16' r='10' fill='none' stroke='%23FFFF00' stroke-width='2'/><circle cx='16' cy='16' r='4' fill='%23FF1C00'/></svg>" type="image/svg+xml">
+  <!-- Favicons (browser tabs, bookmarks, PWA) - from public icons -->
+  <link rel="icon" href="./icon.ico" sizes="any">
+  <link rel="icon" type="image/png" href="./icon-16.png" sizes="16x16">
+  <link rel="icon" type="image/png" href="./icon-32.png" sizes="32x32">
+  <link rel="icon" type="image/png" href="./icon-48.png" sizes="48x48">
+  <link rel="apple-touch-icon" href="./icon-256.png" sizes="256x256">
+  <link rel="apple-touch-icon" href="./icon-512.png" sizes="512x512">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://api.cartesia.ai" crossorigin>
+  <link rel="preconnect" href="https://n8n.hempstarai.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="modulepreload" href="./js/app.js">
+  <!-- AudioWorklet processors: NOT modulepreload — loaded via addModule() in worklet scope; preloading would bundle them as main-thread scripts (AudioWorkletProcessor undefined). -->
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet">
   <!-- Modern UI v2.0 - Enhanced Iron Man Theme with Glassmorphism -->
   <style>
     :root {
@@ -15,6 +31,8 @@
       --bg-panel: #0f0f15;
       --bg-input: #1a1a22;
       --border: #2a2a35;
+      --iron-dark: #0f0f15;
+      --iron-border: #2a2a35;
       /* Yellow */
       --gold: #FFFF00;
       --gold-bright: #FFD700;
@@ -53,6 +71,16 @@
     * { 
       box-sizing: border-box;
     }
+    html { background: #000; }
+    /* Full-viewport background video (behind overlays and chat) */
+    .bg-video {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 0;
+    }
     body {
       font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
       font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
@@ -60,15 +88,11 @@
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
       text-rendering: optimizeLegibility;
-      background: var(--bg-deep);
-      background-image: 
-        radial-gradient(circle at 20% 30%, rgba(255, 24, 0, 0.2) 0%, transparent 60%),
-        radial-gradient(circle at 80% 70%, rgba(255, 255, 0, 0.25) 0%, transparent 60%),
-        radial-gradient(circle at 50% 50%, rgba(255, 255, 0, 0.15) 0%, transparent 70%),
-        linear-gradient(135deg, rgba(255, 24, 0, 0.12) 0%, rgba(255, 255, 0, 0.1) 50%, rgba(255, 24, 0, 0.08) 100%);
+      background: transparent;
       color: var(--text);
       margin: 0;
       min-height: 100vh;
+      min-height: 100dvh;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -80,11 +104,11 @@
       position: fixed;
       inset: 0;
       background: 
-        repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255, 24, 0, 0.05) 2px, rgba(255, 24, 0, 0.05) 4px),
-        repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(255, 255, 0, 0.05) 2px, rgba(255, 255, 0, 0.05) 4px),
-        repeating-linear-gradient(45deg, transparent, transparent 1px, rgba(255, 255, 0, 0.03) 1px, rgba(255, 255, 0, 0.03) 2px);
+        repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255, 24, 0, 0.08) 2px, rgba(255, 24, 0, 0.08) 4px),
+        repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(255, 255, 0, 0.08) 2px, rgba(255, 255, 0, 0.08) 4px),
+        repeating-linear-gradient(45deg, transparent, transparent 1px, rgba(255, 255, 0, 0.04) 1px, rgba(255, 255, 0, 0.04) 2px);
       pointer-events: none;
-      z-index: 0;
+      z-index: 1;
       opacity: 0.5;
     }
     body::after {
@@ -92,11 +116,12 @@
       position: fixed;
       inset: 0;
       background: 
-        radial-gradient(ellipse at 30% 40%, rgba(255, 24, 0, 0.06) 0%, transparent 50%),
-        radial-gradient(ellipse at 70% 60%, rgba(255, 255, 0, 0.05) 0%, transparent 50%),
-        radial-gradient(ellipse at 50% 50%, rgba(255, 255, 0, 0.04) 0%, transparent 60%);
+        radial-gradient(ellipse at 30% 40%, rgba(255, 24, 0, 0.15) 0%, transparent 50%),
+        radial-gradient(ellipse at 70% 60%, rgba(255, 255, 0, 0.12) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(255, 255, 0, 0.08) 0%, transparent 60%),
+        linear-gradient(180deg, rgba(0,0,0,0.5) 0%, transparent 30%, transparent 70%, rgba(0,0,0,0.4) 100%);
       pointer-events: none;
-      z-index: 0;
+      z-index: 1;
       animation: backgroundPulse 8s ease-in-out infinite;
     }
     @keyframes backgroundPulse {
@@ -104,30 +129,38 @@
       50% { opacity: 0.7; }
     }
     .chat-interface {
-      width: 700px;
-      height: 600px;
+      width: min(700px, calc(100vw - 2rem));
+      height: min(600px, calc(100vh - 2rem));
+      height: min(600px, calc(100dvh - 2rem));
+      max-width: 100%;
+      max-height: 100%;
+      min-width: 280px;
+      min-height: 320px;
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
       display: flex;
       flex-direction: column;
-      background: rgba(15, 15, 21, 0.7);
+      background: rgba(15, 15, 21, 0.02);
       background-image: 
-        linear-gradient(135deg, rgba(255, 24, 0, 0.15) 0%, rgba(255, 255, 0, 0.12) 50%, rgba(255, 24, 0, 0.1) 100%),
-        radial-gradient(circle at top left, rgba(255, 24, 0, 0.2) 0%, transparent 50%),
-        radial-gradient(circle at bottom right, rgba(255, 255, 0, 0.18) 0%, transparent 50%);
+        linear-gradient(135deg, rgba(255, 24, 0, 0.01) 0%, rgba(255, 255, 0, 0.008) 50%, rgba(255, 24, 0, 0.01) 100%),
+        radial-gradient(circle at top left, rgba(255, 24, 0, 0.015) 0%, transparent 50%),
+        radial-gradient(circle at bottom right, rgba(255, 255, 0, 0.01) 0%, transparent 50%);
       border: none;
       border-radius: var(--radius);
       overflow: hidden;
       box-shadow: 
-        0 25px 70px rgba(0, 0, 0, 0.8),
+        0 25px 70px rgba(0, 0, 0, 0.4),
         0 0 0 2px rgba(255, 24, 0, 0.3),
-        0 0 80px rgba(255, 24, 0, 0.3),
-        0 0 120px rgba(255, 255, 0, 0.2),
-        0 0 100px rgba(255, 24, 0, 0.15),
-        inset 0 2px 4px rgba(255, 255, 255, 0.12),
-        inset 0 -2px 4px rgba(255, 255, 0, 0.15);
-      backdrop-filter: blur(25px) saturate(200%);
-      -webkit-backdrop-filter: blur(25px) saturate(200%);
-      position: relative;
-      z-index: 1;
+        0 0 80px rgba(255, 24, 0, 0.2),
+        0 0 120px rgba(255, 255, 0, 0.15),
+        0 0 100px rgba(255, 24, 0, 0.1),
+        inset 0 2px 4px rgba(255, 255, 255, 0.08),
+        inset 0 -2px 4px rgba(255, 255, 0, 0.08);
+      backdrop-filter: blur(4px) saturate(110%);
+      -webkit-backdrop-filter: blur(4px) saturate(110%);
+      z-index: 2;
     }
     .chat-interface::after {
       content: '';
@@ -162,15 +195,24 @@
       display: flex;
       align-items: center;
       gap: 0.75rem;
-      background: rgba(15, 15, 21, 0.6);
-      backdrop-filter: blur(30px) saturate(200%);
-      -webkit-backdrop-filter: blur(30px) saturate(200%);
+      background: rgba(15, 15, 21, 0.03);
+      cursor: move;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      backdrop-filter: blur(4px) saturate(110%);
+      -webkit-backdrop-filter: blur(4px) saturate(110%);
       position: relative;
       box-shadow: 
-        0 4px 16px rgba(0, 0, 0, 0.5),
-        inset 0 1px 0 rgba(255, 255, 255, 0.12),
-        0 0 30px rgba(255, 24, 0, 0.2),
-        0 0 20px rgba(255, 255, 0, 0.15);
+        0 4px 16px rgba(0, 0, 0, 0.25),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08),
+        0 0 30px rgba(255, 24, 0, 0.15),
+        0 0 20px rgba(255, 255, 0, 0.1);
+    }
+    .header button {
+      cursor: pointer;
     }
     .header::after {
       content: '';
@@ -603,12 +645,12 @@
     }
     .message.user {
       align-self: flex-end;
-      background: linear-gradient(135deg, rgba(255, 24, 0, 0.25), rgba(255, 24, 0, 0.15));
+      background: linear-gradient(135deg, rgba(255, 24, 0, 0.10), rgba(255, 24, 0, 0.06));
       border: 1.5px solid var(--iron-red);
       box-shadow: 
-        0 4px 14px rgba(255, 24, 0, 0.3),
-        0 0 30px rgba(255, 24, 0, 0.25),
-        inset 0 1px 0 rgba(220, 20, 60, 0.3);
+        0 4px 14px rgba(255, 24, 0, 0.2),
+        0 0 30px rgba(255, 24, 0, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.12);
     }
     .message.assistant {
       align-self: flex-start;
@@ -1051,10 +1093,9 @@
     @media (max-width: 768px) {
       .chat-interface {
         width: calc(100vw - 2rem);
-        max-width: 700px;
         height: calc(100vh - 2rem);
-        max-height: 600px;
-        margin: 1rem;
+        max-width: none;
+        max-height: none;
       }
       .header {
         padding: 0.75rem 1rem;
@@ -1086,6 +1127,8 @@
         width: calc(100vw - 1rem);
         height: calc(100vh - 1rem);
         margin: 0.5rem;
+        min-width: 260px;
+        min-height: 300px;
       }
       .header h1 {
         font-size: 1.25rem;
@@ -1126,16 +1169,56 @@
     .btn-copy-log:hover .log-count {
       box-shadow: 0 0 12px rgba(220, 20, 60, 0.8);
     }
+    /* Log viewer modal (right-click fallback when clipboard fails) */
+    .log-viewer-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000;
+      display: flex; align-items: center; justify-content: center; padding: 1rem;
+    }
+    .log-viewer-modal {
+      background: var(--iron-dark); border: 1px solid var(--iron-border);
+      border-radius: 8px; max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column;
+    }
+    .log-viewer-modal h3 { margin: 0; padding: 0.75rem 1rem; font-size: 1rem; }
+    .log-viewer-modal textarea {
+      flex: 1; min-height: 300px; font-family: ui-monospace, monospace; font-size: 12px;
+      padding: 1rem; resize: both; background: #1a1a1a; color: #eee; border: none;
+      border-top: 1px solid var(--iron-border);
+    }
+    .log-viewer-modal .log-viewer-actions { padding: 0.5rem 1rem; display: flex; gap: 0.5rem; justify-content: flex-end; }
+    /* Collapsible chat window */
+    .chat-interface.collapsed {
+      height: auto;
+      min-height: unset;
+    }
+    .chat-interface.collapsed .chat-container,
+    .chat-interface.collapsed .input-row {
+      display: none;
+    }
+    .btn-collapse .icon-expanded { display: inline-block; }
+    .btn-collapse .icon-collapsed { display: none; }
+    .chat-interface.collapsed .btn-collapse .icon-expanded { display: none; }
+    .chat-interface.collapsed .btn-collapse .icon-collapsed { display: inline-block; }
   </style>
 </head>
 <body>
-  <div class="chat-interface">
+  <video id="bgVideo" class="bg-video" autoplay muted loop playsinline aria-hidden="true">
+    <source src="./Ironman_web_optimized.mp4" type="video/mp4">
+  </video>
+  <div class="chat-interface" id="chatInterface">
   <header class="header">
     <div class="logo" aria-hidden="true"></div>
     <h1>JARVIS</h1>
     <span class="status" id="status">Ready</span>
     <div class="header-actions">
-      <button type="button" class="btn-icon btn-copy-log" id="btnCopyLog" title="Copy error logs" aria-label="Copy error logs">
+      <button type="button" class="btn-icon btn-collapse" id="btnCollapse" title="Collapse chat" aria-label="Collapse chat" aria-expanded="true">
+        <svg class="icon-expanded" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+        <svg class="icon-collapsed" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="18 15 12 9 6 15"/>
+        </svg>
+      </button>
+      <button type="button" class="btn-icon btn-copy-log" id="btnCopyLog" title="Copy error logs (right-click to view and manually copy)" aria-label="Copy error logs">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
           <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
           <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
@@ -1192,7 +1275,19 @@
   </div>
   </div>
 
-  <script>
+  <div id="logViewerOverlay" class="log-viewer-overlay" style="display: none;" role="dialog" aria-label="Error logs viewer">
+    <div class="log-viewer-modal">
+      <h3 id="logViewerTitle">Error &amp; Warning Logs — Full log below. Select all (Ctrl+A) then Copy (Ctrl+C) to copy every entry.</h3>
+      <textarea id="logViewerText" readonly aria-label="Full error log — select all and copy"></textarea>
+      <div class="log-viewer-actions">
+        <button type="button" id="logViewerSelectAll" title="Select entire log">Select All</button>
+        <button type="button" id="logViewerCopy">Copy to clipboard</button>
+        <button type="button" id="logViewerClose">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script nonce="{{CSP_NONCE}}">
     window.JARVIS_CONFIG = window.JARVIS_CONFIG || {};
     // Cartesia API Configuration - MUST be set via environment variables or window.JARVIS_CONFIG
     // Never hardcode API keys in source code - this is a critical security vulnerability
@@ -1200,191 +1295,141 @@
     // For static HTML, set window.JARVIS_CONFIG.apiKey before this script runs
     window.JARVIS_CONFIG.apiKey = window.JARVIS_CONFIG.apiKey || '';
     window.JARVIS_CONFIG.voiceId = window.JARVIS_CONFIG.voiceId || '95131c95-525c-463b-893d-803bafdf93c4';
-    
+    // n8n webhook — used when not in Electron (Electron gets URL from main process .env)
+    window.JARVIS_CONFIG.n8nWebhookUrl = window.JARVIS_CONFIG.n8nWebhookUrl || 'https://n8n.hempstarai.com/webhook/7600d4d1-e268-4c35-a853-b39ce7014e96';
+
+    // Ensure background video plays (fallback when autoplay is blocked)
+    (function () {
+      function ensureBgVideo() {
+        var v = document.getElementById('bgVideo');
+        if (v && v.paused) v.play().catch(function () {});
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', ensureBgVideo);
+      } else {
+        ensureBgVideo();
+      }
+      var v = document.getElementById('bgVideo');
+      if (v) v.addEventListener('loadeddata', ensureBgVideo);
+    })();
+
+    // Set initial greeting immediately so "{{ now }}" is never visible (front-end ↔ UI integration)
+    (function () {
+      var el = document.getElementById('initialGreeting');
+      if (el) {
+        var h = new Date().getHours();
+        var part = (h >= 5 && h < 12) ? 'morning' : (h >= 12 && h < 17) ? 'afternoon' : 'evening';
+        el.textContent = 'Good ' + part + ', sir. How may I assist you?';
+      }
+    })();
+
     // Enable debug: ?debug=1 in URL, or set window.JARVIS_DEBUG = true
     if (/[?&]debug=1/.test(location.search) || /[?&]debug=true/.test(location.search)) {
       window.JARVIS_DEBUG = true;
     }
 
-    // Error Log Capture System
+    // Console error + warning capture — core patches in error-capture.js (loads first in head)
+    // This block adds log/info/debug/assert patches and UI; skips error/warn if already patched
     (function() {
       'use strict';
       
-      // Initialize captured logs array
-      window.__JARVIS_CAPTURED_LOGS = window.__JARVIS_CAPTURED_LOGS || [];
-      const capturedLogs = window.__JARVIS_CAPTURED_LOGS;
-      
-      // Track captured entries to avoid duplicates
-      const capturedEntrySet = new Set();
-      
-      // Helper to format timestamp
-      function formatTimestamp() {
-        const now = new Date();
-        return now.toLocaleTimeString('en-US', { 
-          hour12: false, 
-          hour: '2-digit', 
-          minute: '2-digit', 
-          second: '2-digit',
-          fractionalSecondDigits: 3
-        });
-      }
-      
-      // Helper to stringify objects
-      function stringifyArg(arg) {
-        if (arg === null) return 'null';
-        if (arg === undefined) return 'undefined';
-        if (typeof arg === 'string') return arg;
-        if (typeof arg === 'object') {
-          try {
-            // Check if it's an Error object
-            if (arg instanceof Error) {
-              let errorStr = `Error: ${arg.name || 'Error'}\nMessage: ${arg.message || '(no message)'}`;
-              if (arg.stack) {
-                errorStr += `\nStack:\n${arg.stack}`;
-              }
-              if (arg.cause) {
-                errorStr += `\nCause: ${stringifyArg(arg.cause)}`;
-              }
-              return errorStr;
-            }
-            // Check if it's an n8n diagnostic object
-            if (arg.issue || arg.issueDescription || arg.diagnostics || arg.diagnosticSteps || 
-                arg.webhookUrl || arg.dataKeys || (arg.status && (arg.issue || arg.diagnostics))) {
-              return '\n[n8n Configuration Diagnostic]\n' + JSON.stringify(arg, null, 2);
-            }
-            return JSON.stringify(arg, null, 2);
-          } catch (e) {
-            return String(arg);
-          }
-        }
-        return String(arg);
-      }
-      
-      // Helper to format log entry with better handling of multiple arguments
-      function formatLogEntry(level, args) {
-        const timestamp = formatTimestamp();
-        if (args.length === 0) {
-          return `[${timestamp}] ${level}\n(no message)`;
-        }
-        // Use newlines for better readability when multiple arguments
-        const message = Array.from(args).map(stringifyArg).join('\n');
-        return `[${timestamp}] ${level}\n${message}`;
-      }
-      
-      // Helper to capture log entry (with duplicate prevention)
-      function captureLogEntry(entry) {
-        // Create a hash based on content (first 200 chars) to detect exact duplicates
-        // Only prevent duplicates if they're identical and within 100ms (to prevent spam)
-        const contentHash = entry.substring(0, 200);
-        const timeWindow = Math.floor(Date.now() / 100); // 100ms windows
-        const entryHash = contentHash + '|' + timeWindow;
-        
-        if (!capturedEntrySet.has(entryHash)) {
-          capturedEntrySet.add(entryHash);
+      const capturedLogs = window.__JARVIS_CAPTURED_LOGS || [];
+      const maxEntries = 2000;
+      const installed = window.__JARVIS_LOG_CAPTURE_INSTALLED;
+      const captureEntry = window.__JARVIS_CAPTURE_ENTRY || (function() {
+        function fallbackCapture(entry) {
           capturedLogs.push(entry);
-          updateLogCount();
-          // Clean up old hashes periodically (keep last 2000)
-          if (capturedEntrySet.size > 2000) {
-            const entries = Array.from(capturedEntrySet);
-            entries.slice(0, entries.length - 1000).forEach(hash => capturedEntrySet.delete(hash));
+          if (capturedLogs.length > maxEntries) capturedLogs.splice(0, capturedLogs.length - maxEntries);
+          var ce = document.getElementById('logCount');
+          if (ce) { ce.textContent = capturedLogs.length > 99 ? '99+' : String(capturedLogs.length); ce.style.display = 'block'; }
+        }
+        return fallbackCapture;
+      })();
+      const formatTimestamp = window.__JARVIS_CAPTURE_FORMAT_TS || function() {
+        const n = new Date();
+        return n.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 });
+      };
+      const stringifyArg = window.__JARVIS_CAPTURE_STRINGIFY || function(a) {
+        if (a == null) return String(a);
+        if (typeof a === 'string') return a;
+        if (a instanceof Error) return (a.stack || a.message || String(a));
+        try { return JSON.stringify(a, null, 2); } catch (e) { return String(a); }
+      };
+      const formatLogEntry = window.__JARVIS_CAPTURE_FORMAT_ENTRY || function(level, args) {
+        const msg = args.length === 0 ? '(no message)' : Array.from(args).map(stringifyArg).join('\n');
+        return '[' + formatTimestamp() + '] ' + level + '\n' + msg;
+      };
+      
+      if (!installed) {
+        var originalError = console.error;
+        var originalWarn = console.warn;
+        console.error = function() {
+          originalError.apply(console, arguments);
+          captureEntry(formatLogEntry('ERROR', arguments));
+        };
+        console.warn = function() {
+          originalWarn.apply(console, arguments);
+          captureEntry(formatLogEntry('WARN', arguments));
+        };
+        window.addEventListener('unhandledrejection', function(e) {
+          var s = '[' + formatTimestamp() + '] UNHANDLED PROMISE REJECTION\n';
+          if (e.reason instanceof Error) s += (e.reason.stack || e.reason.message || String(e.reason));
+          else s += JSON.stringify(e.reason, null, 2);
+          captureEntry(s);
+          originalError('[JARVIS] Unhandled Promise Rejection:', e.reason);
+        }, true);
+        window.addEventListener('error', function(e) {
+          var msg = e.message || '(no message)';
+          var src = (e.filename || '') + ':' + (e.lineno != null ? e.lineno : '') + ':' + (e.colno != null ? e.colno : '');
+          if (e.error) {
+            if (e.error instanceof Error && (!msg || msg === '(no message)')) msg = e.error.message || e.error.name || String(e.error);
+            else if (!msg || msg === '(no message)') msg = String(e.error);
           }
+          if ((!msg || msg === '(no message)') && e.target && !e.error) {
+            try {
+              if (e.target.tagName === 'SCRIPT') { var h = e.target.src || e.target.getAttribute('src') || ''; if (h) msg = 'Script load failed: ' + h; }
+              else if (e.target.tagName === 'LINK') { var h = e.target.href || e.target.getAttribute('href') || ''; if (h) msg = 'Resource load failed: ' + h; }
+            } catch (ignored) {}
+          }
+          var s = '[' + formatTimestamp() + '] UNCAUGHT EXCEPTION\n' + msg + '\n' + src;
+          if (e.error && e.error instanceof Error && e.error.stack) s += '\n' + e.error.stack;
+          if ((!msg || msg === '(no message)') && (!src || src.indexOf('unknown') !== -1)) s += '\nHint: Open DevTools (F12) before loading to see full error in Console.';
+          captureEntry(s);
+        }, true);
+      }
+      
+      var originalLog = console.log;
+      var originalInfo = console.info;
+      var originalDebug = console.debug;
+      var originalAssert = console.assert;
+      
+      function maybeCapture(level, args) {
+        if (args.length > 0 && typeof args[0] === 'string' && (args[0].includes('[JARVIS]') || args[0].includes('n8n') || args[0].includes('webhook'))) {
+          captureEntry(formatLogEntry(level, args));
         }
       }
       
-      // Intercept console.error
-      const originalError = console.error;
-      console.error = function(...args) {
-        originalError.apply(console, args);
-        const entry = formatLogEntry('ERROR', args);
-        captureLogEntry(entry);
+      console.log = function() {
+        originalLog.apply(console, arguments);
+        maybeCapture('LOG', arguments);
       };
-      
-      // Intercept console.warn
-      const originalWarn = console.warn;
-      console.warn = function(...args) {
-        originalWarn.apply(console, args);
-        const entry = formatLogEntry('WARN', args);
-        captureLogEntry(entry);
-        
-        // Special handling for n8n warnings
-        if (args.length > 0 && typeof args[0] === 'string' && 
-            (args[0].includes('[JARVIS]') || args[0].includes('n8n') || args[0].includes('webhook'))) {
-          if (args.length > 1 && typeof args[1] === 'object') {
-            const diagnostic = stringifyArg(args[1]);
-            const diagnosticEntry = `[${formatTimestamp()}] WARN\n[n8n Diagnostic Details]\n${diagnostic}`;
-            captureLogEntry(diagnosticEntry);
-          }
-        }
+      console.info = function() {
+        originalInfo.apply(console, arguments);
+        maybeCapture('INFO', arguments);
       };
-      
-      // Intercept console.log for JARVIS messages
-      const originalLog = console.log;
-      console.log = function(...args) {
-        originalLog.apply(console, args);
-        // Only capture JARVIS-related logs
-        if (args.length > 0 && typeof args[0] === 'string' && 
-            (args[0].includes('[JARVIS]') || args[0].includes('n8n') || args[0].includes('webhook'))) {
-          const entry = formatLogEntry('LOG', args);
-          captureLogEntry(entry);
-        }
+      console.debug = function() {
+        originalDebug.apply(console, arguments);
+        maybeCapture('DEBUG', arguments);
       };
-      
-      // Capture unhandled promise rejections
-      window.addEventListener('unhandledrejection', function(event) {
-        const timestamp = formatTimestamp();
-        let errorInfo = `[${timestamp}] UNHANDLED PROMISE REJECTION\n`;
-        
-        if (event.reason instanceof Error) {
-          errorInfo += `Error: ${event.reason.name || 'Error'}\n`;
-          errorInfo += `Message: ${event.reason.message || '(no message)'}\n`;
-          if (event.reason.stack) {
-            errorInfo += `Stack:\n${event.reason.stack}`;
-          }
-        } else if (typeof event.reason === 'object' && event.reason !== null) {
-          errorInfo += `Reason: ${JSON.stringify(event.reason, null, 2)}`;
-        } else {
-          errorInfo += `Reason: ${String(event.reason)}`;
-        }
-        
-        captureLogEntry(errorInfo);
-        // Also log to console for visibility
-        originalError('[JARVIS] Unhandled Promise Rejection:', event.reason);
-      });
-      
-      // Capture uncaught exceptions
-      window.addEventListener('error', function(event) {
-        const timestamp = formatTimestamp();
-        let errorInfo = `[${timestamp}] UNCAUGHT EXCEPTION\n`;
-        errorInfo += `Message: ${event.message || '(no message)'}\n`;
-        errorInfo += `Source: ${event.filename || 'unknown'}:${event.lineno || '?'}:${event.colno || '?'}\n`;
-        if (event.error) {
-          if (event.error instanceof Error) {
-            errorInfo += `Error: ${event.error.name || 'Error'}\n`;
-            if (event.error.stack) {
-              errorInfo += `Stack:\n${event.error.stack}`;
-            }
-          } else {
-            errorInfo += `Error: ${stringifyArg(event.error)}`;
-          }
-        }
-        
-        captureLogEntry(errorInfo);
-        // Don't prevent default - let browser handle it normally
-      });
-      
-      // Capture console.assert failures
-      const originalAssert = console.assert;
-      console.assert = function(condition, ...args) {
+      console.assert = function(condition) {
         if (!condition) {
-          originalAssert.apply(console, [condition, ...args]);
-          const entry = formatLogEntry('ASSERT FAILED', args.length > 0 ? args : ['Assertion failed']);
-          captureLogEntry(entry);
-        } else {
-          originalAssert.apply(console, [condition, ...args]);
+          var args = Array.prototype.slice.call(arguments, 1);
+          captureEntry(formatLogEntry('ASSERT FAILED', args.length ? args : ['Assertion failed']));
         }
+        originalAssert.apply(console, arguments);
       };
       
-      // Update log count badge
+      // Update log count badge (for fallback path when error-capture.js not loaded)
       function updateLogCount() {
         const countEl = document.getElementById('logCount');
         if (countEl) {
@@ -1398,23 +1443,41 @@
         }
       }
       
-      // Copy logs to clipboard
+      // Copy logs to clipboard (ASCII separators for reliable paste into chat/terminals)
       function copyLogs() {
         if (capturedLogs.length === 0) {
           alert('No logs captured yet. Errors and warnings will appear here automatically.');
           return;
         }
         
-        const header = '═══════════════════════════════════════════════════════════\n';
-        const title = 'JARVIS Error & Warning Log\n';
-        const timestamp = `Captured: ${new Date().toLocaleString()}\n`;
-        const separator = '═══════════════════════════════════════════════════════════\n\n';
+        const fullLog = buildFullLog();
         
-        const fullLog = header + title + timestamp + separator + 
-                       capturedLogs.join('\n\n' + '─'.repeat(60) + '\n\n') + 
-                       '\n\n' + separator;
+        function doCopy(text) {
+          if (window.electronAPI?.writeClipboardText) {
+            return Promise.resolve(window.electronAPI.writeClipboardText(text));
+          }
+          if (navigator.clipboard?.writeText) {
+            return navigator.clipboard.writeText(text);
+          }
+          // Fallback: execCommand for HTTP or when Clipboard API unavailable
+          return new Promise((resolve, reject) => {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.cssText = 'position:fixed;left:-9999px;top:0';
+            document.body.appendChild(ta);
+            ta.select();
+            try {
+              const ok = document.execCommand('copy');
+              document.body.removeChild(ta);
+              ok ? resolve() : reject(new Error('execCommand copy failed'));
+            } catch (e) {
+              document.body.removeChild(ta);
+              reject(e);
+            }
+          });
+        }
         
-        navigator.clipboard.writeText(fullLog).then(() => {
+        doCopy(fullLog).then(() => {
           const btn = document.getElementById('btnCopyLog');
           if (btn) {
             // Clear any existing timeout
@@ -1433,20 +1496,93 @@
           console.log(`✅ Copied ${capturedLogs.length} log entries to clipboard`);
         }).catch(err => {
           console.error('Failed to copy logs:', err);
-          alert('Failed to copy logs. Please check console for errors.');
+          showLogViewer();
+          alert('Clipboard copy failed. Log viewer opened — use Select All then Ctrl+C to copy every entry.');
         });
       }
       
+      // Build full log string (header + all entries + footer) for copy/viewer
+      function buildFullLog() {
+        const header = '===========================================================\n';
+        const title = 'JARVIS Error & Warning Log\n';
+        const timestamp = `Captured: ${new Date().toLocaleString()}\n`;
+        const totalLine = capturedLogs.length >= maxEntries
+          ? `Total entries: ${capturedLogs.length} (max ${maxEntries} retained — oldest dropped)\n`
+          : `Total entries: ${capturedLogs.length}\n`;
+        const separator = '===========================================================\n\n';
+        const footer = '\n\n========== End of log (' + capturedLogs.length + ' entries) ==========\n\n' + separator;
+        return header + title + timestamp + totalLine + separator +
+          capturedLogs.join('\n\n' + '-'.repeat(60) + '\n\n') + footer;
+      }
+
+      // Show log viewer modal (full access to every entry; select all and copy)
+      function showLogViewer() {
+        if (capturedLogs.length === 0) {
+          alert('No logs captured yet.');
+          return;
+        }
+        const fullLog = buildFullLog();
+        const overlay = document.getElementById('logViewerOverlay');
+        const textarea = document.getElementById('logViewerText');
+        const titleEl = document.getElementById('logViewerTitle');
+        if (overlay && textarea) {
+          textarea.value = fullLog;
+          if (titleEl) {
+            titleEl.textContent = 'Error & Warning Logs — ' + capturedLogs.length + ' entries. Select all (Ctrl+A) then Copy (Ctrl+C) to copy every entry.';
+          }
+          overlay.style.display = 'flex';
+          textarea.focus();
+          textarea.select();
+        }
+      }
+
+      function hideLogViewer() {
+        const overlay = document.getElementById('logViewerOverlay');
+        if (overlay) overlay.style.display = 'none';
+      }
+
       // Initialize button when DOM is ready
       function initCopyLogButton() {
         const btn = document.getElementById('btnCopyLog');
         if (btn) {
           btn.addEventListener('click', copyLogs);
+          btn.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            showLogViewer();
+          });
           updateLogCount();
-        } else {
-          // Retry if button not found yet
-          setTimeout(initCopyLogButton, 100);
         }
+        const overlay = document.getElementById('logViewerOverlay');
+        if (overlay && !overlay.dataset.inited) {
+          overlay.dataset.inited = '1';
+          document.getElementById('logViewerClose')?.addEventListener('click', hideLogViewer);
+          document.getElementById('logViewerSelectAll')?.addEventListener('click', () => {
+            const ta = document.getElementById('logViewerText');
+            if (ta) {
+              ta.focus();
+              ta.select();
+            }
+          });
+          document.getElementById('logViewerCopy')?.addEventListener('click', () => {
+            const ta = document.getElementById('logViewerText');
+            if (ta) {
+              ta.focus();
+              ta.select();
+              const text = ta.value;
+              if (window.electronAPI?.writeClipboardText) {
+                window.electronAPI.writeClipboardText(text).catch(() => {
+                  navigator.clipboard?.writeText(text).catch(() => document.execCommand('copy'));
+                });
+              } else if (navigator.clipboard?.writeText) {
+                navigator.clipboard.writeText(text).catch(() => document.execCommand('copy'));
+              } else {
+                try { document.execCommand('copy'); } catch (_) {}
+              }
+            }
+          });
+          overlay.addEventListener('click', (e) => { if (e.target === overlay) hideLogViewer(); });
+        }
+        if (!btn) setTimeout(initCopyLogButton, 100);
       }
       
       // Start initialization
@@ -1456,12 +1592,13 @@
         initCopyLogButton();
       }
       
-      // Expose function for manual testing
+      // Expose functions for manual testing
       window.JARVIS_COPY_LOGS = copyLogs;
+      window.JARVIS_SHOW_LOG_VIEWER = showLogViewer;
       window.JARVIS_GET_LOGS = () => capturedLogs;
       window.JARVIS_CLEAR_LOGS = () => {
         capturedLogs.length = 0;
-        capturedEntrySet.clear();
+        if (window.__JARVIS_CAPTURE_ENTRY_SET) window.__JARVIS_CAPTURE_ENTRY_SET.clear();
         updateLogCount();
       };
       
@@ -1553,49 +1690,159 @@
         initReadyButton();
       }
     })();
-  </script>
-  <script type="module" src="./js/app.js"></script>
-  <script>
-    // Set timestamp on initial message and update greeting with time of day
+
+    // Draggable chat interface — drag header to move
     (function() {
-      function getTimeOfDay() {
-        const hour = new Date().getHours();
-        if (hour >= 5 && hour < 12) return 'morning';
-        if (hour >= 12 && hour < 17) return 'afternoon';
-        // Evening: 5:00 PM - 4:59 AM (hours 17-4)
-        return 'evening';
+      'use strict';
+      const STORAGE_KEY = 'jarvis_chat_position';
+
+      function initDraggable() {
+        const chat = document.querySelector('.chat-interface');
+        const header = document.querySelector('.header');
+        if (!chat || !header) {
+          setTimeout(initDraggable, 100);
+          return;
+        }
+
+        let isDragging = false;
+        let startX = 0, startY = 0, startLeft = 0, startTop = 0;
+
+        function getPosition() {
+          const rect = chat.getBoundingClientRect();
+          return { left: rect.left, top: rect.top };
+        }
+
+        function getClientCoords(e) {
+          if (e.touches && e.touches.length) {
+            return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+          }
+          return { x: e.clientX, y: e.clientY };
+        }
+
+        function setPosition(left, top) {
+          const w = chat.offsetWidth;
+          const h = chat.offsetHeight;
+          const maxLeft = window.innerWidth - w + 20;
+          const maxTop = window.innerHeight - h + 20;
+          left = Math.max(-w + 80, Math.min(maxLeft, left));
+          top = Math.max(0, Math.min(maxTop, top));
+          chat.style.left = left + 'px';
+          chat.style.top = top + 'px';
+          chat.style.transform = 'none';
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ left, top })); } catch (_) {}
+        }
+
+        function restorePosition() {
+          try {
+            const s = localStorage.getItem(STORAGE_KEY);
+            if (s) {
+              const { left, top } = JSON.parse(s);
+              if (typeof left === 'number' && typeof top === 'number') {
+                setPosition(left, top);
+                return;
+              }
+            }
+          } catch (_) {}
+        }
+
+        restorePosition();
+
+        function onPointerDown(e) {
+          if (e.target.closest('button') || e.target.closest('a') || e.target.closest('#status')) return;
+          isDragging = true;
+          const pos = getPosition();
+          const c = getClientCoords(e);
+          startX = c.x;
+          startY = c.y;
+          startLeft = pos.left;
+          startTop = pos.top;
+          chat.style.cursor = 'grabbing';
+          header.style.cursor = 'grabbing';
+        }
+
+        function onPointerMove(e) {
+          if (!isDragging) return;
+          const c = getClientCoords(e);
+          const dx = c.x - startX;
+          const dy = c.y - startY;
+          setPosition(startLeft + dx, startTop + dy);
+          if (e.cancelable && e.touches) e.preventDefault();
+        }
+
+        function onPointerUp() {
+          if (!isDragging) return;
+          isDragging = false;
+          chat.style.cursor = '';
+          header.style.cursor = 'move';
+        }
+
+        header.addEventListener('mousedown', onPointerDown);
+        header.addEventListener('touchstart', onPointerDown, { passive: true });
+        document.addEventListener('mousemove', onPointerMove);
+        document.addEventListener('mouseup', onPointerUp);
+        document.addEventListener('touchmove', onPointerMove, { passive: false });
+        document.addEventListener('touchend', onPointerUp);
+        document.addEventListener('touchcancel', onPointerUp);
+
+        header.setAttribute('title', header.getAttribute('title') || 'Drag to move');
       }
 
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initDraggable);
+      } else {
+        initDraggable();
+      }
+    })();
+
+    (function() {
+      function initCollapsible() {
+        const COLLAPSED_KEY = 'jarvis_chat_collapsed';
+        const chat = document.getElementById('chatInterface');
+        const btn = document.getElementById('btnCollapse');
+        if (!chat || !btn) return;
+
+        function isCollapsed() { return chat.classList.contains('collapsed'); }
+        function setCollapsed(collapsed) {
+          chat.classList.toggle('collapsed', !!collapsed);
+          btn.setAttribute('aria-expanded', !collapsed);
+          btn.setAttribute('title', collapsed ? 'Expand chat' : 'Collapse chat');
+          btn.setAttribute('aria-label', collapsed ? 'Expand chat' : 'Collapse chat');
+          try { localStorage.setItem(COLLAPSED_KEY, collapsed ? '1' : '0'); } catch (e) {}
+        }
+
+        try {
+          const stored = localStorage.getItem(COLLAPSED_KEY);
+          if (stored === '1') setCollapsed(true);
+        } catch (e) {}
+
+        btn.addEventListener('click', function() { setCollapsed(!isCollapsed()); });
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initCollapsible);
+      } else {
+        initCollapsible();
+      }
+    })();
+  </script>
+  <script type="module" src="./js/app.js" nonce="{{CSP_NONCE}}"></script>
+  <script nonce="{{CSP_NONCE}}">
+    // Set timestamp on initial message (greeting is set earlier in page by IIFE)
+    (function() {
       function setInitialTimestamp() {
         const initialTimestamp = document.getElementById('initialTimestamp');
         if (initialTimestamp) {
           const now = new Date();
-          const timestamp = now.toLocaleTimeString('en-US', { 
-            hour12: true, 
-            hour: 'numeric', 
+          initialTimestamp.textContent = now.toLocaleTimeString('en-US', {
+            hour12: true,
+            hour: 'numeric',
             minute: '2-digit'
           });
-          initialTimestamp.textContent = timestamp;
         }
       }
-
-      function setInitialGreeting() {
-        const initialGreeting = document.getElementById('initialGreeting');
-        if (initialGreeting) {
-          const timeOfDay = getTimeOfDay();
-          initialGreeting.textContent = initialGreeting.textContent.replace('{{ now }}', timeOfDay);
-        }
-      }
-
-      function initialize() {
-        setInitialTimestamp();
-        setInitialGreeting();
-      }
-      
       if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initialize);
+        document.addEventListener('DOMContentLoaded', setInitialTimestamp);
       } else {
-        initialize();
+        setInitialTimestamp();
       }
     })();
   </script>

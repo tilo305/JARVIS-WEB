@@ -121,6 +121,7 @@ describe('VAD_CONFIG', () => {
       'silenceAfterSpeechToStopMicMs', 'silenceClosingMessageMs', 'silenceClosingPhrases',
       'silenceClosingDelayAfterTtsMs', 'maxListeningMs',
       'baseAssetPath', 'onnxWASMBasePath',
+      'fillerPhrases', 'fillerTimeDelayMs',
     ]);
     Object.keys(VAD_CONFIG).forEach((key) => {
       expect(allowed.has(key)).toBe(true);

@@ -1,6 +1,7 @@
 node_modules/
 dist/
 dist-public/
+release/
 coverage/
 *.pcm
 *.wav
@@ -23,3 +24,6 @@ credentials/
 
 # Debug logs (websocket metrics, etc.)
 debug/logs/*.json
+
+# Vite dev server port (written when server starts, used by electron:dev)
+.vite-dev-port

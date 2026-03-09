@@ -2,7 +2,7 @@
   "name": "jarvis-web-cartesia",
   "version": "1.0.0",
   "description": "Bidirectional conversational AI using Cartesia STT and TTS WebSockets",
-  "main": "dist/index.js",
+  "main": "electron/main.js",
   "type": "module",
   "scripts": {
     "build": "tsc",
@@ -12,7 +12,11 @@
     "serve": "node server.js",
     "serve:prod": "node scripts/kill-port-then-vite.mjs build && node server.js",
     "dev:browser": "vite",
-    "vite": "concurrently --kill-others-on-fail=false \"node scripts/kill-port-then-vite.mjs\" \"npm run openwakeword\"",
+    "electron:dev": "node scripts/electron-dev.mjs",
+    "electron": "electron .",
+    "electron:build": "npm run vite:build && node scripts/run-electron-build.mjs",
+    "electron:pack": "npm run vite:build && electron-builder",
+    "vite": "concurrently --kill-others-on-fail=false \"node scripts/kill-port-then-vite.mjs\"",
     "vite:build": "node scripts/kill-port-then-vite.mjs build",
     "preview": "vite preview",
     "dev:full": "node scripts/kill-port-then-vite.mjs",
@@ -33,12 +37,7 @@
     "check": "npm run lint:check && npm run build && npm test -- --watchAll=false && npm run vite:build",
     "debug": "node debug/run-debug-suite.mjs",
     "debug:live": "jest debug/live",
-    "openwakeword": "node scripts/start-openwakeword-server.mjs",
-    "test:wakeword": "node debug/tools/verify-wake-word-setup.js",
-    "test:wakeword:activation": "node debug/tools/test-wake-word-activation-flow.js",
-    "test:wakeword:cli": "node debug/tools/wake-word-activation-test-cli.js",
-    "debug:openwakeword": "node debug/tools/debug-openwakeword-config-live.js",
-    "debug:openwakeword:websocket": "node debug/tools/debug-openwakeword-websocket-live.js",
+    "check:logs": "node debug/tools/check-error-logs.js",
     "test:debug": "jest --coverage > debug/results/latest-test-run.txt 2>&1",
     "test:integration": "jest debug/tests/integration"
   },
@@ -52,6 +51,15 @@
   ],
   "author": "",
   "license": "MIT",
+  "build": {
+    "appId": "com.jarvis.web",
+    "productName": "JARVIS",
+    "files": ["electron/**/*", "dist-public/**/*"],
+    "directories": { "output": "release" },
+    "win": { "target": ["nsis", "portable"] },
+    "mac": { "target": ["dmg"], "category": "public.app-category.utilities" },
+    "linux": { "target": ["AppImage"] }
+  },
   "dependencies": {
     "@ricky0123/vad-web": "^0.0.30",
     "dotenv": "^17.2.3",
@@ -78,6 +86,9 @@
     "typescript-eslint": "^8.54.0",
     "concurrently": "^9.1.2",
     "vite": "^7.3.1",
-    "vite-plugin-static-copy": "^3.2.0"
+    "vite-plugin-static-copy": "^3.2.0",
+    "electron": "^33.2.0",
+    "wait-on": "^8.0.1",
+    "electron-builder": "^25.0.0"
   }
 }

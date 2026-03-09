@@ -14,7 +14,7 @@ import { join, extname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
-const PORT = process.env.PORT || 3000;
+const PREFERRED_PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = join(__dirname, 'public');
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
@@ -132,16 +132,30 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`Server: http://localhost:${PORT}`);
-  console.log('Note: AudioWorklet requires HTTPS in production.');
-});
+/**
+ * Try to listen, incrementing port on EADDRINUSE until an available port is found.
+ */
+function tryListen(port, maxAttempts = 100) {
+  server.listen(port, () => {
+    console.log(`Server: http://localhost:${port}`);
+    console.log('Note: AudioWorklet requires HTTPS in production.');
+  });
 
-server.on('error', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    console.error(`Port ${PORT} is already in use. Try: PORT=${Number(PORT) + 1} node server.js`);
-  } else {
-    console.error('Server error:', err);
-  }
-  process.exitCode = 1;
-});
+  server.once('error', (err) => {
+    if (err.code === 'EADDRINUSE' && maxAttempts > 1) {
+      const nextPort = port + 1;
+      console.warn(`Port ${port} is in use, trying ${nextPort}...`);
+      tryListen(nextPort, maxAttempts - 1);
+    } else {
+      server.removeAllListeners('listening');
+      if (err.code === 'EADDRINUSE') {
+        console.error(`Could not find available port after ${maxAttempts} attempts.`);
+      } else {
+        console.error('Server error:', err);
+      }
+      process.exitCode = 1;
+    }
+  });
+}
+
+tryListen(PREFERRED_PORT);

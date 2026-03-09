@@ -20,20 +20,15 @@ const __dirname = dirname(__filename);
 // Known WebSocket files from WEBSOCKET-FILES-PARSE.md
 const KNOWN_WEBSOCKET_FILES = [
   // Core Implementation Files
-  'public/js/openwakeword-client.js',
   'src/stt-client.ts',
   'src/tts-client.ts',
-  'scripts/openwakeword-server.py',
   'public/js/cartesia-audio-bridge.js',
   
   // Debug and Testing Files
-  'debug/tools/debug-openwakeword-websocket-live.js',
-  'public/debug/openwakeword-websocket-debug.html',
   'debug/tests/integration/cartesia-websocket-live.test.ts',
   
   // Documentation Files
   'debug/COMPREHENSIVE-WEBSOCKET-DEBUG-RESEARCH-COMPLETE.md',
-  'debug/OPENWAKEWORD-WEBSOCKET-DEBUG-COMPLETE.md',
   'wEbSoCkEt DoCs.md',
   'cArTeSiA wEbSoCkEt.md',
   'WEBSOCKET-FILES-PARSE.md',

@@ -71,9 +71,6 @@ function parseClientFile(content, filePath) {
   } else if (filename.includes('tts-client') || filename.includes('ttsclient')) {
     stats.clientType = 'tts';
     stats.clientName = 'TTS Client';
-  } else if (filename.includes('openwakeword-client') || filename.includes('openwakewordclient')) {
-    stats.clientType = 'openwakeword';
-    stats.clientName = 'OpenWakeWord Client';
   } else if (filename.includes('audio-bridge') || filename.includes('audiobridge')) {
     stats.clientType = 'audio-bridge';
     stats.clientName = 'Audio Bridge';
@@ -227,7 +224,6 @@ async function parseAllClientFiles() {
   const clientTypes = {
     stt: [],
     tts: [],
-    openwakeword: [],
     'audio-bridge': [],
     websocket: [],
     test: [],
@@ -306,8 +302,6 @@ async function parseAllClientFiles() {
   clientTypes.stt.forEach(f => console.log(`    - ${f}`));
   console.log(`  TTS Clients: ${clientTypes.tts.length}`);
   clientTypes.tts.forEach(f => console.log(`    - ${f}`));
-  console.log(`  OpenWakeWord Clients: ${clientTypes.openwakeword.length}`);
-  clientTypes.openwakeword.forEach(f => console.log(`    - ${f}`));
   console.log(`  Audio Bridge: ${clientTypes['audio-bridge'].length}`);
   clientTypes['audio-bridge'].forEach(f => console.log(`    - ${f}`));
   console.log(`  WebSocket Clients: ${clientTypes.websocket.length}`);
@@ -344,7 +338,6 @@ async function parseAllClientFiles() {
       byType: {
         stt: clientTypes.stt.length,
         tts: clientTypes.tts.length,
-        openwakeword: clientTypes.openwakeword.length,
         'audio-bridge': clientTypes['audio-bridge'].length,
         websocket: clientTypes.websocket.length,
         test: clientTypes.test.length,

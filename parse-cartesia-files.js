@@ -53,7 +53,7 @@ function parseJSFile(content, filePath) {
   }
 
   // Extract Cartesia methods
-  const methodRegex = /\.(connect|disconnect|sendAudio|sendText|speakText|startSTT|stopSTT|connectSTT|connectTTS|onTranscript|onAudio|onError|finalize|done|streamTextChunks|cancelTTS|initWakeWord)\s*\(/gi;
+  const methodRegex = /\.(connect|disconnect|sendAudio|sendText|speakText|startSTT|stopSTT|connectSTT|connectTTS|onTranscript|onAudio|onError|finalize|done|streamTextChunks|cancelTTS)\s*\(/gi;
   const methodMatches = [...content.matchAll(methodRegex)];
   stats.cartesiaMethods = [...new Set(methodMatches.map(m => m[1]))];
 

@@ -7,10 +7,27 @@
  * - setStatus() and syncMicButton() are the single place to update header status and mic button (active/disabled/aria).
  * - Mic: click = toggle STT; bridge.onSTTStopped always clears mic "recording" state so UI stays in sync.
  *
+ * Optimal latency & bidirectional flow (do not regress):
+ * - sendTranscriptOnFinal: true = send to agent on STT final (~2.5s faster than waiting for silence).
+ * - sonic-turbo TTS: 40ms first byte (bridge default); pre-connect TTS while waiting for n8n.
+ * - Filler phrases (NVIDIA Tokkio): speak after fillerTimeDelayMs while waiting for n8n; cancel before reply.
+ * - Barge-in: STT stays active during TTS (voice and text paths); pauseSilenceTimersForBargeIn; cancelTTS on new input.
+ * - VAD: vad-config.js tuned for low latency (redemptionMs 900, sensitive thresholds).
+ *
  * Debug: Add ?debug=1 to URL or set window.JARVIS_DEBUG = true
  */
 import { CartesiaAudioBridge } from './cartesia-audio-bridge.js';
-import { buildN8nPayload, extractReplyFromJson, extractFilesFromJson, getNaturalFallback } from './n8n-payload.js';
+import { VAD_CONFIG } from './vad-config.js';
+import { buildN8nPayload, validateN8nPayload, extractReplyFromJson, extractFilesFromJson, getNaturalFallback, isSimpleTimeOrDateQuery } from './n8n-payload.js';
+import {
+  ConversationHistory,
+  classifyIntent,
+  getContextEnrichment,
+  validateInput,
+  runWithRetry,
+  runPromptChainPipeline,
+  validateAndRefineReply,
+} from './agentic-patterns.js';
 import { addOcrToAttachments } from './ocr-tool.js';
 import {
   createPdfBlob,
@@ -36,6 +53,12 @@ import {
   isValidUrl 
 } from './security.js';
 import { PerformanceMonitor } from './utils/debug.js';
+import {
+  detectCORSError,
+  diagnoseCORS,
+  testCORSPreflight,
+  getCORSConfigurationGuide,
+} from './cors-handler.js';
 
 const chatContainer = document.getElementById('chatContainer');
 const textInput = document.getElementById('textInput');
@@ -79,20 +102,72 @@ const getConfig = memoize(() => {
   const env = typeof import.meta !== 'undefined' ? import.meta.env : {};
   const win = typeof window !== 'undefined' ? window : {};
   const cfg = win.JARVIS_CONFIG || {};
+  const defaultN8n = 'https://n8n.hempstarai.com/webhook/7600d4d1-e268-4c35-a853-b39ce7014e96';
+  // Electron: n8n URL is resolved at send time via electronAPI.getN8nWebhookUrl() (main process .env)
+  const n8nUrl = env.VITE_N8N_WEBHOOK_URL || cfg.n8nWebhookUrl || env.N8N_WEBHOOK_URL || defaultN8n;
   return {
     apiKey: env.VITE_CARTESIA_API_KEY || cfg.apiKey || '',
     voiceId: env.VITE_CARTESIA_VOICE_ID || cfg.voiceId || '',
-    n8nWebhookUrl: env.VITE_N8N_WEBHOOK_URL || cfg.n8nWebhookUrl || 'https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4',
+    n8nWebhookUrl: n8nUrl,
+    // Low-latency bidirectional flow: default true = send to agent on STT final (saves ~2.5s vs waiting for silence)
+    sendTranscriptOnFinal: env.VITE_SEND_TRANSCRIPT_ON_FINAL !== 'false' && cfg.sendTranscriptOnFinal !== false,
   };
 });
 
-const { apiKey, voiceId, n8nWebhookUrl } = getConfig();
+const { apiKey, voiceId, n8nWebhookUrl, sendTranscriptOnFinal } = getConfig();
+
+/** Detect Electron desktop context (preload exposes electronAPI when running in Electron). */
+if (typeof window !== 'undefined' && window.electronAPI?.isElectron) {
+  window.JARVIS_IS_ELECTRON = true;
+  // Log n8n URL at startup when available (from main process .env)
+  if (window.electronAPI?.getN8nWebhookUrl) {
+    window.electronAPI.getN8nWebhookUrl().then((u) => {
+      /* eslint-disable-next-line no-console -- intentional: Electron startup verification */
+      console.log('[JARVIS] Electron: n8n webhook URL (from .env):', u);
+    }).catch(() => {});
+  }
+  // Verify mic + bridge integration for Electron (app:// = secure context for getUserMedia)
+  const micCheck = CartesiaAudioBridge.checkRecordingSupport();
+  /* eslint-disable-next-line no-console -- intentional: Electron mic integration verification */
+  console.log('[JARVIS] Electron: mic support', micCheck.supported ? 'OK' : micCheck.message, '| origin:', window.location?.origin);
+}
+
+/**
+ * Show a toast notification (Electron menu-action, etc.).
+ * Uses existing .notification CSS from index.html.
+ * @param {string} message - Message to display
+ * @param {string} [type='info'] - 'info' | 'success' | 'error' | 'warn'
+ */
+function showNotification(message, type = 'info') {
+  const el = document.createElement('div');
+  el.className = `notification notification-${type}`;
+  el.textContent = message;
+  el.style.borderColor = type === 'error' ? 'var(--iron-red)' : type === 'success' ? 'var(--gold)' : 'var(--border)';
+  document.body.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+  setTimeout(() => {
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 300);
+  }, 3000);
+}
+
+/** Wire Electron menu-action listener (Pattern 3: Main→Renderer). */
+if (typeof window !== 'undefined' && window.electronAPI?.onMenuAction) {
+  window.electronAPI.onMenuAction(({ action, payload }) => {
+    if (action === 'ping') {
+      showNotification(String(payload ?? 'Pong'), 'success');
+    }
+  });
+}
 
 /** Session ID for n8n workflow continuity (persists for page lifetime) */
 const sessionId = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 
-/** Conversation history for context (maintains conversation flow) */
-const conversationHistory = [];
+/** Cached n8n webhook URL from Electron main process (avoids repeated IPC). */
+let cachedElectronN8nUrl = null;
+
+/** Conversation history for context (Agentic Pattern: Memory). Never cleared until page refresh. */
+const conversationHistory = new ConversationHistory(20);
 
 /** Flag to suppress onSTTStopped callback during STT restart (prevents mic flicker) */
 let _isRestartingSTT = false;
@@ -100,9 +175,83 @@ let _isRestartingSTT = false;
 /** Flag to prevent multiple concurrent mic button clicks */
 let _micClickInProgress = false;
 
-/** Build payload with app's session ID and conversation history */
+/** Cooldown (ms) between voice→n8n sends to avoid repeated requests from rapid STT finals (e.g. when n8n returns 500) */
+const VOICE_SEND_COOLDOWN_MS = 2500;
+const TTS_ECHO_REJECT_MS = 8000; // Reject voice transcripts that match recent TTS output (speaker feedback)
+let _lastVoiceSendTime = 0;
+let _lastSpokenTTS = '';
+let _lastSpokenTTSAt = 0;
+
+/** Guard: only one voice→n8n request at a time (prevents overlapping sends when n8n is slow) */
+let _voiceSendInProgress = false;
+
+/** Build payload with app's session ID, conversation history, intent, and context (Agentic Patterns) */
 function buildPayload(message, options) {
-  return buildN8nPayload(message, { ...options, sessionId, conversationHistory });
+  const recentTurns = conversationHistory.getRecent(10);
+  const intent = classifyIntent(message);
+  const contextEnrichment = getContextEnrichment();
+  const { extractedEntities, agenticHints } = runPromptChainPipeline(message);
+  return buildN8nPayload(message, {
+    ...options,
+    sessionId,
+    conversationHistory: recentTurns,
+    intent,
+    contextEnrichment,
+    agenticHints,
+    extractedEntities,
+  });
+}
+
+/**
+ * Decode HTML entities so TTS speaks plain text (not "ampersand hash twenty seven").
+ * Reverses sanitizeHtml encoding: &#x27; → ', &quot; → ", &amp; → &, etc.
+ * Must run before stripMarkdownForTTS when reply comes from sanitizeWebhookResponse.
+ */
+function decodeHtmlEntitiesForTTS(text) {
+  if (typeof text !== 'string' && text != null) text = String(text);
+  if (!text || !text.trim()) return text;
+  return text
+    .replace(/&#x27;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&#x2F;/g, '/')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
+}
+
+/**
+ * Strip markdown and meta-formatting so TTS speaks only the words (no "asterisk", "bold", etc.).
+ * Removes **bold**, *italic*, `code`, and similar without reading the symbols aloud.
+ * Also strips any remaining * or _ (TTS would read these as "asterisk"/"underscore").
+ */
+function stripMarkdownForTTS(text) {
+  if (typeof text !== 'string' && text != null) text = String(text);
+  if (!text || !text.trim()) return '';
+  let t = text
+    .replace(/\*\*([^*]+)\*\*/g, '$1')   // **bold** -> bold
+    .replace(/\*([^*]+)\*/g, '$1')        // *italic* -> italic
+    .replace(/__([^_]+)__/g, '$1')        // __bold__ -> bold
+    .replace(/_([^_]+)_/g, '$1')          // _italic_ -> italic
+    .replace(/`([^`]+)`/g, '$1')          // `code` -> code
+    .replace(/~~([^~]+)~~/g, '$1')        // ~~strike~~ -> strike
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // [text](url) -> text
+    .replace(/\*+/g, '')                  // Remove remaining asterisks (TTS reads as "asterisk")
+    .replace(/_+/g, ' ')                  // Remove remaining underscores (TTS reads as "underscore")
+    .replace(/\s+/g, ' ');                // Normalize whitespace
+  return t.trim();
+}
+
+/**
+ * Split text into sentences for TTS continuations (natural prosody with continue: true).
+ * Keeps sentence-ending punctuation. Single segment or no sentence end = one chunk.
+ */
+function splitSentencesForTTS(text) {
+  const t = (typeof text === 'string' ? text : String(text || '')).trim();
+  if (!t) return [];
+  const parts = t.split(/(?<=[.!?])\s+/);
+  const trimmed = parts.map((p) => p.trim()).filter(Boolean);
+  return trimmed.length > 0 ? trimmed : [t];
 }
 
 // Optimized: Use requestAnimationFrame for smooth UI updates (reduces layout thrashing)
@@ -224,8 +373,6 @@ function appendMessage(role, content, attachments = []) {
   return wrap;
 }
 
-// escapeHtml is now imported from debug.js
-
 /** Max attachment size (bytes) — larger files are skipped to avoid huge payloads */
 const MAX_ATTACHMENT_SIZE = 15 * 1024 * 1024; // 15 MB
 
@@ -292,6 +439,15 @@ async function filesToAttachmentPayload(files) {
 }
 
 /**
+ * Message flow (send/receive contract):
+ * 1. User action (text Send or voice final) → appendMessage('user', text) → conversationHistory.push(user)
+ * 2. getLLMReplyWithFiller / getLLMReply builds payload (message, query, input, sessionId, etc.) and POSTs to n8n
+ * 3. Response parsed via extractReplyFromJson → appendMessage('assistant', reply) → conversationHistory.push(assistant)
+ * 4. TTS speaks reply (if apiKey); processFileSpecs handles any file outputs from n8n
+ * UI always shows user message first, then assistant message after n8n responds (or error fallback).
+ */
+
+/**
  * Get LLM reply from n8n webhook.
  * Sends full payload: message, session_id, sessionId, timestamp, timezone, location,
  * message_id, messageId, source, attachments, locale, language.
@@ -300,19 +456,51 @@ async function filesToAttachmentPayload(files) {
  * Enhanced with Result pattern and custom error classes from JavaScript Handbook
  */
 async function getLLMReply(userText, options = {}) {
+  // Agentic Pattern: Guardrails — validate input before sending
+  const inputValidation = validateInput(userText);
+  if (!inputValidation.valid) {
+    DEBUG.error('getLLMReply: input validation failed', { error: inputValidation.error });
+    return { reply: inputValidation.error || "I didn't catch that. Try again?", data: {} };
+  }
+
   const payload = buildPayload(userText, options);
-  
+
   // Validation with custom error class
   if (!payload.message) {
     const error = new ValidationError("I didn't catch that. Try again?");
     DEBUG.error('getLLMReply: empty message', error);
     return { reply: error.message, data: {} };
   }
-  
+
+  const validation = validateN8nPayload(payload);
+  if (!validation.valid) {
+    DEBUG.error('getLLMReply: invalid n8n payload', { errors: validation.errors });
+    return { reply: "Configuration error, sir. The request could not be sent. Please try again.", data: {} };
+  }
+
+  // Fast path: answer simple time/date queries locally to avoid LLM returning non-answers
+  // (e.g. "Noted, sir." when user asks "what time is it"). Guarantees correct response.
+  if (isSimpleTimeOrDateQuery(userText)) {
+    const localReply = getNaturalFallback(userText);
+    if (localReply) {
+      DEBUG.trace('getLLMReply: local time/date fast path', { message: userText.slice(0, 30) });
+      return { reply: localReply, data: {} };
+    }
+  }
+
+  // Resolve n8n URL: from Electron main (.env) when in desktop app, else from config
+  let url = n8nWebhookUrl;
+  if (typeof window !== 'undefined' && window.electronAPI?.getN8nWebhookUrl) {
+    if (!cachedElectronN8nUrl) {
+      cachedElectronN8nUrl = await window.electronAPI.getN8nWebhookUrl();
+    }
+    url = cachedElectronN8nUrl || url;
+  }
+
   DEBUG.trace('n8n: sending payload', { 
     message: payload.message.slice(0, 50), 
     source: payload.source, 
-    url: n8nWebhookUrl,
+    url,
     hasAttachments: !!(payload.attachments && payload.attachments.length),
     attachmentCount: payload.attachments?.length || 0
   });
@@ -329,16 +517,16 @@ async function getLLMReply(userText, options = {}) {
   }
   
   // Configuration validation with custom error class
-  if (!n8nWebhookUrl || typeof n8nWebhookUrl !== 'string' || !n8nWebhookUrl.trim()) {
+  if (!url || typeof url !== 'string' || !url.trim()) {
     const error = new ConfigurationError('N8N webhook URL is not set', 'n8nWebhookUrl');
-    DEBUG.error('n8n webhook URL is missing or invalid', { n8nWebhookUrl, error });
+    DEBUG.error('n8n webhook URL is missing or invalid', { url, error });
     return { reply: "Configuration error, sir. N8N webhook URL is not set. Please check your configuration.", data: {} };
   }
   
   // URL validation to prevent SSRF attacks
-  if (!isValidUrl(n8nWebhookUrl)) {
+  if (!isValidUrl(url)) {
     const error = new ConfigurationError('N8N webhook URL is invalid or uses dangerous protocol', 'n8nWebhookUrl');
-    DEBUG.error('n8n webhook URL validation failed', { n8nWebhookUrl, error });
+    DEBUG.error('n8n webhook URL validation failed', { url, error });
     return { reply: "Configuration error, sir. N8N webhook URL is invalid. Please check your configuration.", data: {} };
   }
   
@@ -349,62 +537,113 @@ async function getLLMReply(userText, options = {}) {
     return { reply: "Rate limit exceeded, sir. Please wait a moment before trying again.", data: {} };
   }
   
-  const controller = new AbortController();
-  let timeoutId;
-  
+  const useElectronProxy = typeof window !== 'undefined' && window.electronAPI?.invokeN8nWebhook;
+  const N8N_TIMEOUT_MS = 90000; // 90s — match Electron main default; allow slow n8n/AI workflows; override via N8N_PROXY_TIMEOUT_MS in Electron .env
+
   try {
-    // Performance monitoring with Performance API
+    // Agentic Pattern: Exception Handling — retry with exponential backoff for transient failures
     const { result: responseData, duration } = await PerformanceMonitor.measureAsync(
       `n8n Request (${payload.source})`,
-      async () => {
-        const payloadJson = JSON.stringify(payload);
-        DEBUG.trace('n8n: sending POST request', { 
-          source: payload.source, 
-          payloadSize: payloadJson.length,
-          url: n8nWebhookUrl 
-        });
-        
-        // Always log payload send (not just in debug mode) for verification
-        // eslint-disable-next-line no-console -- intentional: user needs to verify payloads are sent
-        console.log(`[JARVIS] Sending ${payload.source} payload to n8n:`, {
-          source: payload.source,
-          message: payload.message.slice(0, 100),
-          hasAttachments: !!(payload.attachments && payload.attachments.length),
-          attachmentCount: payload.attachments?.length || 0,
-          sessionId: payload.sessionId
-        });
-        
-        const res = await fetch(n8nWebhookUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: payloadJson,
-          signal: controller.signal,
-        });
-        
-        if (!res.ok) {
-          throw new NetworkError(`HTTP ${res.status}: ${res.statusText}`);
-        }
-        
-        const contentType = res.headers.get('content-type') || '';
-        let data = {};
-        if (contentType.includes('application/json')) {
-          data = await res.json().catch(() => ({}));
-        } else {
-          const text = await res.text().catch(() => '');
-          if (text.trim()) {
-            try {
-              data = JSON.parse(text);
-            } catch {
-              data = { output: text.trim() };
+      () => runWithRetry(async () => {
+        const controller = new AbortController();
+        const timeoutId = useElectronProxy ? null : setTimeout(() => controller.abort(), N8N_TIMEOUT_MS);
+        try {
+          const payloadJson = JSON.stringify(payload);
+          const proxyUrl = typeof window !== 'undefined' ? `${window.location.origin}/api/n8n-proxy` : null;
+          const useProxy = proxyUrl && window.location.origin !== 'null' && !url.startsWith(window.location.origin);
+          DEBUG.trace('n8n: sending POST request', {
+            source: payload.source,
+            payloadSize: payloadJson.length,
+            url,
+            viaElectron: !!useElectronProxy,
+            viaProxy: !!useProxy
+          });
+
+          const viaLabel = useElectronProxy ? ' (via Electron)' : (useProxy ? ' (via /api/n8n-proxy)' : '');
+          const payloadSummary = { source: payload.source, message: payload.message.slice(0, 120), messageLength: payload.message.length, hasAttachments: !!(payload.attachments && payload.attachments.length), sessionId: payload.sessionId };
+          // eslint-disable-next-line no-console -- intentional: user needs to verify payloads are sent (JSON.stringify so Electron main log shows content, not [object Object])
+          console.log(`[JARVIS] Sending ${payload.source} to n8n${viaLabel}:`, JSON.stringify(payloadSummary));
+
+          if (useElectronProxy) {
+            // Client-side timeout: must be longer than main process n8n timeout (default 60s) so we don't abort before main
+            const ipcTimeoutMs = N8N_TIMEOUT_MS + 5000;
+            const r = await Promise.race([
+              window.electronAPI.invokeN8nWebhook(url, payloadJson),
+              new Promise((_, reject) =>
+                setTimeout(
+                  () => reject(new TimeoutError(`Electron IPC timed out after ${Math.round(ipcTimeoutMs / 1000)}s`, ipcTimeoutMs)),
+                  ipcTimeoutMs
+                )
+              ),
+            ]);
+            if (r.status < 200 || r.status >= 300) {
+              throw new NetworkError(`HTTP ${r.status}: ${r.statusText}`);
+            }
+            return { data: r.data, status: r.status, statusText: r.statusText };
+          }
+
+          let res;
+          if (useProxy) {
+            res = await fetch(proxyUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url, body: payload }),
+              signal: controller.signal,
+            });
+            if (res.status === 403) {
+              const errBody = await res.json().catch(() => ({}));
+              const msg = errBody?.message || 'Webhook URL not allowed';
+              throw new NetworkError(`N8n proxy: ${msg}. Add your webhook to N8N_WEBHOOK_URL or ALLOWED_N8N_WEBHOOKS in .env.`);
+            }
+            if (res.status === 404) {
+              res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: payloadJson,
+                signal: controller.signal,
+              });
+            }
+          } else {
+            res = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: payloadJson,
+              signal: controller.signal,
+            });
+          }
+
+          if (!res.ok) {
+            throw new NetworkError(`HTTP ${res.status}: ${res.statusText}`);
+          }
+
+          const contentType = res.headers.get('content-type') || '';
+          let data = {};
+          if (contentType.includes('application/json')) {
+            data = await res.json().catch(() => ({}));
+          } else {
+            const text = await res.text().catch(() => '');
+            if (text.trim()) {
+              try {
+                data = JSON.parse(text);
+              } catch {
+                data = { output: text.trim() };
+              }
             }
           }
+
+          return { data, status: res.status, statusText: res.statusText };
+        } finally {
+          if (timeoutId) clearTimeout(timeoutId);
         }
-        
-        return { data, status: res.status, statusText: res.statusText };
-      }
+      }, {
+        maxAttempts: 3,
+        retryable: (err) => {
+          if (err instanceof NetworkError && /HTTP [45]\d{2}/.test(err?.message || '')) return false;
+          const msg = err?.message || '';
+          return err?.name === 'AbortError' || /timeout|timed out/i.test(msg) || /failed to fetch|network error|networkerror/i.test(msg) || /ECONNRESET|ETIMEDOUT|ENOTFOUND/i.test(msg);
+        },
+      })
     );
-    
-    if (timeoutId) clearTimeout(timeoutId);
     
     const { data, status, statusText } = responseData;
     
@@ -432,20 +671,27 @@ async function getLLMReply(userText, options = {}) {
     });
     
     if (typeof reply === 'string') {
-      return { reply, data };
+      // Agentic Pattern: Reflection (Ch 4) — validate and refine reply; override low-quality non-answers
+      const { refined, wasRefined, reason } = validateAndRefineReply(
+        payload.message,
+        reply,
+        getNaturalFallback
+      );
+      if (wasRefined) {
+        DEBUG.trace('n8n: reflection refined reply', { reason, original: reply.slice(0, 40) });
+      }
+      return { reply: refined || reply, data };
     }
-    
-    // No reply extracted — log so we can diagnose fallback
-    const hasNatural = !!getNaturalFallback(payload.message);
-    if (!hasNatural) {
-      // eslint-disable-next-line no-console -- intentional: user needs to see why fallback was used
-      console.warn('[JARVIS] n8n fallback: no reply in response. Status:', status, 'Body:', JSON.stringify(data).slice(0, 300));
-    }
+
+    // No reply extracted — log so we can diagnose fallback (message was sent; n8n returned no recognized reply key)
+    const responseKeys = data && typeof data === 'object' ? Object.keys(data) : [];
+    // eslint-disable-next-line no-console -- intentional: user needs to see why fallback was used
+    console.warn('[JARVIS] n8n fallback: no reply in response. Message we sent:', JSON.stringify(payload.message).slice(0, 80), '| Response keys:', responseKeys.join(', ') || '(empty)', '| Body preview:', JSON.stringify(data).slice(0, 400));
     if (DEBUG.enabled && typeof reply !== 'string') {
       DEBUG.trace('n8n: response body (no reply extracted)', data);
     }
     if (status >= 200 && status < 300 && (Object.keys(data).length === 0 || !extractReplyFromJson(data))) {
-      DEBUG.error('n8n: empty or no reply in response body. In n8n, set Webhook node Respond to "Using Respond to Webhook Node". See debug/N8N-RESPOND-TO-WEBHOOK-FIX.md');
+      DEBUG.warn('n8n: empty or no reply in response body. In n8n, set Webhook node Respond to "Using Respond to Webhook Node" and return JSON with one of: output, reply, result, text, message, response, answer, content, body, webhooks. See debug/N8N-RESPOND-TO-WEBHOOK-FIX.md');
     }
     const natural = getNaturalFallback(payload.message);
     const fallback = natural || "I heard you, sir. Still getting set up — please try again in a moment.";
@@ -453,25 +699,83 @@ async function getLLMReply(userText, options = {}) {
     return { reply: natural ? natural : fallback, data };
     
   } catch (err) {
-    if (timeoutId) clearTimeout(timeoutId);
-    
     // Enhanced error handling with custom error classes
-    if (err.name === 'AbortError') {
-      const error = new TimeoutError('Request timed out after 30s', 30000);
-      DEBUG.error('n8n webhook timeout after 30s', { url: n8nWebhookUrl, message: payload.message.slice(0, 50), error });
+    if (err.name === 'AbortError' || err instanceof TimeoutError) {
+      const error = err instanceof TimeoutError ? err : new TimeoutError(`Request timed out after ${Math.round(N8N_TIMEOUT_MS / 1000)}s`, N8N_TIMEOUT_MS);
+      DEBUG.error('n8n webhook timeout', { url, message: payload.message.slice(0, 50), error });
       return { reply: "Request timed out, sir. The assistant is taking too long to respond. Please try again.", data: {} };
     } else if (err instanceof NetworkError) {
-      DEBUG.error('n8n webhook network error', { url: n8nWebhookUrl, error: err });
-      return { reply: "Network error, sir. Could not reach the assistant. Check your connection and CORS settings.", data: {} };
-    } else if (err.message && (err.message.includes('CORS') || err.message.includes('Failed to fetch'))) {
+      const code = err.code ?? err.cause?.code;
+      const hint = code ? ` (${code})` : '';
+      const is429 = err.message && err.message.includes('429');
+      const is404 = err.message && err.message.includes('404');
+      // Log message and url/code as primitives so Electron main log shows them (objects stringify as [object Object])
+      DEBUG.error('n8n webhook network error:', err.message || String(err), url, code ?? '');
+      if (is404) {
+        // eslint-disable-next-line no-console -- intentional: user needs to fix webhook URL
+        console.warn('[JARVIS] 404: Webhook not found. In n8n: open the workflow → turn it ON (Active). Use production URL /webhook/... not /webhook-test/.... If you recreated the workflow, copy the new webhook URL into .env. URL:', url);
+      }
+      if (is429) {
+        return { reply: "Rate limit exceeded, sir. Please wait a moment before trying again.", data: {} };
+      }
+      if (is404) {
+        return { reply: "Webhook not found, sir. In n8n: open the workflow and turn it ON (Active). Use the production URL (/webhook/..., not /webhook-test/). If you recreated the workflow, update the webhook URL in .env.", data: {} };
+      }
+      return { reply: `Network error${hint}, sir. Could not reach the assistant. Check your connection and that n8n.hempstarai.com is reachable.`, data: {} };
+    } else if (detectCORSError(err, url) || (err.message && (err.message.includes('CORS') || err.message.includes('Failed to fetch')))) {
       const error = new NetworkError('CORS or network error', err);
-      DEBUG.error('n8n webhook CORS or network error', { url: n8nWebhookUrl, error });
+      DEBUG.error('n8n webhook CORS or network error', { url, error });
+      if (DEBUG.enabled) {
+        DEBUG.error('CORS config guide', getCORSConfigurationGuide(typeof window !== 'undefined' ? window.origin : ''));
+      }
       return { reply: "Network error, sir. Could not reach the assistant. Check your connection and CORS settings.", data: {} };
     } else {
       const error = new NetworkError('Failed to reach assistant', err);
-      DEBUG.error('n8n webhook error', { url: n8nWebhookUrl, error });
+      DEBUG.error('n8n webhook error', { url, error });
       return { reply: "Sorry, sir. I couldn't reach the assistant. Please try again.", data: {} };
     }
+  }
+}
+
+/**
+ * Wraps getLLMReply with dynamic filler logic (NVIDIA Tokkio pattern).
+ * After fillerTimeDelayMs with no reply, speaks a random filler phrase.
+ * Cut off filler when reply arrives by calling cancelTTS before speaking reply.
+ * @param {string} userText - User message
+ * @param {Object} options - Options for buildPayload (source, attachments, etc.)
+ * @param {{ bridge: CartesiaAudioBridge, apiKey: string }} ctx - Bridge and TTS availability
+ * @returns {Promise<{ reply: string, data: Object }>} - Same as getLLMReply
+ */
+async function getLLMReplyWithFiller(userText, options, { bridge, apiKey }) {
+  const { fillerPhrases = [], fillerTimeDelayMs = 2000 } = VAD_CONFIG;
+  const enabled = apiKey && Array.isArray(fillerPhrases) && fillerPhrases.length > 0 && fillerTimeDelayMs > 0;
+
+  let fillerTimer = null;
+  const clearFillerTimer = () => {
+    if (fillerTimer) {
+      clearTimeout(fillerTimer);
+      fillerTimer = null;
+    }
+  };
+
+  if (enabled) {
+    fillerTimer = setTimeout(() => {
+      fillerTimer = null;
+      const phrase = fillerPhrases[Math.floor(Math.random() * fillerPhrases.length)];
+      if (phrase && typeof phrase === 'string' && phrase.trim()) {
+        DEBUG.trace('Filler: speaking while waiting for n8n', { phrase: phrase.trim() });
+        bridge.speakText(phrase.trim()).catch(() => {});
+      }
+    }, fillerTimeDelayMs);
+  }
+
+  try {
+    const result = await getLLMReply(userText, options);
+    clearFillerTimer();
+    return result;
+  } catch (err) {
+    clearFillerTimer();
+    throw err;
   }
 }
 
@@ -533,16 +837,23 @@ async function processFileSpecs(files) {
   }
 }
 
-const bridge = new CartesiaAudioBridge({
+// Optimal latency & bidirectional flow: send on STT final, sonic-turbo TTS (40ms first byte), TTS pre-connect during n8n wait
+let bridge;
+try {
+  bridge = new CartesiaAudioBridge({
   apiKey: apiKey || undefined,
   voiceId: voiceId || undefined,
-  ttsModel: 'sonic-turbo', // Optimal latency: 40ms first byte (vs 90ms for sonic-3)
+  ttsModel: 'sonic-turbo', // 40ms first byte (vs 90ms for sonic-3)
+  sendTranscriptOnFinal: sendTranscriptOnFinal !== false, // true = send as soon as STT final (default); false = wait for silence (~2.5s slower)
   audioWorkletBasePath: (() => {
-    // Use absolute path for AudioWorklet modules
-    // In browser, this resolves to /audio/ from the root
-    // @vite-ignore - URL is resolved at runtime, not build time
-    const url = new URL('../audio/', import.meta.url);
-    // Use href (full URL) and ensure trailing slash
+    // Electron: resolve /audio/ relative to the loaded page so file:// and app:// both work
+    if (typeof window !== 'undefined' && window.electronAPI?.isElectron) {
+      // file:// with origin + '/audio/' becomes file:///audio/ (fs root). Use document-relative URL instead.
+      const base = new URL('audio/', window.location.href).href;
+      return base;
+    }
+    // Browser/Vite: resolve from import.meta.url for correct origin
+    const url = new URL(/* @vite-ignore */ '../audio/', import.meta.url);
     let path = url.href;
     if (!path.endsWith('/')) path += '/';
     return path;
@@ -567,6 +878,30 @@ const bridge = new CartesiaAudioBridge({
       DEBUG.trace('onTranscript: empty text, skipping n8n (no payload sent)');
       return;
     }
+    if (_voiceSendInProgress) {
+      DEBUG.trace('onTranscript: voice send already in progress, skipping', { preview: trimmed.slice(0, 40) });
+      return;
+    }
+    const now = Date.now();
+    if (now - _lastVoiceSendTime < VOICE_SEND_COOLDOWN_MS) {
+      DEBUG.trace('onTranscript: cooldown active, skipping duplicate voice send', { elapsed: now - _lastVoiceSendTime });
+      return;
+    }
+    // Reject transcripts that match recent TTS output (mic picking up speaker feedback)
+    if (_lastSpokenTTS && now - _lastSpokenTTSAt < TTS_ECHO_REJECT_MS) {
+      const tNorm = trimmed.toLowerCase().replace(/\s+/g, ' ');
+      const sNorm = _lastSpokenTTS.toLowerCase().replace(/\s+/g, ' ');
+      const isSubstring = tNorm.length >= 8 && sNorm.includes(tNorm);
+      const tWords = tNorm.split(/\s+/).filter((w) => w.length >= 3);
+      const overlap = tWords.filter((w) => sNorm.includes(w)).length / Math.max(1, tWords.length);
+      if (isSubstring || (tWords.length >= 3 && overlap >= 0.7)) {
+        DEBUG.trace('onTranscript: rejected as TTS echo', { preview: trimmed.slice(0, 50) });
+        return;
+      }
+    }
+    _lastVoiceSendTime = now;
+    _voiceSendInProgress = true;
+    // Voice and text both use getLLMReply → buildPayload → buildN8nPayload (full payload: sessionId, conversationHistory, intent, contextEnrichment, agenticHints, attachments, etc.)
     DEBUG.trace('onTranscript: sending voice payload to n8n', { length: trimmed.length, preview: trimmed.slice(0, 80) });
     // Get recorded audio as base64 before any async operations
     let audioBase64 = null;
@@ -585,9 +920,8 @@ const bridge = new CartesiaAudioBridge({
     bridge.clearRecordedAudio();
     
     try {
+      // Send/receive: show user message in UI first, then request n8n reply
       appendMessage('user', trimmed);
-
-      // Add user message to conversation history
       conversationHistory.push({ role: 'user', content: trimmed });
       setStatus('Processing…', 'listening');
       const audioAttachments = audioBase64 ? [{
@@ -608,7 +942,15 @@ const bridge = new CartesiaAudioBridge({
       // Optimized: Pre-connect TTS WebSocket while waiting for n8n response (parallel processing)
       const ttsConnectPromise = apiKey ? bridge.connectTTS().catch(() => {}) : null;
       
-      const { reply: replyText, data: replyData } = await getLLMReply(trimmed, { source: 'voice', attachments: audioAttachments });
+      let replyText;
+      let replyData;
+      try {
+        const result = await getLLMReplyWithFiller(trimmed, { source: 'voice', attachments: audioAttachments }, { bridge, apiKey });
+        replyText = result.reply;
+        replyData = result.data;
+      } finally {
+        _voiceSendInProgress = false;
+      }
       
       // Ensure TTS is connected before speaking (wait for pre-connection if it was started)
       if (ttsConnectPromise) {
@@ -622,10 +964,12 @@ const bridge = new CartesiaAudioBridge({
       
       // Safeguard: ensure replyText is a string
       const safeReplyText = typeof replyText === 'string' ? replyText : String(replyText || '');
-      appendMessage('assistant', safeReplyText);
+      // Decode HTML entities for display (sanitizeWebhookResponse encodes ' → &#x27; etc; display as "It's" not "It&#x27;s")
+      const displayText = decodeHtmlEntitiesForTTS(safeReplyText);
+      appendMessage('assistant', displayText);
 
       // Add assistant response to conversation history
-      conversationHistory.push({ role: 'assistant', content: safeReplyText });
+      conversationHistory.push({ role: 'assistant', content: displayText });
       const files = extractFilesFromJson(replyData);
       if (apiKey) {
         setStatus('Speaking…', 'speaking');
@@ -657,17 +1001,25 @@ const bridge = new CartesiaAudioBridge({
             }
           }
           
-          // Speak the reply (barge-in can interrupt this if STT is active)
-          // Optimized: TTS WebSocket already connected, zero connection latency
-          // Safeguard: ensure replyText is a string
-          const safeReplyTextForTTS = typeof replyText === 'string' ? replyText : String(replyText || '');
+          // Cut off any filler spoken while waiting; then speak the reply (barge-in can interrupt)
+          bridge.cancelTTS();
+          // Decode HTML entities (sanitizeWebhookResponse encodes ' → &#x27; etc) then strip markdown
+          const rawReply = typeof replyText === 'string' ? replyText : String(replyText || '');
+          const decodedReply = decodeHtmlEntitiesForTTS(rawReply);
+          const safeReplyTextForTTS = stripMarkdownForTTS(decodedReply);
           if (safeReplyTextForTTS.trim()) {
-            await bridge.speakText(safeReplyTextForTTS);
+            _lastSpokenTTS = safeReplyTextForTTS;
+            _lastSpokenTTSAt = Date.now();
+            const chunks = splitSentencesForTTS(safeReplyTextForTTS);
+            if (chunks.length > 1) {
+              await bridge.streamTextChunks(chunks);
+            } else {
+              await bridge.speakText(safeReplyTextForTTS);
+            }
           }
           
-          // After TTS completes, resume silence timers if STT is still active
+          // After TTS completes, bridge starts 10s silence timer when playback actually finishes (buffer empty)
           if (bridge.isSTTActive()) {
-            bridge.resumeSilenceTimersAfterTTS();
             setStatus('Listening…', 'listening');
           } else {
             // If STT stopped (e.g., due to barge-in), restart it
@@ -684,7 +1036,7 @@ const bridge = new CartesiaAudioBridge({
               await bridge.startSTT();
               syncMicButton(true, false);
               setStatus('Listening…', 'listening');
-              bridge.startAgentSilenceTimer();
+              // 10s timer starts from bridge when TTS playback drains (agent last spoke), not here
             } catch (sttErr) {
               DEBUG.error('Failed to restart STT after TTS', sttErr);
               syncMicButton(false, false);
@@ -695,10 +1047,24 @@ const bridge = new CartesiaAudioBridge({
           }
           if (files.length) await processFileSpecs(files);
         } catch (err) {
-          DEBUG.error('TTS error in onTranscript', err);
-          _isRestartingSTT = false; // Clear flag on error
-          setStatus('Ready (TTS error)', '');
-          appendMessage('assistant', 'Sorry, I could not speak that. ' + (err?.message || err));
+          _isRestartingSTT = false;
+          // Barge-in: user spoke during TTS — treat as normal flow, not an error
+          const isBargeIn = err?.message && /barge-in|cancelled|user spoke|Barge-in/i.test(String(err.message));
+          if (isBargeIn) {
+            DEBUG.trace('TTS interrupted by barge-in (normal flow)', { message: err?.message });
+            if (bridge.isSTTActive()) setStatus('Listening…', 'listening');
+            else setStatus('Ready');
+          } else {
+            DEBUG.error('TTS error in onTranscript', err);
+            setStatus('Ready (TTS error)', '');
+            appendMessage('assistant', 'Sorry, I could not speak that. ' + (err?.message || err));
+            // Ensure mic turns off when TTS fails — stop STT and sync mic button
+            if (bridge.isSTTActive()) {
+              bridge.stopSTT(); // Triggers onSTTStopped → syncMicButton
+            } else {
+              syncMicButton(false, false);
+            }
+          }
         }
       } else {
         setStatus('Ready (no voice: add CARTESIA_API_KEY for TTS)', '');
@@ -706,10 +1072,17 @@ const bridge = new CartesiaAudioBridge({
       }
     } catch (err) {
       DEBUG.error('onTranscript error', err);
-      // Safeguard: ensure flag is cleared on any error
+      // Safeguard: ensure flags are cleared on any error
+      _voiceSendInProgress = false;
       _isRestartingSTT = false;
       setStatus('Error', 'error');
       appendMessage('assistant', 'Sorry, sir. Something went wrong. ' + (err?.message || err));
+      // Ensure mic turns off when voice flow errors
+      if (bridge?.isSTTActive?.()) {
+        bridge.stopSTT();
+      } else {
+        syncMicButton(false, false);
+      }
     }
   },
   onTTSChunk: () => {},
@@ -763,9 +1136,21 @@ const bridge = new CartesiaAudioBridge({
     const text = phrase.trim();
     setStatus('Standing by…', '');
     appendMessage('assistant', text);
-    bridge.speakText(text).then(() => setStatus('Ready')).catch(() => setStatus('Ready'));
+    bridge.speakText(text, null, false, true).then(() => setStatus('Ready')).catch(() => setStatus('Ready'));
   },
 });
+
+  // Mic starts in ready state (not disabled) so user can click to talk
+  if (btnMic) syncMicButton(false, false);
+
+// Expose bridge and conversation history for debug and external integration.
+// UI contract: All status and mic state flow from bridge callbacks → setStatus() / syncMicButton().
+// index.html Ready-button and menu actions may call setStatus('Ready') or JARVIS_BRIDGE.stopSTT/stopTTS; bridge.onSTTStopped then syncs mic.
+if (typeof window !== 'undefined') {
+  window.JARVIS_BRIDGE = bridge;
+  // Agentic Pattern: Memory — expose for debug (?debug=1): JARVIS_CONVERSATION_HISTORY.getRecent(20)
+  window.JARVIS_CONVERSATION_HISTORY = conversationHistory;
+}
 
 /** Debug tool: when ?debug=1, expose JARVIS_DEBUG_SEND_TEST() in console to send a test message and check n8n response. */
 if (typeof window !== 'undefined' && (DEBUG.enabled || (window.location && window.location.search && /[?&]debug=1/.test(window.location.search)))) {
@@ -807,12 +1192,82 @@ if (typeof window !== 'undefined' && (DEBUG.enabled || (window.location && windo
   };
   console.log('[JARVIS DEBUG] Run JARVIS_DEBUG_CHECK_CONFIG() to see current configuration and mic status.');
 }
-/* eslint-enable no-console */
+
+/** Verify Electron + mic + bridge integration. Call JARVIS_VERIFY_ELECTRON_MIC() when running in Electron. */
+if (typeof window !== 'undefined') {
+  window.JARVIS_VERIFY_ELECTRON_MIC = function () {
+    const checks = { ok: true, errors: [], warnings: [] };
+    const isElectron = window.electronAPI?.isElectron === true;
+    if (!isElectron) checks.warnings.push('Not in Electron (electronAPI.isElectron is false)');
+    if (!window.electronAPI) checks.errors.push('electronAPI not exposed (preload/contextBridge)');
+    if (!window.isSecureContext) {
+      checks.ok = false;
+      checks.errors.push('Not a secure context — getUserMedia requires HTTPS, localhost, or app://');
+    }
+    const micSupport = CartesiaAudioBridge.checkRecordingSupport();
+    if (!micSupport.supported) {
+      checks.ok = false;
+      checks.errors.push('Mic not available: ' + (micSupport.message || 'Unknown'));
+    }
+    if (!btnMic) checks.errors.push('btnMic (#btnMic) missing in DOM');
+    else {
+      checks.info = { ...(checks.info || {}), btnMic: 'found', ariaLabel: btnMic.getAttribute('aria-label') };
+    }
+    const basePath = bridge?.options?.audioWorkletBasePath || '(not set)';
+    checks.info = { ...(checks.info || {}), audioWorkletBasePath: basePath, origin: window.location?.origin };
+    if (isElectron && (!basePath || basePath === '(not set)' || !basePath.includes('/audio/'))) {
+      checks.warnings.push('AudioWorklet base path may be wrong for Electron (expected origin + /audio/)');
+    }
+    console.log('[JARVIS] Electron mic verification:', checks.ok ? 'PASS' : 'FAIL', checks);
+    return checks;
+  };
+}
+
+/** Verify front-end send/receive flow: DOM elements, payload shape, and reply extraction. Call JARVIS_VERIFY_MESSAGE_FLOW() anytime. */
+if (typeof window !== 'undefined') {
+  window.JARVIS_VERIFY_MESSAGE_FLOW = function () {
+    const checks = { ok: true, errors: [], warnings: [] };
+    if (!chatContainer) {
+      checks.ok = false;
+      checks.errors.push('chatContainer (#chatContainer) missing');
+    }
+    if (!textInput) checks.errors.push('textInput (#textInput) missing');
+    if (!btnSend) checks.errors.push('btnSend (#btnSend) missing');
+    if (!btnMic) checks.warnings.push('btnMic (#btnMic) missing');
+    if (!statusEl) checks.errors.push('status (#status) missing');
+    const payload = buildPayload('verify-flow-test', { source: 'text' });
+    const validation = validateN8nPayload(payload);
+    if (!validation.valid) {
+      checks.ok = false;
+      checks.errors.push('Payload validation failed: ' + (validation.errors || []).join('; '));
+    }
+    if (payload.message !== 'verify-flow-test' || payload.query !== payload.message || payload.input !== payload.message) {
+      checks.ok = false;
+      checks.errors.push('Payload message/query/input not aligned');
+    }
+    if (checks.errors.length) checks.ok = false;
+    console.log('[JARVIS] Message flow verification:', checks.ok ? 'PASS' : 'FAIL', checks);
+    return checks;
+  };
+}
 
 let pendingAttachments = [];
 
 if (btnSend) {
   btnSend.addEventListener('click', async () => {
+    // Timer refs and clearer at top so both success and error paths can clear (no ReferenceError in outer catch)
+    let processingHintTimer = null;
+    let safetyTimeoutId = null;
+    const clearProcessingTimers = () => {
+      if (processingHintTimer) {
+        clearTimeout(processingHintTimer);
+        processingHintTimer = null;
+      }
+      if (safetyTimeoutId) {
+        clearTimeout(safetyTimeoutId);
+        safetyTimeoutId = null;
+      }
+    };
     try {
       DEBUG.trace('btnSend clicked', { hasText: !!textInput.value.trim(), textLength: textInput.value.trim().length });
       const text = textInput.value.trim();
@@ -830,11 +1285,20 @@ if (btnSend) {
         textInput.style.height = 'auto';
       }
       const attachmentsForPayload = [...pendingAttachments];
+      // Send/receive: show user message in UI first, then request n8n reply
       appendMessage('user', text, attachmentsForPayload.length ? attachmentsForPayload : []);
-      // Add user message to conversation history
       conversationHistory.push({ role: 'user', content: text });
       pendingAttachments = [];
       setStatus('Processing…', 'listening');
+      // "Still waiting" hint after 10s so user knows the app didn't freeze; safety timeout so we never stay stuck
+      const PROCESSING_HINT_MS = 10000;
+      const SAFETY_TIMEOUT_MS = 70000;
+      processingHintTimer = setTimeout(() => {
+        processingHintTimer = null;
+        if (statusEl && (statusEl.textContent.includes('Processing') || statusEl.textContent.includes('Still waiting'))) {
+          setStatus('Still waiting for assistant…', 'listening');
+        }
+      }, PROCESSING_HINT_MS);
       try {
         const attachmentPayload = await filesToAttachmentPayload(attachmentsForPayload);
         await addOcrToAttachments(attachmentPayload);
@@ -844,8 +1308,16 @@ if (btnSend) {
         });
         // Optimized: Pre-connect TTS WebSocket while waiting for n8n response (parallel processing)
         const ttsConnectPromise = apiKey ? bridge.connectTTS().catch(() => {}) : null;
-        
-        const { reply: replyText, data: replyData } = await getLLMReply(text, { source: 'text', attachments: attachmentPayload });
+        // Safety: never stay stuck on "Processing" — race with a timeout and show clear error
+        const replyPromise = getLLMReplyWithFiller(text, { source: 'text', attachments: attachmentPayload }, { bridge, apiKey });
+        const timeoutPromise = new Promise((_, reject) => {
+          safetyTimeoutId = setTimeout(() => {
+            safetyTimeoutId = null;
+            reject(new TimeoutError(`Request timed out after ${Math.round(SAFETY_TIMEOUT_MS / 1000)}s. Check that your n8n workflow is Active and the webhook URL in .env is correct.`, SAFETY_TIMEOUT_MS));
+          }, SAFETY_TIMEOUT_MS);
+        });
+        const { reply: replyText, data: replyData } = await Promise.race([replyPromise, timeoutPromise]);
+        clearProcessingTimers();
         
         // Ensure TTS is connected before speaking (wait for pre-connection if it was started)
         if (ttsConnectPromise) {
@@ -859,39 +1331,106 @@ if (btnSend) {
         
         // Safeguard: ensure replyText is a string
         const safeReplyText = typeof replyText === 'string' ? replyText : String(replyText || '');
-        appendMessage('assistant', safeReplyText);
+        // Decode HTML entities for display (sanitizeWebhookResponse encodes ' → &#x27; etc; display as "It's" not "It&#x27;s")
+        const displayText = decodeHtmlEntitiesForTTS(safeReplyText);
+        appendMessage('assistant', displayText);
         // Add assistant response to conversation history
-        conversationHistory.push({ role: 'assistant', content: safeReplyText });
+        conversationHistory.push({ role: 'assistant', content: displayText });
         const files = extractFilesFromJson(replyData);
         if (apiKey) {
           setStatus('Speaking…', 'speaking');
           try {
-            // Optimized: TTS WebSocket already connected, zero connection latency
-            // Safeguard: ensure replyText is a string
-            const safeReplyTextForTTS = typeof replyText === 'string' ? replyText : String(replyText || '');
-            if (safeReplyTextForTTS.trim()) {
-              await bridge.speakText(safeReplyTextForTTS);
+            // Optimal bidirectional flow: start STT during TTS so user can voice-barge-in (same as voice path)
+            const wasSTTActive = bridge.isSTTActive();
+            if (wasSTTActive) {
+              bridge.pauseSilenceTimersForBargeIn();
+            } else {
+              _isRestartingSTT = true;
+              try {
+                const saved = typeof localStorage !== 'undefined' && localStorage.getItem(MIC_BOOST_STORAGE_KEY);
+                if (saved != null) {
+                  const v = parseFloat(saved);
+                  if (!Number.isNaN(v)) bridge.setInputGain(Math.max(0.5, Math.min(2, v)));
+                }
+                await bridge.startSTT();
+                syncMicButton(true, false);
+                setStatus('Listening…', 'listening');
+              } catch (sttErr) {
+                DEBUG.error('Failed to start STT before TTS (text path)', sttErr);
+              } finally {
+                _isRestartingSTT = false;
+              }
             }
-            setStatus('Ready');
+            // Cut off any filler spoken while waiting; then speak the reply (barge-in can interrupt)
+            bridge.cancelTTS();
+            // Decode HTML entities (sanitizeWebhookResponse encodes ' → &#x27; etc) then strip markdown
+            const rawReply = typeof replyText === 'string' ? replyText : String(replyText || '');
+            const decodedReply = decodeHtmlEntitiesForTTS(rawReply);
+            const safeReplyTextForTTS = stripMarkdownForTTS(decodedReply);
+            if (safeReplyTextForTTS.trim()) {
+              const chunks = splitSentencesForTTS(safeReplyTextForTTS);
+              if (chunks.length > 1) {
+                await bridge.streamTextChunks(chunks);
+              } else {
+                await bridge.speakText(safeReplyTextForTTS);
+              }
+            }
+            // After TTS: keep listening or restart STT for next turn (optimal bidirectional flow)
+            if (bridge.isSTTActive()) {
+              setStatus('Listening…', 'listening');
+            } else {
+              setStatus('Connecting…', '');
+              _isRestartingSTT = true;
+              try {
+                const saved = typeof localStorage !== 'undefined' && localStorage.getItem(MIC_BOOST_STORAGE_KEY);
+                if (saved != null) {
+                  const v = parseFloat(saved);
+                  if (!Number.isNaN(v)) bridge.setInputGain(Math.max(0.5, Math.min(2, v)));
+                }
+                await bridge.startSTT();
+                syncMicButton(true, false);
+                setStatus('Listening…', 'listening');
+                // 10s timer starts from bridge when TTS playback drains (agent last spoke), not here
+              } catch (sttErr) {
+                DEBUG.error('Failed to restart STT after TTS (text path)', sttErr);
+                syncMicButton(false, false);
+                setStatus('Ready (mic restart failed)', '');
+              } finally {
+                _isRestartingSTT = false;
+              }
+            }
             if (files.length) await processFileSpecs(files);
           } catch (err) {
-            setStatus('Error', 'error');
-            appendMessage('assistant', 'Sorry, sir. Something went wrong. ' + (err?.message || err));
+            _isRestartingSTT = false;
+            const isBargeIn = err?.message && /barge-in|cancelled|user spoke|Barge-in/i.test(String(err.message));
+            if (isBargeIn) {
+              DEBUG.trace('TTS interrupted (barge-in) in btnSend', { message: err?.message });
+              if (bridge.isSTTActive()) setStatus('Listening…', 'listening');
+              else setStatus('Ready');
+            } else {
+              setStatus('Error', 'error');
+              appendMessage('assistant', 'Sorry, sir. Something went wrong. ' + (err?.message || err));
+            }
+            if (files.length) await processFileSpecs(files);
           }
         } else {
           setStatus('Ready (no voice: add CARTESIA_API_KEY for TTS)', '');
           if (files.length) await processFileSpecs(files);
         }
       } catch (err) {
+        clearProcessingTimers();
         setStatus('Error', 'error');
-        appendMessage('assistant', 'Sorry, sir. Something went wrong. ' + (err?.message || err));
+        const msg = err instanceof TimeoutError ? (err.message || 'Request timed out. Check that your n8n workflow is Active and the webhook URL in .env is correct.') : (err?.message || err);
+        appendMessage('assistant', 'Sorry, sir. Something went wrong. ' + msg);
       }
     } catch (err) {
       // Top-level catch to prevent unhandled promise rejections
+      clearProcessingTimers();
       DEBUG.error('btnSend: unhandled error', err);
       setStatus('Error', 'error');
       if (chatContainer) {
-        appendMessage('assistant', 'Sorry, sir. An unexpected error occurred. ' + (err?.message || err));
+        const msg = err instanceof TimeoutError ? (err.message || 'Request timed out.') : (err?.message || err);
+        appendMessage('assistant', 'Sorry, sir. An unexpected error occurred. ' + msg);
       }
     }
   });
@@ -957,11 +1496,13 @@ if (btnMic) {
       
       // Early validation checks (synchronous, don't need flag protection)
       if (!apiKey) {
+        console.warn('[JARVIS] Mic: CARTESIA_API_KEY not set');
         setStatus('Add CARTESIA_API_KEY (or set window.JARVIS_CONFIG.apiKey)', 'error');
         return;
       }
       const support = CartesiaAudioBridge.checkRecordingSupport();
       if (!support.supported) {
+        console.warn('[JARVIS] Mic not available:', support.message);
         setStatus(support.message || 'Microphone not available', 'error');
         return;
       }
@@ -985,8 +1526,19 @@ if (btnMic) {
           setStatus('Listening…', 'listening');
         } catch (err) {
           const msg = err?.message || String(err);
+          console.error('[JARVIS] Mic error:', err);
           setStatus(msg.startsWith('Mic ') ? msg : 'Mic: ' + msg, 'error');
           syncMicButton(false, false);
+          // If permission denied in Electron, offer to open privacy settings
+          const isPermissionDenied = err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError' || (typeof msg === 'string' && msg.toLowerCase().includes('denied'));
+          if (isPermissionDenied && window.electronAPI?.openMicPrivacySettings) {
+            window.electronAPI.getMediaAccessStatus?.().then(({ microphone }) => {
+              if (microphone !== 'granted') {
+                showNotification('Mic access denied. Click mic again after enabling in Settings.', 'warn');
+                window.electronAPI.openMicPrivacySettings();
+              }
+            }).catch(() => {});
+          }
         }
       } finally {
         _micClickInProgress = false;
@@ -1077,6 +1629,12 @@ if (fileInput && textInput) {
   DEBUG.error('fileInput or textInput not found - cannot attach file change handler', { fileInput: !!fileInput, textInput: !!textInput });
 }
 
+// MDN WebSockets API: Close connections on pagehide for bfcache compatibility.
+// "Having an open WebSocket connection may prevent the browser adding your page to the bfcache.
+// It's good practice to close your connection when the user has finished with your page."
+// @see https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API/Writing_WebSocket_client_applications#working_with_the_bfcache
+window.addEventListener('pagehide', () => bridge.closeAllWebSocketsForBfcache());
+
 window.addEventListener('beforeunload', () => bridge.destroy());
 
 // Expose functions for testing (debug mode only)
@@ -1087,4 +1645,51 @@ if (DEBUG.enabled || (typeof window !== 'undefined' && window.location && window
     bridge,
     syncMicButton
   };
+  // Read-only debug API: chat history is never cleared until the page is refreshed.
+  window.JARVIS_CONVERSATION_HISTORY = {
+    getRecent(n = 20) {
+      const len = Math.min(Number(n) || 20, conversationHistory.length);
+      return conversationHistory.slice(-len);
+    }
+  };
+  // CORS diagnostics (see docs/CORS-DOCS.md, docs/CORS-CONFIGURATION.md)
+  window.JARVIS_DEBUG_CORS = async (url = n8nWebhookUrl) => {
+    const result = await diagnoseCORS(url);
+    /* eslint-disable no-console -- debug API for CORS diagnostics */
+    console.log('[JARVIS] CORS diagnostics:', result);
+    console.log(getCORSConfigurationGuide(typeof window !== 'undefined' ? window.origin : ''));
+    /* eslint-enable no-console */
+    return result;
+  };
+  window.JARVIS_DEBUG_CORS_PREFLIGHT = async (url = n8nWebhookUrl) => {
+    const result = await testCORSPreflight(url);
+    /* eslint-disable-next-line no-console -- debug API for CORS preflight test */
+    console.log('[JARVIS] CORS preflight test:', result);
+    return result;
+  };
+}
+
+} catch (err) {
+  const msg = err?.message || String(err);
+  // eslint-disable-next-line no-console -- intentional: user-facing setup failure reporting
+  console.error('[JARVIS] Setup failed', err);
+  setStatus('Setup failed', 'error');
+  if (statusEl) statusEl.textContent = 'Setup failed';
+  if (chatContainer) appendMessage('assistant', 'Setup failed: ' + msg + '. Open View → Toggle Developer Tools and check the Console.');
+  const showErrorReply = () => {
+    if (chatContainer) appendMessage('assistant', 'App failed to start. ' + msg + ' Check the console (View → Toggle Developer Tools).');
+  };
+  if (btnSend) btnSend.addEventListener('click', () => {
+    const text = textInput?.value?.trim();
+    if (text && chatContainer) { appendMessage('user', text); textInput.value = ''; }
+    setStatus('Error', 'error');
+    showErrorReply();
+  });
+  if (btnMic) btnMic.addEventListener('click', () => { setStatus('Error', 'error'); showErrorReply(); });
+  if (textInput) textInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (btnSend) btnSend.click();
+    }
+  });
 }

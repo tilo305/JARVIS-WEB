@@ -33,19 +33,17 @@ describe('Bridge streamTextChunks Optimization', () => {
     
     const streamTextChunksCode = bridgeSource.substring(startIndex, endIndex + 1);
     
-    // Should check connection before the map/loop
+    // Should check connection before the loop
     expect(streamTextChunksCode).toMatch(/if\s*\(!\s*this\.ttsWs/);
     expect(streamTextChunksCode).toMatch(/readyState\s*!==\s*WebSocket\.OPEN/);
     expect(streamTextChunksCode).toMatch(/await\s+this\.connectTTS\(\)/);
     
-    // Should send chunks in parallel (Promise.all)
-    expect(streamTextChunksCode).toMatch(/Promise\.all\(/);
-    
-    // Should use map to create promises
-    expect(streamTextChunksCode).toMatch(/\.map\(/);
+    // Should send chunks (sequential for correct TTS playback order)
+    expect(streamTextChunksCode).toMatch(/for\s*\(/);
+    expect(streamTextChunksCode).toMatch(/await\s+this\.speakText\(/);
   });
 
-  it('should handle connection check before parallel sends', () => {
+  it('should handle connection check before sending loop', () => {
     // Find the streamTextChunks function
     const streamTextChunksIndex = bridgeSource.indexOf('async streamTextChunks');
     let braceCount = 0;
@@ -65,14 +63,13 @@ describe('Bridge streamTextChunks Optimization', () => {
     
     const streamTextChunksCode = bridgeSource.substring(startIndex, endIndex + 1);
     
-    // Find the position of connection check vs map
+    // Connection check should come before the send loop
     const connectionCheckIndex = streamTextChunksCode.indexOf('if (!this.ttsWs');
-    const mapIndex = streamTextChunksCode.indexOf('.map(');
+    const loopIndex = streamTextChunksCode.indexOf('for (let i = 0');
     
-    // Connection check should come before map
     expect(connectionCheckIndex).toBeGreaterThan(-1);
-    expect(mapIndex).toBeGreaterThan(-1);
-    expect(connectionCheckIndex).toBeLessThan(mapIndex);
+    expect(loopIndex).toBeGreaterThan(-1);
+    expect(connectionCheckIndex).toBeLessThan(loopIndex);
   });
 
   it('should use continue flag correctly for continuations', () => {

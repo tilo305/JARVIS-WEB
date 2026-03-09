@@ -73,22 +73,18 @@ describe('n8n-payload', () => {
       expect(payload.attachments[0]).toHaveProperty('ocrText', '');
     });
 
-    it('should include agentic fields when provided (Memory, Routing, Context Engineering)', () => {
+    it('should include conversationHistory when provided', () => {
       const payload = buildN8nPayload('Hello', {
         conversationHistory: [{ role: 'user', content: 'Hi' }, { role: 'assistant', content: 'Hey!' }],
-        intent: 'greeting',
-        contextEnrichment: { viewportWidth: 1920 },
       });
       expect(payload.conversationHistory).toHaveLength(2);
-      expect(payload.intent).toBe('greeting');
-      expect(payload.contextEnrichment).toEqual({ viewportWidth: 1920 });
+      expect(payload.conversation_history).toHaveLength(2);
     });
 
-    it('should not include agentic fields when empty', () => {
+    it('should have empty conversationHistory when not provided', () => {
       const payload = buildN8nPayload('Hello');
-      expect(payload.conversationHistory).toBeUndefined();
-      expect(payload.intent).toBeUndefined();
-      expect(payload.contextEnrichment).toBeUndefined();
+      expect(payload.conversationHistory).toEqual([]);
+      expect(payload.conversation_history).toEqual([]);
     });
   });
 

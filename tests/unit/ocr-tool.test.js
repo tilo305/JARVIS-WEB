@@ -20,13 +20,16 @@ describe('ocr-tool', () => {
   });
 
   describe('OCR_CONFIG', () => {
-    it('should have minDimension, grayscale, psm, rotateAuto', () => {
+    it('should have minDimension, grayscale, psm, rotateAuto, borderPx', () => {
       expect(OCR_CONFIG).toHaveProperty('minDimension');
       expect(OCR_CONFIG).toHaveProperty('grayscale');
       expect(OCR_CONFIG).toHaveProperty('psm');
       expect(OCR_CONFIG).toHaveProperty('rotateAuto');
+      expect(OCR_CONFIG).toHaveProperty('borderPx');
       expect(OCR_CONFIG.minDimension).toBe(1200);
       expect(OCR_CONFIG.psm).toBe(OCR_PSM.AUTO);
+      expect(typeof OCR_CONFIG.borderPx).toBe('number');
+      expect(OCR_CONFIG.borderPx).toBeGreaterThanOrEqual(0);
     });
   });
 
@@ -34,6 +37,12 @@ describe('ocr-tool', () => {
     it('should resolve with same dataUrl when not in browser (no document)', async () => {
       const dataUrl = 'data:image/png;base64,iVBORw0KGgo=';
       const out = await preprocessImageForOcr(dataUrl);
+      expect(out).toBe(dataUrl);
+    });
+
+    it('should resolve with same dataUrl when not in browser with borderPx option', async () => {
+      const dataUrl = 'data:image/png;base64,iVBORw0KGgo=';
+      const out = await preprocessImageForOcr(dataUrl, { borderPx: 10 });
       expect(out).toBe(dataUrl);
     });
   });
@@ -80,6 +89,14 @@ describe('ocr-tool', () => {
         { name: 'img.png', type: 'image/png', size: 100 },
       ];
       await addOcrToAttachments(attachments);
+      expect(attachments[0]).not.toHaveProperty('ocrText');
+    });
+
+    it('should accept sparseText and other options without throwing', async () => {
+      const attachments = [
+        { name: 'img.png', type: 'image/png', size: 100 },
+      ];
+      await addOcrToAttachments(attachments, { sparseText: true, borderPx: 10 });
       expect(attachments[0]).not.toHaveProperty('ocrText');
     });
   });

@@ -628,7 +628,6 @@ function parseBridge(content, filePath) {
     hasSTT: false,
     hasTTS: false,
     hasVAD: false,
-    hasWakeWord: false,
     hasBargeIn: false,
     hasReconnection: false,
     audioProcessors: [],
@@ -704,10 +703,6 @@ function parseBridge(content, filePath) {
     stats.hasVAD = true;
   }
 
-  // Check for Wake Word
-  if (/wake.*word|wakeWord|WakeWord|openWakeWord/i.test(content)) {
-    stats.hasWakeWord = true;
-  }
 
   // Check for Barge-in
   if (/barge.*in|bargeIn|clearTTSBuffer/i.test(content)) {

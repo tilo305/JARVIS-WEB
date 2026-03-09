@@ -115,28 +115,34 @@ async function killRelatedNodeProcesses() {
 async function main() {
   const isBuild = process.argv.includes('build');
   const viteArgs = isBuild ? ['vite', 'build'] : ['vite'];
+  const skipKill = process.env.VITE_SKIP_KILL_PORT === '1' || process.env.VITE_SKIP_KILL_PORT === 'true';
 
-  console.log(`\n🔧 Cleaning up previous tasks on port ${PORT}...\n`);
+  if (skipKill) {
+    // Dynamic port mode: Vite will find next available port if PORT is taken
+    console.log(`\n🚀 Starting Vite (dynamic port from ${PORT})...\n`);
+  } else {
+    console.log(`\n🔧 Cleaning up previous tasks on port ${PORT}...\n`);
 
-  // Step 1: Kill related Node processes first
-  await killRelatedNodeProcesses();
-  await new Promise(resolve => setTimeout(resolve, 300));
+    // Step 1: Kill related Node processes first
+    await killRelatedNodeProcesses();
+    await new Promise(resolve => setTimeout(resolve, 300));
 
-  // Step 2: Kill processes by port with retry
-  const portKilled = await killPortWithRetry(PORT);
-  await new Promise(resolve => setTimeout(resolve, 500));
+    // Step 2: Kill processes by port with retry
+    const portKilled = await killPortWithRetry(PORT);
+    await new Promise(resolve => setTimeout(resolve, 500));
 
-  // Step 3: Kill vite processes by name (if any are still running)
-  await killProcessesByName(['vite']);
-  await new Promise(resolve => setTimeout(resolve, 300));
+    // Step 3: Kill vite processes by name (if any are still running)
+    await killProcessesByName(['vite']);
+    await new Promise(resolve => setTimeout(resolve, 300));
 
-  // Step 4: Final port check and kill
-  if (!portKilled) {
-    console.log(`  Attempting final port cleanup...`);
-    await killPortWithRetry(PORT, 2);
+    // Step 4: Final port check and kill
+    if (!portKilled) {
+      console.log(`  Attempting final port cleanup...`);
+      await killPortWithRetry(PORT, 2);
+    }
+
+    console.log(`\n🚀 Starting Vite...\n`);
   }
-
-  console.log(`\n🚀 Starting Vite...\n`);
 
   // Use project's local Vite binary directly (avoids npx installing to wrong location)
   const viteBin = join(rootDir, 'node_modules', 'vite', 'bin', 'vite.js');

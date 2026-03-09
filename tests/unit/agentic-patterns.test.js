@@ -11,6 +11,9 @@ import {
   runWithRetry,
   getContextEnrichment,
   getFallbackSuggestions,
+  extractEntities,
+  runPromptChainPipeline,
+  validateAndRefineReply,
 } from '../../public/js/agentic-patterns.js';
 
 describe('agentic-patterns', () => {

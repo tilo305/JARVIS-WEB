@@ -50,7 +50,7 @@
         if (ctx.state === 'suspended') await ctx.resume();
         pass('AudioContext created and resumed: ' + ctx.state);
 
-        const base = new URL('../audio/', document.baseURI).href;
+        const base = new URL('/audio/', window.location.origin).href;
         await ctx.audioWorklet.addModule(base + 'stt-capture-processor.js');
         pass('STT capture processor loaded');
 

@@ -33,8 +33,6 @@ function parseJSFile(content, filePath) {
     managerFunctionCalls: [],
     totalManagerReferences: 0,
     managerPatterns: {
-      wakeWordManager: false,
-      openWakeWordManager: false,
       audioManager: false,
       streamManager: false,
       otherManagers: []
@@ -156,12 +154,6 @@ function parseJSFile(content, filePath) {
   stats.totalManagerReferences = (content.match(managerRefRegex) || []).length;
 
   // Detect specific manager patterns
-  if (/WakeWordManager|wakeWordManager|wake-word-manager/i.test(content)) {
-    stats.managerPatterns.wakeWordManager = true;
-  }
-  if (/OpenWakeWordManager|openWakeWordManager|openwakeword-manager/i.test(content)) {
-    stats.managerPatterns.openWakeWordManager = true;
-  }
   if (/AudioManager|audioManager|audio-manager/i.test(content)) {
     stats.managerPatterns.audioManager = true;
   }
@@ -172,7 +164,7 @@ function parseJSFile(content, filePath) {
   // Extract other manager names
   const otherManagerRegex = /(\w*[Mm]anager\w*)/g;
   const otherMatches = [...content.matchAll(otherManagerRegex)];
-  const knownManagers = ['WakeWordManager', 'OpenWakeWordManager', 'AudioManager', 'StreamManager', 'Manager'];
+  const knownManagers = ['AudioManager', 'StreamManager', 'Manager'];
   otherMatches.forEach(m => {
     const managerName = m[1];
     if (!knownManagers.includes(managerName) && !stats.managerPatterns.otherManagers.includes(managerName)) {
@@ -345,8 +337,6 @@ async function parseAllManagerFiles() {
           console.log(`  Manager Types: ${parsed.managerTypes.map(t => t.name).join(', ')}`);
         }
         const patterns = [];
-        if (parsed.managerPatterns.wakeWordManager) patterns.push('WakeWordManager');
-        if (parsed.managerPatterns.openWakeWordManager) patterns.push('OpenWakeWordManager');
         if (parsed.managerPatterns.audioManager) patterns.push('AudioManager');
         if (parsed.managerPatterns.streamManager) patterns.push('StreamManager');
         if (patterns.length > 0) {
@@ -444,14 +434,10 @@ async function parseAllManagerFiles() {
   }
 
   // Manager patterns
-  const wakeWordManagerFiles = jsFiles.filter(r => r.parsed?.managerPatterns?.wakeWordManager).length;
-  const openWakeWordManagerFiles = jsFiles.filter(r => r.parsed?.managerPatterns?.openWakeWordManager).length;
   const audioManagerFiles = jsFiles.filter(r => r.parsed?.managerPatterns?.audioManager).length;
   const streamManagerFiles = jsFiles.filter(r => r.parsed?.managerPatterns?.streamManager).length;
 
   console.log('\n=== Manager Patterns ===');
-  console.log(`Files with WakeWordManager: ${wakeWordManagerFiles}`);
-  console.log(`Files with OpenWakeWordManager: ${openWakeWordManagerFiles}`);
   console.log(`Files with AudioManager: ${audioManagerFiles}`);
   console.log(`Files with StreamManager: ${streamManagerFiles}`);
 
@@ -499,8 +485,6 @@ async function parseAllManagerFiles() {
         totalManagerClasses,
         totalManagerMethods,
         managerPatterns: {
-          wakeWordManagerFiles,
-          openWakeWordManagerFiles,
           audioManagerFiles,
           streamManagerFiles
         }

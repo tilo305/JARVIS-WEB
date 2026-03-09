@@ -54,7 +54,7 @@ export default tseslint.config(
 
   // Node.js files (server.js, vite.config.js, scripts)
   {
-    files: ["server.js", "vite.config.js", "scripts/**/*.mjs", "scripts/**/*.js"],
+    files: ["server.js", "vite.config.js", "scripts/**/*.mjs", "scripts/**/*.js", "electron/**/*.js"],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "module",
@@ -138,6 +138,8 @@ export default tseslint.config(
     },
     rules: {
       "no-console": "off",
+      // Allow imports used only in nested it() callbacks
+      "no-unused-vars": ["warn", { "varsIgnorePattern": "^(describe|it|expect|extractEntities|runPromptChainPipeline|validateAndRefineReply)$", "argsIgnorePattern": "^_" }],
     },
   },
 

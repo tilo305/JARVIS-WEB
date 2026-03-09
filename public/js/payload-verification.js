@@ -1,391 +1,155 @@
 /**
- * Payload Verification Utility
- * Ensures front-end, UI, and back-end are sending and receiving payloads correctly.
- * Provides validation, monitoring, and debugging tools for payload flow.
+ * Payload verification — validates n8n webhook payloads and responses.
+ * Used for debugging and monitoring payload flow.
  */
-
-'use strict';
+import { extractReplyFromJson } from './n8n-payload.js';
 
 /**
- * Expected payload structure for n8n webhook
- */
-const REQUIRED_PAYLOAD_FIELDS = [
-  'message',
-  'session_id',
-  'sessionId',
-  'timestamp',
-  'source',
-  'message_id',
-  'messageId',
-];
-
-// Optional payload fields (documentation only - not used in validation)
-// const OPTIONAL_PAYLOAD_FIELDS = [
-//   'timezone',
-//   'location',
-//   'attachments',
-//   'locale',
-//   'language',
-//   'conversationHistory',
-//   'intent',
-//   'agenticHints',
-//   'contextEnrichment',
-// ];
-
-/**
- * Expected response keys that n8n may return
- */
-const EXPECTED_RESPONSE_KEYS = [
-  'output',
-  'reply',
-  'result',
-  'text',
-  'message',
-  'response',
-  'answer',
-  'content',
-  'body',
-  'responseText',
-];
-
-/**
- * Validate payload structure before sending
- * @param {Object} payload - Payload to validate
- * @returns {{ valid: boolean, errors: string[], warnings: string[] }}
+ * Validate outgoing payload before sending.
+ * @param {Object} payload - Built payload object
+ * @returns {{ valid: boolean, errors?: string[], warnings?: string[] }}
  */
 export function validatePayload(payload) {
   const errors = [];
   const warnings = [];
 
   if (!payload || typeof payload !== 'object') {
-    return { valid: false, errors: ['Payload is not an object'], warnings: [] };
+    return { valid: false, errors: ['Payload must be an object'] };
   }
 
-  // Check required fields
-  for (const field of REQUIRED_PAYLOAD_FIELDS) {
-    if (!(field in payload)) {
-      errors.push(`Missing required field: ${field}`);
-    } else if (field === 'message' && (!payload[field] || typeof payload[field] !== 'string' || !payload[field].trim())) {
-      errors.push(`Field 'message' is empty or invalid`);
-    } else if (field === 'source' && !['voice', 'text'].includes(payload[field])) {
-      errors.push(`Field 'source' must be 'voice' or 'text', got: ${payload[field]}`);
+  const requiredForValidation = ['message', 'session_id', 'sessionId', 'timestamp', 'source', 'message_id', 'messageId'];
+  for (const key of requiredForValidation) {
+    if (!(key in payload)) {
+      errors.push(`Missing required key: ${key}`);
     }
   }
 
-  // Validate session_id and sessionId match
-  if (payload.session_id && payload.sessionId && payload.session_id !== payload.sessionId) {
-    warnings.push(`session_id and sessionId do not match: ${payload.session_id} vs ${payload.sessionId}`);
+  const msg = payload.message;
+  const q = payload.query ?? payload.message;
+  const inp = payload.input ?? payload.message;
+  if (typeof msg !== 'string') errors.push('payload.message must be a string');
+  else if (msg.trim() === '') errors.push('payload.message cannot be empty');
+  if (typeof q !== 'string') errors.push('payload.query must be a string');
+  if (typeof inp !== 'string') errors.push('payload.input must be a string');
+  if (msg !== q || msg !== inp) {
+    errors.push('payload.message, query, and input must be the same value');
+  }
+  if (payload.source !== 'voice' && payload.source !== 'text') {
+    errors.push("payload.source must be 'voice' or 'text'");
+  }
+  const attachments = payload.attachments;
+  if (attachments != null && !Array.isArray(attachments)) {
+    errors.push('payload.attachments must be an array');
   }
 
-  // Validate message_id and messageId match
-  if (payload.message_id && payload.messageId && payload.message_id !== payload.messageId) {
-    warnings.push(`message_id and messageId do not match: ${payload.message_id} vs ${payload.messageId}`);
+  if (payload.session_id !== payload.sessionId) {
+    warnings.push('session_id and sessionId should match');
   }
 
-  // Validate timestamp format (ISO 8601)
-  if (payload.timestamp && typeof payload.timestamp === 'string') {
-    const date = new Date(payload.timestamp);
-    if (isNaN(date.getTime())) {
-      warnings.push(`Invalid timestamp format: ${payload.timestamp}`);
-    }
-  }
+  if (errors.length) return { valid: false, errors, warnings };
+  return { valid: true, errors: [], warnings };
+}
 
-  // Validate attachments structure
-  if (payload.attachments && Array.isArray(payload.attachments)) {
-    payload.attachments.forEach((att, idx) => {
-      if (!att || typeof att !== 'object') {
-        warnings.push(`Attachment at index ${idx} is not an object`);
-      } else {
-        if (!att.name || typeof att.name !== 'string') {
-          warnings.push(`Attachment at index ${idx} missing or invalid 'name' field`);
-        }
-        if (att.data && typeof att.data !== 'string') {
-          warnings.push(`Attachment at index ${idx} has invalid 'data' field (should be base64 string)`);
-        }
+function findReplyKeyPath(data, prefix = '') {
+  if (!data || typeof data !== 'object') return null;
+  for (const key of ['output', 'reply', 'result', 'text', 'message', 'response', 'answer', 'content', 'body']) {
+    const v = data[key];
+    if (typeof v === 'string') return prefix ? `${prefix}.${key}` : key;
+  }
+  if (Array.isArray(data) && data.length) {
+    const first = data[0];
+    if (typeof first === 'string') return `${prefix}[0]`;
+    if (first && typeof first === 'object') {
+      const fromFirst = findReplyKeyPath(first, prefix ? `${prefix}[0]` : '[0]');
+      if (fromFirst) return fromFirst;
+      if (first.json) {
+        const fromJson = findReplyKeyPath(first.json, prefix ? `${prefix}[0].json` : '[0].json');
+        if (fromJson) return fromJson;
       }
-    });
+    }
   }
-
-  // Validate wakeWordTriggered if present (should be boolean)
-  if ('wakeWordTriggered' in payload && typeof payload.wakeWordTriggered !== 'boolean') {
-    warnings.push(`Field 'wakeWordTriggered' should be a boolean, got: ${typeof payload.wakeWordTriggered}`);
-  }
-
-  return {
-    valid: errors.length === 0,
-    errors,
-    warnings,
-  };
+  return null;
 }
 
 /**
- * Validate response structure from n8n
- * @param {Object} response - Response to validate
- * @returns {{ valid: boolean, hasReply: boolean, replyKey: string|null, errors: string[], warnings: string[] }}
+ * Validate n8n webhook response.
+ * @param {Object|Array} response - Parsed JSON response
+ * @returns {{ valid: boolean, hasReply: boolean, replyKey?: string, errors?: string[] }}
  */
 export function validateResponse(response) {
   const errors = [];
-  const warnings = [];
+  const replyKey = findReplyKeyPath(response);
+  const hasReply = replyKey != null;
 
-  if (!response || typeof response !== 'object') {
-    return {
-      valid: false,
-      hasReply: false,
-      replyKey: null,
-      errors: ['Response is not an object'],
-      warnings: [],
-    };
+  if (!response || (typeof response !== 'object' && !Array.isArray(response))) {
+    return { valid: false, hasReply: false, errors: ['Response must be an object or array'] };
   }
-
-  // Check if response is empty
-  if (Object.keys(response).length === 0) {
-    errors.push('Response is empty (no keys found)');
-    return {
-      valid: false,
-      hasReply: false,
-      replyKey: null,
-      errors,
-      warnings,
-    };
-  }
-
-  // Check for expected reply keys
-  let replyKey = null;
-  let hasReply = false;
-
-  for (const key of EXPECTED_RESPONSE_KEYS) {
-    if (key in response) {
-      const value = response[key];
-      if (typeof value === 'string' && value.trim()) {
-        replyKey = key;
-        hasReply = true;
-        break;
-      } else if (typeof value === 'string' && !value.trim()) {
-        warnings.push(`Response has '${key}' field but it's empty`);
-      }
-    }
-  }
-
-  // Check for array responses (n8n item format)
-  if (!hasReply && Array.isArray(response) && response.length > 0) {
-    warnings.push('Response is an array - checking first item for reply');
-    const firstItem = response[0];
-    if (firstItem && typeof firstItem === 'object') {
-      for (const key of EXPECTED_RESPONSE_KEYS) {
-        if (key in firstItem) {
-          const value = firstItem[key];
-          if (typeof value === 'string' && value.trim()) {
-            replyKey = `[0].${key}`;
-            hasReply = true;
-            break;
-          }
-        }
-        // Check nested json property (n8n item format)
-        if (firstItem.json && typeof firstItem.json === 'object' && key in firstItem.json) {
-          const value = firstItem.json[key];
-          if (typeof value === 'string' && value.trim()) {
-            replyKey = `[0].json.${key}`;
-            hasReply = true;
-            break;
-          }
-        }
-      }
-    }
-  }
-
   if (!hasReply) {
-    const availableKeys = Object.keys(response);
-    errors.push(`No reply found in response. Available keys: ${availableKeys.join(', ')}. Expected one of: ${EXPECTED_RESPONSE_KEYS.join(', ')}`);
+    errors.push('Response has no reply or is empty');
+    return { valid: false, hasReply: false, replyKey: replyKey || undefined, errors };
   }
-
-  return {
-    valid: hasReply,
-    hasReply,
-    replyKey,
-    errors,
-    warnings,
-  };
+  return { valid: true, hasReply: true, replyKey: replyKey || undefined, errors: [] };
 }
 
+const MAX_HISTORY = 100;
+let sendHistory = [];
+let receiveHistory = [];
+
 /**
- * Payload monitoring - tracks all payload sends and receives
+ * Monitor for payload send/receive tracking.
  */
-class PayloadMonitor {
-  constructor() {
-    this.sends = [];
-    this.receives = [];
-    this.maxHistory = 100;
-  }
-
-  /**
-   * Record a payload send
-   * @param {Object} payload - Payload that was sent
-   * @param {string} url - Webhook URL
-   * @param {number} timestamp - Timestamp when sent
-   */
-  recordSend(payload, url, timestamp = Date.now()) {
-    const record = {
-      timestamp,
-      url,
-      payload: { ...payload },
-      payloadSize: JSON.stringify(payload).length,
-      source: payload.source || 'unknown',
-      messageLength: payload.message?.length || 0,
-      hasAttachments: Array.isArray(payload.attachments) && payload.attachments.length > 0,
-      validation: validatePayload(payload),
-    };
-    this.sends.push(record);
-    if (this.sends.length > this.maxHistory) {
-      this.sends.shift();
-    }
+export const payloadMonitor = {
+  recordSend(payload, url) {
+    const record = { payload, url, ts: Date.now() };
+    sendHistory.push(record);
+    if (sendHistory.length > MAX_HISTORY) sendHistory = sendHistory.slice(-MAX_HISTORY);
     return record;
-  }
+  },
 
-  /**
-   * Record a response receive
-   * @param {Object} response - Response received
-   * @param {number} status - HTTP status code
-   * @param {string} url - Webhook URL
-   * @param {number} timestamp - Timestamp when received
-   */
-  recordReceive(response, status, url, timestamp = Date.now()) {
-    const record = {
-      timestamp,
-      url,
-      status,
-      response: { ...response },
-      responseSize: JSON.stringify(response).length,
-      validation: validateResponse(response),
-    };
-    this.receives.push(record);
-    if (this.receives.length > this.maxHistory) {
-      this.receives.shift();
-    }
+  recordReceive(response, status, url) {
+    const record = { response, status, url, ts: Date.now() };
+    receiveHistory.push(record);
+    if (receiveHistory.length > MAX_HISTORY) receiveHistory = receiveHistory.slice(-MAX_HISTORY);
     return record;
-  }
+  },
 
-  /**
-   * Get statistics about payload flow
-   * @returns {Object} Statistics
-   */
   getStats() {
-    const recentSends = this.sends.slice(-10);
-    const recentReceives = this.receives.slice(-10);
+    const sends = { total: sendHistory.length, history: sendHistory };
+    const receives = { total: receiveHistory.length, history: receiveHistory };
+    const lastReceive = receiveHistory[receiveHistory.length - 1];
+    const hasReply = lastReceive ? extractReplyFromJson(lastReceive.response) != null : false;
+    const health = sends.total > 0 && receives.total > 0 && hasReply ? 'healthy' : 'unknown';
+    return { sends, receives, health };
+  },
 
-    const sendStats = {
-      total: this.sends.length,
-      recent: recentSends.length,
-      valid: recentSends.filter(r => r.validation.valid).length,
-      invalid: recentSends.filter(r => !r.validation.valid).length,
-      withAttachments: recentSends.filter(r => r.hasAttachments).length,
-      voice: recentSends.filter(r => r.payload.source === 'voice').length,
-      text: recentSends.filter(r => r.payload.source === 'text').length,
-    };
-
-    const receiveStats = {
-      total: this.receives.length,
-      recent: recentReceives.length,
-      withReply: recentReceives.filter(r => r.validation.hasReply).length,
-      withoutReply: recentReceives.filter(r => !r.validation.hasReply).length,
-      success: recentReceives.filter(r => r.status >= 200 && r.status < 300).length,
-      errors: recentReceives.filter(r => r.status >= 400).length,
-    };
-
-    return {
-      sends: sendStats,
-      receives: receiveStats,
-      health: {
-        sendHealth: sendStats.recent > 0 ? (sendStats.valid / sendStats.recent) * 100 : 0,
-        receiveHealth: receiveStats.recent > 0 ? (receiveStats.withReply / receiveStats.recent) * 100 : 0,
-        overallHealth: receiveStats.recent > 0 && sendStats.recent > 0
-          ? ((sendStats.valid / sendStats.recent) + (receiveStats.withReply / receiveStats.recent)) / 2 * 100
-          : 0,
-      },
-    };
-  }
-
-  /**
-   * Get recent history
-   * @param {number} count - Number of recent records to return
-   * @returns {Object} Recent sends and receives
-   */
-  getRecentHistory(count = 10) {
-    return {
-      sends: this.sends.slice(-count),
-      receives: this.receives.slice(-count),
-    };
-  }
-
-  /**
-   * Clear history
-   */
   clear() {
-    this.sends = [];
-    this.receives = [];
-  }
-}
-
-// Global monitor instance
-export const payloadMonitor = new PayloadMonitor();
+    sendHistory = [];
+    receiveHistory = [];
+  },
+};
 
 /**
- * Comprehensive payload flow verification
- * Checks if payloads are being sent and received correctly
- * @returns {Object} Verification results
+ * Verify payload flow health based on monitor history.
+ * @returns {{ healthy: boolean, stats: Object, issues: Array<{ message: string }> }}
  */
 export function verifyPayloadFlow() {
   const stats = payloadMonitor.getStats();
-  const recent = payloadMonitor.getRecentHistory(5);
-
   const issues = [];
 
-  // Check if we're sending payloads
-  if (stats.sends.recent === 0) {
-    issues.push({
-      severity: 'error',
-      message: 'No payloads have been sent recently. Check if UI buttons are working.',
-    });
-  } else if (stats.sends.invalid > 0) {
-    issues.push({
-      severity: 'warning',
-      message: `${stats.sends.invalid} of ${stats.sends.recent} recent payloads had validation errors.`,
-    });
+  if (stats.sends.total === 0) {
+    issues.push({ message: 'No payloads sent recorded' });
   }
-
-  // Check if we're receiving responses
-  if (stats.receives.recent === 0) {
-    issues.push({
-      severity: 'error',
-      message: 'No responses have been received recently. Check network connection and n8n webhook.',
-    });
-  } else if (stats.receives.withoutReply > 0) {
-    issues.push({
-      severity: 'warning',
-      message: `${stats.receives.withoutReply} of ${stats.receives.recent} recent responses had no reply field.`,
-    });
+  if (stats.receives.total === 0 && stats.sends.total > 0) {
+    issues.push({ message: 'No receives recorded' });
   }
-
-  // Check response success rate
-  if (stats.receives.recent > 0 && stats.receives.errors > 0) {
-    issues.push({
-      severity: 'error',
-      message: `${stats.receives.errors} of ${stats.receives.recent} recent responses had HTTP errors.`,
-    });
-  }
-
-  // Check payload/response matching
-  if (stats.sends.recent > stats.receives.recent + 1) {
-    issues.push({
-      severity: 'warning',
-      message: `More payloads sent (${stats.sends.recent}) than responses received (${stats.receives.recent}). Some requests may be pending or failed.`,
-    });
+  const lastRecv = receiveHistory[receiveHistory.length - 1];
+  if (lastRecv && findReplyKeyPath(lastRecv.response) == null) {
+    issues.push({ message: 'Last response has no reply' });
   }
 
   return {
-    healthy: issues.filter(i => i.severity === 'error').length === 0,
+    healthy: issues.length === 0,
     stats,
     issues,
-    recent,
-    timestamp: new Date().toISOString(),
   };
 }

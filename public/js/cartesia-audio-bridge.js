@@ -21,6 +21,8 @@ const DEFAULT_API_KEY = '';
 const DEFAULT_VOICE_ID = '95131c95-525c-463b-893d-803bafdf93c4';
 const STT_CHUNK_MS = 100;
 
+// MDN: Use wss:// when page is HTTPS; ws:// from HTTPS is mixed content and blocked by browsers.
+// @see https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API/Writing_WebSocket_client_applications#security_considerations
 const TTS_ENDPOINT = 'wss://api.cartesia.ai/tts/websocket';
 const STT_ENDPOINT = 'wss://api.cartesia.ai/stt/websocket';
 
@@ -71,6 +73,14 @@ export class CartesiaAudioBridge {
     this._silenceClosingTimer = null;
     /** Timer: delay after TTS before starting the 10s countdown (playback drain) */
     this._silenceClosingDelayTimer = null;
+    /** True after TTS server "done" until playback buffer drains; then we start the 10s silence timer */
+    this._ttsPlaybackDrainPending = false;
+    /** Fallback: if bufferEmpty never fires (e.g. buffer was already empty when "done" arrived), start timer after this ms */
+    this._ttsPlaybackDrainFallbackTimer = null;
+    /** If true, skip starting the 10s agent silence timer on next TTS drain (e.g. closing message TTS). Prevents the timer from looping every 10s. */
+    this._skipNextAgentSilenceTimerStart = false;
+    /** Barge-in suppression: ignore VAD-triggered barge-in for first N ms of TTS (avoids cutoff from speaker feedback) */
+    this._ttsBargeInSuppressUntil = 0;
     /** Pending final transcript: buffer until silence-after-speech timer fires, then send to agent */
     this._pendingFinalTranscript = null;
     /** Last transcript text (partial or final) — fallback when final arrives late or never */
@@ -91,6 +101,8 @@ export class CartesiaAudioBridge {
     this._connectionHealthInterval = null;
     this._lastSTTActivity = 0;
     this._lastTTSActivity = 0;
+    /** If true, call onTranscript as soon as STT sends is_final (minimal latency). If false, wait for silence-after-speech then send. Default true for optimal bidirectional flow. */
+    this.sendTranscriptOnFinal = options.sendTranscriptOnFinal !== false;
   }
 
   /** Set mic input gain (0.5–3). Use when STT is active to boost quiet mics. */
@@ -206,13 +218,16 @@ export class CartesiaAudioBridge {
 
   /**
    * Start the 10s "agent silence" timer. Call when the agent finishes speaking (TTS done).
-   * Waits silenceClosingDelayAfterTtsMs first (so playback can finish), then after 10s of
-   * no user speech fires onSilenceClosingMessage with a phrase, then stopSTT.
-   * Cleared automatically on user speech (onSpeechStart) or stopSTT.
+   * If skipDelay is true (playback already drained), starts the 10s countdown immediately.
+   * Otherwise waits silenceClosingDelayAfterTtsMs first, then 10s of no user speech fires
+   * onSilenceClosingMessage with a phrase, then stopSTT.
+   * Cleared when the user starts talking: on VAD onSpeechStart and on any STT transcript (partial or final),
+   * so the closing message never fires if the user speaks again within the 10s window. Also cleared on stopSTT.
+   * @param {boolean} [skipDelay] - If true, start 10s countdown immediately (e.g. after playback buffer drained).
    */
-  startAgentSilenceTimer() {
+  startAgentSilenceTimer(skipDelay = false) {
     const closingMs = VAD_CONFIG.silenceClosingMessageMs ?? 0;
-    const delayMs = VAD_CONFIG.silenceClosingDelayAfterTtsMs ?? 0;
+    const delayMs = skipDelay ? 0 : (VAD_CONFIG.silenceClosingDelayAfterTtsMs ?? 0);
     const phrases = VAD_CONFIG.silenceClosingPhrases;
     if (closingMs <= 0 || !Array.isArray(phrases) || phrases.length === 0) return;
     this._clearSilenceClosingTimer();
@@ -320,7 +335,9 @@ export class CartesiaAudioBridge {
             basePath += '/';
           }
           const ttsPath = `${basePath}tts-playback-processor.js`;
-          const ttsAbsolute = ttsPath.startsWith('http') ? ttsPath : new URL(ttsPath, window.location.origin).href;
+          // Include app: for Electron app://bundle/ secure context (getUserMedia, AudioWorklet)
+          const isAbsoluteUrl = (p) => typeof p === 'string' && (p.startsWith('http:') || p.startsWith('https:') || p.startsWith('file:') || p.startsWith('app:'));
+          const ttsAbsolute = isAbsoluteUrl(ttsPath) ? ttsPath : new URL(ttsPath, window.location.origin).href;
           try {
             await this.audioContext.audioWorklet.addModule(ttsAbsolute);
           } catch (err) {
@@ -332,6 +349,16 @@ export class CartesiaAudioBridge {
           this.ttsNode = new AudioWorkletNode(this.audioContext, 'tts-playback-processor');
           this.ttsNode.connect(this.audioContext.destination);
           DEBUG.trace('TTS AudioWorkletNode created and connected to destination');
+          this.ttsNode.port.onmessage = (e) => {
+            if (e.data?.type === 'bufferEmpty' && this._ttsPlaybackDrainPending) {
+              this._ttsPlaybackDrainPending = false;
+              if (this._ttsPlaybackDrainFallbackTimer) {
+                clearTimeout(this._ttsPlaybackDrainFallbackTimer);
+                this._ttsPlaybackDrainFallbackTimer = null;
+              }
+              this.resumeSilenceTimersAfterTTS(true);
+            }
+          };
           this.ttsNode.port.onerror = (err) => {
             DEBUG.error('TTS AudioWorklet processor error', { error: err });
             this.onError('TTS AudioWorklet processor error. Check console for details.');
@@ -366,8 +393,10 @@ export class CartesiaAudioBridge {
       }
       const sttPath = `${basePath}stt-capture-processor.js`;
       const ttsPath = `${basePath}tts-playback-processor.js`;
-      const sttAbsolute = sttPath.startsWith('http') ? sttPath : new URL(sttPath, window.location.origin).href;
-      const ttsAbsolute = ttsPath.startsWith('http') ? ttsPath : new URL(ttsPath, window.location.origin).href;
+      // Include app: for Electron app://bundle/ secure context (getUserMedia, AudioWorklet)
+      const isAbsoluteUrl = (p) => typeof p === 'string' && (p.startsWith('http:') || p.startsWith('https:') || p.startsWith('file:') || p.startsWith('app:'));
+      const sttAbsolute = isAbsoluteUrl(sttPath) ? sttPath : new URL(sttPath, window.location.origin).href;
+      const ttsAbsolute = isAbsoluteUrl(ttsPath) ? ttsPath : new URL(ttsPath, window.location.origin).href;
       DEBUG.trace('Loading AudioWorklet modules', { sttPath: sttAbsolute, ttsPath: ttsAbsolute });
       // Load STT processor
       try {
@@ -391,7 +420,16 @@ export class CartesiaAudioBridge {
         this.ttsNode = new AudioWorkletNode(this.audioContext, 'tts-playback-processor');
         this.ttsNode.connect(this.audioContext.destination);
         DEBUG.trace('TTS AudioWorkletNode created and connected to destination');
-        
+        this.ttsNode.port.onmessage = (e) => {
+          if (e.data?.type === 'bufferEmpty' && this._ttsPlaybackDrainPending) {
+            this._ttsPlaybackDrainPending = false;
+            if (this._ttsPlaybackDrainFallbackTimer) {
+              clearTimeout(this._ttsPlaybackDrainFallbackTimer);
+              this._ttsPlaybackDrainFallbackTimer = null;
+            }
+            this.resumeSilenceTimersAfterTTS(true);
+          }
+        };
         // Handle TTS processor errors
         this.ttsNode.port.onerror = (err) => {
           DEBUG.error('TTS AudioWorklet processor error', { error: err });
@@ -496,16 +534,32 @@ export class CartesiaAudioBridge {
             if (text) {
               this._lastTranscriptText = text;
               this._hadTranscriptFromPreviousSegment = true;
+              // User is talking: cancel 10s silence countdown so closing message won't fire
+              this._clearSilenceClosingTimer();
             }
             DEBUG.trace('STT transcript', { text: text.slice(0, 50), is_final: msg.is_final });
             this.onPartialTranscript(msg.text, msg.is_final);
             if (msg.is_final && text) {
               this._pendingFinalTranscript = { text, request_id: msg.request_id || '' };
-              /* eslint-disable no-console -- pipeline diagnostic: transcript ready */
-              if (typeof console !== 'undefined' && console.log) {
-                console.log('[JARVIS] STT final transcript received — will send to agent when mic stops', { preview: text.slice(0, 60) });
+              if (this.sendTranscriptOnFinal) {
+                this._pendingFinalTranscript = null;
+                /* eslint-disable no-console -- pipeline diagnostic: low-latency send on final */
+                if (typeof console !== 'undefined' && console.log) {
+                  console.log('[JARVIS] STT final — sending to agent immediately (sendTranscriptOnFinal)', { preview: text.slice(0, 60) });
+                }
+                /* eslint-enable no-console */
+                try {
+                  this.onTranscript(text, true, msg.request_id || '');
+                } catch (err) {
+                  DEBUG.error('onTranscript (sendTranscriptOnFinal) error', { error: err });
+                }
+              } else {
+                /* eslint-disable no-console -- pipeline diagnostic: transcript ready */
+                if (typeof console !== 'undefined' && console.log) {
+                  console.log('[JARVIS] STT final transcript received — will send to agent when mic stops', { preview: text.slice(0, 60) });
+                }
+                /* eslint-enable no-console */
               }
-              /* eslint-enable no-console */
             }
           } else if (msg.type === 'error' || msg.error) {
             const sttErr = msg.error ?? msg.message ?? (typeof msg === 'string' ? msg : JSON.stringify(msg));
@@ -833,14 +887,20 @@ export class CartesiaAudioBridge {
   }
 
   /**
-   * Resume silence timers after TTS completes.
-   * Restarts the agent silence timer if STT is still active.
+   * Resume silence timers after TTS completes (or after playback buffer drains).
+   * Always starts the 10s countdown when the agent last spoke (playback drained).
+   * Do not check _sttActive: timer must start from agent's last word, not from when STT was restarted.
+   * Skips if _skipNextAgentSilenceTimerStart is set (e.g. closing message TTS — fire once, not every 10s).
+   * @param {boolean} [afterPlaybackDrain] - If true, start 10s countdown immediately (playback already finished).
    */
-  resumeSilenceTimersAfterTTS() {
-    if (this._sttActive) {
-      this.startAgentSilenceTimer();
-      DEBUG.trace('Silence timers resumed after TTS');
+  resumeSilenceTimersAfterTTS(afterPlaybackDrain = false) {
+    if (this._skipNextAgentSilenceTimerStart) {
+      this._skipNextAgentSilenceTimerStart = false;
+      DEBUG.trace('Silence timers skipped after closing message TTS (fire once)');
+      return;
     }
+    this.startAgentSilenceTimer(afterPlaybackDrain);
+    DEBUG.trace('Silence timers resumed after TTS (agent last spoke)', { afterPlaybackDrain });
   }
 
   /** Stop STT and send any buffered transcript to the agent (used by silence-after-speech timer and max-listening timer). */
@@ -875,9 +935,16 @@ export class CartesiaAudioBridge {
     }
   }
 
+  /**
+   * Barge-in: user spoke while TTS was playing. Order matters for natural bidirectional flow:
+   * 1) Clear playback buffer (user hears silence immediately), 2) Cancel server TTS, 3) Reject resolvers.
+   * Suppresses for first 600ms of TTS to avoid cutoff from speaker feedback (mic picking up JARVIS output).
+   */
   _bargeIn() {
-    // Optimize barge-in: immediate cancellation for optimal responsiveness
-    // Clear audio buffer first (most important for user experience)
+    if (this._ttsBargeInSuppressUntil && Date.now() < this._ttsBargeInSuppressUntil) {
+      DEBUG.trace('Barge-in suppressed (TTS startup window)');
+      return;
+    }
     this.clearTTSBuffer();
     
     // Cancel all active TTS contexts immediately
@@ -1089,35 +1156,66 @@ export class CartesiaAudioBridge {
               this._ttsDoneResolvers.delete(msg.context_id);
               r.resolve();
             }
-            // Start the 10s silence timer AFTER the agent finishes speaking (TTS done)
-            // The timer will wait silenceClosingDelayAfterTtsMs first to allow playback to finish,
-            // then start the 10s countdown
-            this.resumeSilenceTimersAfterTTS();
+            // Wait for playback buffer to drain before starting 10s silence timer (see port.onmessage bufferEmpty)
+            this._ttsPlaybackDrainPending = true;
+            if (this._ttsPlaybackDrainFallbackTimer) clearTimeout(this._ttsPlaybackDrainFallbackTimer);
+            this._ttsPlaybackDrainFallbackTimer = setTimeout(() => {
+              this._ttsPlaybackDrainFallbackTimer = null;
+              if (this._ttsPlaybackDrainPending) {
+                this._ttsPlaybackDrainPending = false;
+                this.resumeSilenceTimersAfterTTS(true);
+              }
+            }, 3000);
           } else if ((msg.type === 'error' || msg.error) && msg.context_id) {
+            const errMsg = msg.error || 'TTS error';
             const r = this._ttsDoneResolvers.get(msg.context_id);
             if (r) {
               this._ttsDoneResolvers.delete(msg.context_id);
-              r.reject(new Error(msg.error || 'TTS error'));
+              r.reject(new Error(errMsg));
             }
-            this.onError(msg.error || 'TTS error');
+            // Suppress benign "Invalid context ID" when we cancelled TTS (e.g. filler cut off for barge-in)
+            const isBenignCancel = typeof errMsg === 'string' && (
+              /invalid context id/i.test(errMsg) ||
+              /does not exist or may have already been cancelled/i.test(errMsg)
+            );
+            if (!isBenignCancel) {
+              this.onError(errMsg);
+            }
           }
-        } catch (err) { this.onError(err); }
+        } catch (err) {
+          this.onError(err?.message || String(err) || 'TTS parse error');
+        }
       };
     });
     return this._ttsConnectPromise;
   }
 
+  /**
+   * Push TTS PCM chunk to AudioWorklet for gapless playback.
+   * Uses transferable ArrayBuffer for zero-copy handoff (optimal latency).
+   * After this call the caller must not use pcmInt16 (buffer is transferred).
+   */
   playTTSChunk(pcmInt16) {
     if (!this.ttsNode) {
       DEBUG.error('playTTSChunk: TTS node not initialized');
       return;
+    }
+    // Start barge-in suppression window on first chunk (avoids cutoff from speaker feedback)
+    if (!this._ttsBargeInSuppressUntil || Date.now() > this._ttsBargeInSuppressUntil) {
+      this._ttsBargeInSuppressUntil = Date.now() + 600;
     }
     try {
       if (!(pcmInt16 instanceof Int16Array) && !Array.isArray(pcmInt16)) {
         DEBUG.error('playTTSChunk: invalid data type', { type: typeof pcmInt16, isInt16Array: pcmInt16 instanceof Int16Array });
         return;
       }
-      const samples = pcmInt16 instanceof Int16Array ? Array.from(pcmInt16) : pcmInt16;
+      // Zero-copy: transfer buffer to worklet (Int16Array preferred; no main-thread copy)
+      if (pcmInt16 instanceof Int16Array && pcmInt16.byteLength > 0) {
+        this.ttsNode.port.postMessage({ type: 'audio', samples: pcmInt16 }, [pcmInt16.buffer]);
+        return;
+      }
+      // Fallback for Array (e.g. from non-Int16 callers)
+      const samples = Array.isArray(pcmInt16) ? pcmInt16 : Array.from(pcmInt16);
       this.ttsNode.port.postMessage({ type: 'audio', samples });
     } catch (err) {
       DEBUG.error('Error sending TTS chunk to AudioWorklet', { error: err });
@@ -1126,6 +1224,7 @@ export class CartesiaAudioBridge {
   }
 
   clearTTSBuffer() {
+    this._ttsBargeInSuppressUntil = 0;
     if (!this.ttsNode) return;
     try {
       this.ttsNode.port.postMessage({ type: 'clear' });
@@ -1176,7 +1275,14 @@ export class CartesiaAudioBridge {
     return result;
   }
 
-  async speakText(transcript, contextId = null, isContinue = false) {
+  /**
+   * @param {string} transcript - Text to speak
+   * @param {string|null} [contextId] - Optional context ID for TTS
+   * @param {boolean} [isContinue] - If true, stream continues (no final resolve)
+   * @param {boolean} [skipAgentSilenceTimerOnComplete] - If true, do not start the 10s agent silence timer when this TTS drains. Use for the closing message so the timer fires only once.
+   */
+  async speakText(transcript, contextId = null, isContinue = false, skipAgentSilenceTimerOnComplete = false) {
+    if (skipAgentSilenceTimerOnComplete) this._skipNextAgentSilenceTimerStart = true;
     // Ensure TTS is connected (may already be pre-connected for optimal latency)
     await this.connectTTS();
     const ctxId = contextId || `ctx_${++this.contextIdCounter}_${Date.now()}`;
@@ -1223,30 +1329,35 @@ export class CartesiaAudioBridge {
     }
   }
 
+  /**
+   * Stream TTS in ordered chunks for natural prosody (continue: true).
+   * Chunks must be sent sequentially so the server receives them in order for correct continuity.
+   */
   async streamTextChunks(chunks, contextId = null) {
     const ctxId = contextId || `ctx_${++this.contextIdCounter}_${Date.now()}`;
-    
-    // Optimize: Ensure TTS is connected once before sending all chunks (if not already connected)
-    // This prevents each chunk from waiting for connection individually, reducing latency
+
     if (!this.ttsWs || this.ttsWs.readyState !== WebSocket.OPEN) {
       await this.connectTTS();
     }
-    
-    // Optimize: Send all chunks in parallel for minimal latency
-    // This reduces total latency from sum(chunk_latencies) to max(chunk_latencies)
-    // Since TTS is pre-connected, speakText() will send immediately without connection delay
-    const promises = chunks.map((chunk, i) => {
+
+    for (let i = 0; i < chunks.length; i++) {
       const isContinue = i < chunks.length - 1;
-      return this.speakText(chunk, ctxId, isContinue).catch((err) => {
-        // Log but don't throw - continue sending remaining chunks
+      try {
+        await this.speakText(chunks[i], ctxId, isContinue);
+      } catch (err) {
         DEBUG.error(`Error sending TTS chunk ${i + 1}/${chunks.length}`, { error: err });
-        return null; // Return null to indicate failure but continue
-      });
-    });
-    
-    // Wait for all chunks to be sent (parallel execution for optimal latency)
-    await Promise.all(promises);
+        throw err;
+      }
+    }
     return ctxId;
+  }
+
+  /**
+   * Stop TTS playback (alias for Ready button and external integration).
+   * Cancels all active TTS and clears the playback buffer.
+   */
+  stopTTS() {
+    this.cancelTTS();
   }
 
   cancelTTS(contextId) {
@@ -1287,6 +1398,11 @@ export class CartesiaAudioBridge {
     }
     // Clear audio buffer immediately for optimal barge-in responsiveness
     this.clearTTSBuffer();
+    this._ttsPlaybackDrainPending = false;
+    if (this._ttsPlaybackDrainFallbackTimer) {
+      clearTimeout(this._ttsPlaybackDrainFallbackTimer);
+      this._ttsPlaybackDrainFallbackTimer = null;
+    }
   }
 
   disconnectTTS() {

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draggable Chat Interface - Live Test</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 900px;
+      margin: 20px auto;
+      padding: 20px;
+      background: #1a1a1a;
+      color: #e0e0e0;
+    }
+    .test-section {
+      background: #2a2a2a;
+      padding: 20px;
+      margin: 20px 0;
+      border-radius: 8px;
+      border: 1px solid #444;
+    }
+    .checklist {
+      list-style: none;
+      padding: 0;
+    }
+    .checklist li {
+      padding: 10px;
+      margin: 8px 0;
+      background: #1a1a1a;
+      border-radius: 4px;
+      border-left: 4px solid #666;
+    }
+    .checklist li.pass {
+      border-left-color: #4caf50;
+    }
+    .checklist li.fail {
+      border-left-color: #f44336;
+    }
+    h1, h2 { color: #fff; }
+    a { color: #2196f3; }
+    code { background: #333; padding: 2px 6px; border-radius: 3px; }
+    .btn {
+      display: inline-block;
+      background: #4caf50;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: 600;
+      margin: 10px 5px 10px 0;
+    }
+    .btn:hover { background: #45a049; }
+  </style>
+</head>
+<body>
+  <h1>Draggable Chat Interface — Live Test</h1>
+  <p>Use this checklist to verify the chat interface is draggable and working correctly.</p>
+
+  <div class="test-section">
+    <h2>1. Open the main app</h2>
+    <a href="../" class="btn" target="_blank">Open JARVIS (new tab)</a>
+  </div>
+
+  <div class="test-section">
+    <h2>2. Manual verification checklist</h2>
+    <p>Run through these checks in the main app:</p>
+    <ul class="checklist">
+      <li><strong>Drag header:</strong> Click and hold the header (logo + JARVIS text area), then drag. The chat window should move.</li>
+      <li><strong>Status click:</strong> Click the "Ready" status — it should reset (not start a drag).</li>
+      <li><strong>Header buttons:</strong> Click Copy log or Export PDF — they should work (not start a drag).</li>
+      <li><strong>Chat scroll:</strong> Scroll the chat messages area — scrolling should work on touch devices.</li>
+      <li><strong>Position persist:</strong> Drag the window, refresh the page — it should restore to the last position.</li>
+      <li><strong>Bounds:</strong> Drag near screen edges — the window should not go fully off-screen.</li>
+    </ul>
+  </div>
+
+  <div class="test-section">
+    <h2>3. Automated tests</h2>
+    <p>Run: <code>npx jest debug/tests/draggable-chat-interface.test.js</code></p>
+    <p>All 13 tests should pass.</p>
+  </div>
+</body>
+</html>

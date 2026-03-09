@@ -50,6 +50,11 @@ export const OCR_CONFIG = {
   psm: OCR_PSM.AUTO,
   /** Enable automatic rotation detection in Tesseract.js. */
   rotateAuto: true,
+  /**
+   * White border in pixels around the image (0 = none). Small border (e.g. 10) can help
+   * when text has no margin (ImproveQuality.html – Borders). Override via preprocess opts.
+   */
+  borderPx: 0,
 };
 
 /** Lazy-loaded Tesseract worker */
@@ -61,6 +66,8 @@ function loadTesseract() {
     const worker = await Tesseract.createWorker('eng', 1);
     await worker.setParameters({
       tessedit_pageseg_mode: OCR_CONFIG.psm,
+      /** Disable adaptive classifier to avoid inconsistent results across multiple images (FAQ). */
+      classify_enable_learning: '0',
     });
     return worker;
   });
@@ -68,15 +75,17 @@ function loadTesseract() {
 }
 
 /**
- * Preprocess image for better OCR: upscale to min dimension and optionally grayscale.
+ * Preprocess image for better OCR: upscale to min dimension, optional grayscale,
+ * flatten alpha to white, and optional white border (ImproveQuality.html).
  * Only runs in browser (uses Canvas). Returns original data URL if not in browser or on error.
  * @param {string} dataUrl - data:image/...;base64,...
- * @param {{ minDimension?: number, grayscale?: boolean }} [opts] - Override OCR_CONFIG
+ * @param {{ minDimension?: number, grayscale?: boolean, borderPx?: number }} [opts] - Override OCR_CONFIG
  * @returns {Promise<string>} - Data URL (preprocessed or original)
  */
 export function preprocessImageForOcr(dataUrl, opts = {}) {
   const minDim = opts.minDimension ?? OCR_CONFIG.minDimension;
   const grayscale = opts.grayscale ?? OCR_CONFIG.grayscale;
+  const borderPx = Math.max(0, Math.floor(opts.borderPx ?? OCR_CONFIG.borderPx) || 0);
 
   if (typeof document === 'undefined' || !document.createElement) {
     return Promise.resolve(dataUrl);
@@ -104,11 +113,13 @@ export function preprocessImageForOcr(dataUrl, opts = {}) {
           width = Math.round(width * scale);
           height = Math.round(height * scale);
         }
-        canvas.width = width;
-        canvas.height = height;
-        ctx.drawImage(img, 0, 0, width, height);
+        canvas.width = width + 2 * borderPx;
+        canvas.height = height + 2 * borderPx;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, borderPx, borderPx, width, height);
         if (grayscale) {
-          const imageData = ctx.getImageData(0, 0, width, height);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const d = imageData.data;
           for (let i = 0; i < d.length; i += 4) {
             const y = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
@@ -141,10 +152,20 @@ export function isOcrSupportedType(mimeType) {
 }
 
 /**
+ * Resolve effective PSM from options (sparseText => PSM 11 for signs/scattered text).
+ * @param {{ psm?: string, sparseText?: boolean }} options
+ * @returns {string}
+ */
+function getEffectivePsm(options) {
+  if (options.sparseText) return OCR_PSM.SPARSE_TEXT;
+  return options.psm ?? OCR_CONFIG.psm;
+}
+
+/**
  * Run OCR on a base64-encoded image. Uses preprocessing and PSM/rotateAuto from config.
  * @param {string} base64Data - Raw base64 string (no data URL prefix)
  * @param {string} mimeType - e.g. 'image/png'
- * @param {{ psm?: string, rotateAuto?: boolean, skipPreprocess?: boolean }} [options] - Override PSM or skip preprocessing
+ * @param {{ psm?: string, rotateAuto?: boolean, skipPreprocess?: boolean, sparseText?: boolean, borderPx?: number }} [options] - Override PSM, use sparse text mode (PSM 11), or preprocessing
  * @returns {Promise<string>} - Extracted text, or '' if not an image or OCR failed
  */
 export async function runOcrOnImage(base64Data, mimeType, options = {}) {
@@ -153,10 +174,13 @@ export async function runOcrOnImage(base64Data, mimeType, options = {}) {
     const worker = await loadTesseract();
     let dataUrl = `data:${mimeType};base64,${base64Data}`;
     if (!options.skipPreprocess) {
-      dataUrl = await preprocessImageForOcr(dataUrl);
+      const preprocessOpts = {};
+      if (options.borderPx !== undefined) preprocessOpts.borderPx = options.borderPx;
+      dataUrl = await preprocessImageForOcr(dataUrl, preprocessOpts);
     }
+    const psm = getEffectivePsm(options);
     const recognizeOpts = {
-      tessedit_pageseg_mode: options.psm ?? OCR_CONFIG.psm,
+      tessedit_pageseg_mode: psm,
       rotateAuto: options.rotateAuto ?? OCR_CONFIG.rotateAuto,
     };
     const { data } = await worker.recognize(dataUrl, recognizeOpts);
@@ -174,7 +198,7 @@ export async function runOcrOnImage(base64Data, mimeType, options = {}) {
  * Run OCR on each image in an array of attachment payload items.
  * Mutates each image attachment to add ocrText when supported.
  * @param {Array<{ name: string, type: string, size: number, data?: string }>} attachments - From filesToAttachmentPayload
- * @param {{ psm?: string, skipPreprocess?: boolean }} [options] - Passed to runOcrOnImage per image
+ * @param {{ psm?: string, skipPreprocess?: boolean, sparseText?: boolean, rotateAuto?: boolean, borderPx?: number }} [options] - Passed to runOcrOnImage per image
  * @returns {Promise<void>}
  */
 export async function addOcrToAttachments(attachments, options = {}) {

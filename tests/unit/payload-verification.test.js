@@ -20,12 +20,17 @@ describe('payload-verification', () => {
     it('should validate a correct payload', () => {
       const payload = {
         message: 'Hello',
+        query: 'Hello',
+        input: 'Hello',
         session_id: 'sess_123',
         sessionId: 'sess_123',
         timestamp: '2024-01-01T00:00:00.000Z',
-        source: 'text',
+        timezone: 'UTC',
+        location: 'UTC',
         message_id: 'msg_123',
         messageId: 'msg_123',
+        source: 'text',
+        attachments: [],
       };
 
       const result = validatePayload(payload);
@@ -47,12 +52,17 @@ describe('payload-verification', () => {
     it('should detect empty message', () => {
       const payload = {
         message: '',
+        query: '',
+        input: '',
         session_id: 'sess_123',
         sessionId: 'sess_123',
         timestamp: '2024-01-01T00:00:00.000Z',
-        source: 'text',
+        timezone: 'UTC',
+        location: 'UTC',
         message_id: 'msg_123',
         messageId: 'msg_123',
+        source: 'text',
+        attachments: [],
       };
 
       const result = validatePayload(payload);
@@ -63,12 +73,17 @@ describe('payload-verification', () => {
     it('should detect invalid source', () => {
       const payload = {
         message: 'Hello',
+        query: 'Hello',
+        input: 'Hello',
         session_id: 'sess_123',
         sessionId: 'sess_123',
         timestamp: '2024-01-01T00:00:00.000Z',
-        source: 'invalid',
+        timezone: 'UTC',
+        location: 'UTC',
         message_id: 'msg_123',
         messageId: 'msg_123',
+        source: 'invalid',
+        attachments: [],
       };
 
       const result = validatePayload(payload);
@@ -79,12 +94,17 @@ describe('payload-verification', () => {
     it('should warn about mismatched session_id and sessionId', () => {
       const payload = {
         message: 'Hello',
+        query: 'Hello',
+        input: 'Hello',
         session_id: 'sess_123',
         sessionId: 'sess_456',
         timestamp: '2024-01-01T00:00:00.000Z',
-        source: 'text',
+        timezone: 'UTC',
+        location: 'UTC',
         message_id: 'msg_123',
         messageId: 'msg_123',
+        source: 'text',
+        attachments: [],
       };
 
       const result = validatePayload(payload);
@@ -94,9 +114,13 @@ describe('payload-verification', () => {
     it('should validate attachments structure', () => {
       const payload = {
         message: 'Hello',
+        query: 'Hello',
+        input: 'Hello',
         session_id: 'sess_123',
         sessionId: 'sess_123',
         timestamp: '2024-01-01T00:00:00.000Z',
+        timezone: 'UTC',
+        location: 'UTC',
         source: 'text',
         message_id: 'msg_123',
         messageId: 'msg_123',

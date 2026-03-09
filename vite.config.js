@@ -12,23 +12,33 @@ const STT_WS = 'wss://api.cartesia.ai/stt/websocket';
 const TTS_WS = 'wss://api.cartesia.ai/tts/websocket';
 const WS_CHECK_MS = 30_000;
 
-/** Vite plugin: ensure built index.html preserves full source (chat-interface, JARVIS_CONFIG, favicon, etc.) */
+/** Vite plugin: patch built index.html — fix modulepreload, restore error-capture, harden CSP for Electron */
 function preserveIndexHtmlPlugin() {
   return {
     name: 'preserve-index-html',
     apply: 'build',
     writeBundle(options, bundle) {
       const outDir = options.dir || join(__dirname, 'dist-public');
-      const jsChunk = Object.keys(bundle).find((k) => k.startsWith('assets/') && k.endsWith('.js'));
+      const mainChunk = Object.keys(bundle).find((k) => k.startsWith('assets/') && k.endsWith('.js') && !k.includes('index-'));
+      const indexChunk = Object.keys(bundle).find((k) => k.startsWith('assets/index-') && k.endsWith('.js'));
+      const jsChunk = indexChunk || mainChunk;
       if (!jsChunk) return;
-      const scriptSrc = '/' + jsChunk;
-      const sourcePath = join(__dirname, 'public', 'index.html');
-      let html = readFileSync(sourcePath, 'utf8');
+      const indexPath = join(outDir, 'index.html');
+      let html = readFileSync(indexPath, 'utf8');
+      // Replace stale modulepreload for app.js with preload for the actual chunk (fixes ERR_FILE_NOT_FOUND)
       html = html.replace(
-        /<script\s+type="module"\s+src="[^"]*"><\/script>/,
-        `<script type="module" crossorigin src="${scriptSrc}"></script>`
+        /<link\s+rel="modulepreload"\s+href="[^"]*app\.js[^"]*"[^>]*>/,
+        `<link rel="modulepreload" href="./${jsChunk}">`
       );
-      writeFileSync(join(outDir, 'index.html'), html);
+      // Restore error-capture script (Vite strips non-entry scripts; must load first)
+      if (!/<script[^>]+src="[^"]*error-capture\.js"/.test(html)) {
+        html = html.replace(
+          /(<meta charset="UTF-8">\s*)/,
+          '$1  <script type="module" src="./js/error-capture.js"></script>\n  '
+        );
+      }
+      // Note: unsafe-eval kept — Tesseract.js (OCR) requires it; removal breaks app load
+      writeFileSync(indexPath, html);
     },
   };
 }
@@ -48,6 +58,23 @@ function blockEnvFilesPlugin() {
           return;
         }
         next();
+      });
+    },
+  };
+}
+
+/** Vite plugin: write resolved dev server port to .vite-dev-port for Electron/scripts. */
+function viteDevPortPlugin() {
+  return {
+    name: 'vite-dev-port-file',
+    apply: 'serve',
+    configureServer(server) {
+      server.httpServer?.once('listening', () => {
+        const addr = server.httpServer.address();
+        const port = addr?.port;
+        if (typeof port === 'number') {
+          writeFileSync(join(__dirname, '.vite-dev-port'), String(port));
+        }
       });
     },
   };
@@ -118,6 +145,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, envDir, ''); // '' = load all keys; frontend only gets VITE_* via define below
   Object.assign(process.env, env);
   return {
+    base: './', // Relative paths for Electron file:// protocol (loadFile)
     root: 'public',
     publicDir: false,
     envDir, // Ensures dev/build both read root .env
@@ -129,15 +157,16 @@ export default defineConfig(({ mode }) => {
           { src: 'audio/*', dest: 'audio' },
           { src: 'debug/*.html', dest: 'debug' },
           { src: 'js/n8n-payload.js', dest: 'js' },
-          { src: 'keywords/*', dest: 'keywords' }, // Porcupine keyword files (.ppn)
+          { src: 'js/error-capture.js', dest: 'js' },
         ],
       }),
+      viteDevPortPlugin(),
       cartesiaWebSocketStatusPlugin(),
     ],
     build: {
       outDir: join(__dirname, 'dist-public'), // absolute path to project root
       emptyOutDir: true,
-      chunkSizeWarningLimit: 4096, // main bundle includes Porcupine/TTS deps; suppress size warning
+      chunkSizeWarningLimit: 4096, // main bundle includes TTS deps; suppress size warning
     },
     optimizeDeps: {
       include: [],
@@ -148,22 +177,20 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: Number(process.env.PORT) || 3000,
+      strictPort: false, // If port is taken, try next available (3001, 3002, ...)
       open: true,
     },
     preview: {
       port: Number(process.env.PORT) || 3000,
+      strictPort: false,
       open: true,
     },
     // Expose env to frontend (from root .env). Use both VITE_* and non-VITE_ names so the same value shows up no matter what is looking for it.
     define: (() => {
-      const defaultN8n = 'https://n8n.hempstarai.com/webhook/e7278dba-076f-4fe9-8c8f-0241e4103ac4';
+      const defaultN8n = 'https://n8n.hempstarai.com/webhook/7600d4d1-e268-4c35-a853-b39ce7014e96';
       const cartesiaApiKey = env.VITE_CARTESIA_API_KEY || env.CARTESIA_API_KEY || '';
       const cartesiaVoiceId = env.VITE_CARTESIA_VOICE_ID || env.CARTESIA_VOICE_ID || '95131c95-525c-463b-893d-803bafdf93c4';
       const n8nWebhookUrl = env.VITE_N8N_WEBHOOK_URL || env.N8N_WEBHOOK_URL || defaultN8n;
-      const wakeWordEnabled = env.VITE_WAKE_WORD_ENABLED || env.WAKE_WORD_ENABLED || 'false';
-      const debugWakeWord = env.VITE_DEBUG_WAKE_WORD || env.DEBUG_WAKE_WORD || 'false';
-      const useOpenWakeWord = env.VITE_USE_OPENWAKEWORD || env.USE_OPENWAKEWORD || 'false';
-      const openWakeWordWsUrl = env.VITE_OPENWAKEWORD_WS_URL || env.OPENWAKEWORD_WS_URL || 'ws://localhost:8765/ws';
       return {
         'import.meta.env.VITE_CARTESIA_API_KEY': JSON.stringify(cartesiaApiKey),
         'import.meta.env.CARTESIA_API_KEY': JSON.stringify(cartesiaApiKey),
@@ -171,14 +198,6 @@ export default defineConfig(({ mode }) => {
         'import.meta.env.CARTESIA_VOICE_ID': JSON.stringify(cartesiaVoiceId),
         'import.meta.env.VITE_N8N_WEBHOOK_URL': JSON.stringify(n8nWebhookUrl),
         'import.meta.env.N8N_WEBHOOK_URL': JSON.stringify(n8nWebhookUrl),
-        'import.meta.env.VITE_WAKE_WORD_ENABLED': JSON.stringify(wakeWordEnabled),
-        'import.meta.env.WAKE_WORD_ENABLED': JSON.stringify(wakeWordEnabled),
-        'import.meta.env.VITE_DEBUG_WAKE_WORD': JSON.stringify(debugWakeWord),
-        'import.meta.env.DEBUG_WAKE_WORD': JSON.stringify(debugWakeWord),
-        'import.meta.env.VITE_USE_OPENWAKEWORD': JSON.stringify(useOpenWakeWord),
-        'import.meta.env.USE_OPENWAKEWORD': JSON.stringify(useOpenWakeWord),
-        'import.meta.env.VITE_OPENWAKEWORD_WS_URL': JSON.stringify(openWakeWordWsUrl),
-        'import.meta.env.OPENWAKEWORD_WS_URL': JSON.stringify(openWakeWordWsUrl),
       };
     })(),
   };

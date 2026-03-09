@@ -46,7 +46,6 @@ function parseBridgeFile(content, filePath) {
     hasAudioWorklet: false,
     hasMediaStream: false,
     hasVAD: false,
-    hasWakeWord: false,
     hasSTT: false,
     hasTTS: false,
     hasBargeIn: false,
@@ -199,11 +198,6 @@ function parseBridgeFile(content, filePath) {
   // Check for VAD (Voice Activity Detection)
   if (/\bVAD\b|MicVAD|voice.*activity|vad/i.test(content)) {
     stats.hasVAD = true;
-  }
-
-  // Check for Wake Word
-  if (/wake.*word|wakeWord|WakeWord|openWakeWord/i.test(content)) {
-    stats.hasWakeWord = true;
   }
 
   // Check for STT (Speech-to-Text)
@@ -467,9 +461,6 @@ async function parseAllBridgeFiles() {
         if (parsed.hasVAD) {
           console.log(`  VAD: ✓`);
         }
-        if (parsed.hasWakeWord) {
-          console.log(`  Wake Word: ✓`);
-        }
         if (parsed.hasBargeIn) {
           console.log(`  Barge-in: ✓`);
         }
@@ -527,7 +518,6 @@ async function parseAllBridgeFiles() {
     hasSTT: validResults.filter(r => r.parsed?.hasSTT).length,
     hasTTS: validResults.filter(r => r.parsed?.hasTTS).length,
     hasVAD: validResults.filter(r => r.parsed?.hasVAD).length,
-    hasWakeWord: validResults.filter(r => r.parsed?.hasWakeWord).length,
     hasBargeIn: validResults.filter(r => r.parsed?.hasBargeIn).length,
     hasReconnection: validResults.filter(r => r.parsed?.hasReconnection).length
   };

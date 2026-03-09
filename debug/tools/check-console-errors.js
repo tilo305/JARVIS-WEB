@@ -2,7 +2,7 @@
 /**
  * Console Error Checker
  * 
- * Checks for potential console errors in wake word related files
+ * Checks for potential console errors in main app files
  * 
  * Usage:
  *   node debug/tools/check-console-errors.js
@@ -124,18 +124,7 @@ function main() {
   
   const files = [
     { path: join(root, 'public/js/app.js'), desc: 'App (main)' },
-    {
-      path: join(root, 'public/js/openwakeword-manager.js'),
-      desc: 'OpenWakeWord Manager'
-    },
-    {
-      path: join(root, 'public/js/cartesia-audio-bridge.js'),
-      desc: 'Cartesia Audio Bridge'
-    },
-    {
-      path: join(root, 'public/debug/wake-word-activation-test.html'),
-      desc: 'Wake Word Test Page'
-    }
+    { path: join(root, 'public/js/cartesia-audio-bridge.js'), desc: 'Cartesia Audio Bridge' }
   ];
   
   let totalErrors = 0;

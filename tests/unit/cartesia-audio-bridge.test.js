@@ -64,6 +64,6 @@ describe('CartesiaAudioBridge', () => {
     const { join } = require('path');
     const source = readFileSync(join(__dirname, '../../public/js/cartesia-audio-bridge.js'), 'utf8');
     expect(source).toMatch(/silenceClosingDelayAfterTtsMs/);
-    expect(source).toMatch(/delayMs\s*=\s*VAD_CONFIG\.silenceClosingDelayAfterTtsMs/);
+    expect(source).toMatch(/delayMs.*VAD_CONFIG\.silenceClosingDelayAfterTtsMs|VAD_CONFIG\.silenceClosingDelayAfterTtsMs.*delayMs/);
   });
 });
